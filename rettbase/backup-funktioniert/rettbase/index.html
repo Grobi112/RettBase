@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Lade RettBase...</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <script>
+        // Setze die Cache-Steuerung im HTML-Header auf NONE, falls der Server dies nicht tut
+        document.write('<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />');
+        document.write('<meta http-equiv="Pragma" content="no-cache" />');
+        document.write('<meta http-equiv="Expires" content="0" />');
+    </script>
+
+    <script>
+        const hostname = window.location.hostname;
+        
+        // 🔥 WICHTIG: Ersetzen Sie dies durch Ihre Hauptdomain
+        const ROOT_DOMAIN = 'rettbase.de'; 
+
+        // Erstelle eine Liste von Hosts, die zur Hauptseite (Dashboard) führen sollen
+        const DASHBOARD_HOSTS = [
+            ROOT_DOMAIN, 
+            'www.' + ROOT_DOMAIN,
+            'admin.' + ROOT_DOMAIN  // 🔥 NEU: admin.rettbase.de geht auch direkt zum Dashboard
+        ];
+
+        // --------------------------------------------------------
+        // PRÜFUNG DER HOSTNAME & WEITERLEITUNG
+        // --------------------------------------------------------
+        
+        // Wenn der Host in der Liste der Dashboard-Hosts ist, gehe zum Dashboard
+        if (DASHBOARD_HOSTS.includes(hostname)) {
+             // Hauptdomain, www. Hauptdomain oder admin. Hauptdomain --> Dashboard
+             window.location.replace('dashboard.html');
+        } else {
+             // Wenn es KEINE Hauptdomain ist, muss es eine Kunden-Subdomain (firma1., etc.) sein.
+             // Kunden-Subdomains gehen immer zuerst zum Login.
+             console.log(`Kunden-Subdomain erkannt: ${hostname}. Weiterleitung zu login.html.`);
+             window.location.replace('login.html');
+        }
+
+    </script>
+</head>
+<body>
+    <noscript>
+        Bitte aktivieren Sie JavaScript, um RettBase zu nutzen.
+        <meta http-equiv="refresh" content="0; url=login.html" />
+    </noscript>
+</body>
+</html>

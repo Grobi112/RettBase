@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>RettBase · Chat</title>
+    <link rel="stylesheet" href="./chat.css">
+</head>
+<body>
+
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück zur Startseite">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Chat</h1>
+        </div>
+        <div class="controls-group">
+            <button id="newChatBtn" class="control-btn" title="Neuer Chat">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>Neuer Chat</span>
+            </button>
+            <button id="newGroupBtn" class="control-btn" title="Neue Gruppe">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>Neue Gruppe</span>
+            </button>
+        </div>
+    </header>
+
+    <main id="chatContainer">
+        <aside id="chatListPanel">
+            <div class="chat-search">
+                <input type="text" id="chatSearch" placeholder="Chats durchsuchen..." autocomplete="off">
+            </div>
+            <div id="chatList" class="chat-list">
+                <div class="empty-state" id="chatListEmpty">
+                    <p>Keine Chats vorhanden.</p>
+                    <p class="hint">Klicke auf "Neuer Chat" oder "Neue Gruppe", um zu starten.</p>
+                </div>
+            </div>
+        </aside>
+
+        <section id="chatViewPanel">
+            <div class="no-chat-selected" id="noChatSelected">
+                <div class="placeholder-content">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <p>Wähle einen Chat aus oder starte eine neue Unterhaltung.</p>
+                </div>
+            </div>
+
+            <div class="chat-active" id="chatActive" style="display: none;">
+                <div class="chat-header">
+                    <button type="button" id="chatBackToList" class="chat-back-to-list" title="Zurück zur Chat-Liste" aria-label="Zurück zur Chat-Liste">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    </button>
+                    <div class="chat-header-info">
+                        <h2 id="chatTitle">Chat</h2>
+                        <span id="chatSubtitle" class="chat-subtitle"></span>
+                    </div>
+                </div>
+
+                <div id="messagesContainer" class="messages-container">
+                    <div id="messagesList" class="messages-list"></div>
+                    <div id="scrollAnchor"></div>
+                </div>
+
+                <div class="message-input-area">
+                    <div id="attachmentPreview" class="attachment-preview" style="display: none;"></div>
+                    <div class="input-row">
+                        <button type="button" id="attachBtn" class="attach-btn" title="Bild oder Datei anhängen">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                            </svg>
+                        </button>
+                        <button type="button" id="recordBtn" class="record-btn" title="Sprachnachricht aufnehmen">
+                            <svg class="record-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                            <svg class="stop-icon" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                                <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                            </svg>
+                        </button>
+                        <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" multiple hidden>
+                        <textarea id="messageInput" placeholder="Nachricht eingeben..." rows="1"></textarea>
+                        <button type="button" id="sendBtn" class="send-btn" title="Senden">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="msgContextMenu" class="msg-context-menu" role="menu"></div>
+
+    <div id="micPermissionModal" class="modal mic-permission-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Sprachnachricht aufnehmen</h3>
+                <button type="button" class="modal-close" id="closeMicPermissionModal">&times;</button>
+            </div>
+            <div class="modal-body" id="micPermissionBody">
+                <p class="mic-permission-text">Für Sprachnachrichten wird der Mikrofon-Zugriff benötigt.</p>
+                <p class="mic-permission-hint">Dein Browser fragt dich, ob die Website das Mikrofon nutzen darf – wähle „Erlauben“ oder „Blockieren“.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="micPermissionCancel">Abbrechen</button>
+                <button type="button" class="btn-secondary" id="micPermissionNewTab" style="display:none" title="Chat in neuem Fenster öffnen – Mikrofon funktioniert dort oft zuverlässiger">In neuem Tab öffnen</button>
+                <button type="button" class="btn-primary" id="micPermissionAllow">Mikrofon erlauben</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="selectUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Chat mit Mitarbeiter starten</h3>
+                <button type="button" class="modal-close" id="closeSelectUserModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="userSearch" placeholder="Mitarbeiter suchen..." class="search-input">
+                <div id="userList" class="user-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="createGroupModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Neue Gruppe erstellen</h3>
+                <button type="button" class="modal-close" id="closeCreateGroupModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="groupName">Gruppenname</label>
+                    <input type="text" id="groupName" placeholder="z.B. Rettungsteam A" required>
+                </div>
+                <input type="text" id="groupMemberSearch" placeholder="Mitglieder suchen..." class="search-input">
+                <div id="groupMemberList" class="user-list"></div>
+                <div id="selectedMembers" class="selected-members"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" id="cancelCreateGroup">Abbrechen</button>
+                <button type="button" class="btn-primary" id="confirmCreateGroup">Gruppe erstellen</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./chat.js"></script>
+</body>
+</html>

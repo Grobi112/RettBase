@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Kundenverwaltung</title>
+    <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/RBapp.png">
+    <link rel="stylesheet" href="kundenverwaltung.css"> 
+</head>
+<body>
+
+    <h1 class="rettbase-heading">Kundenverwaltung</h1>
+    
+    <div class="container">
+        <section id="companyListSection" class="card list-card">
+            <h2>
+                Aktive Kunden (Firmen) 
+                <button id="createCompanyBtn" class="primary-btn is-hidden" style="float: right;">Kunden anlegen</button>
+            </h2>
+            
+            <!-- Such- und Filter-Bereich -->
+            <div class="search-filter-bar">
+                <input type="text" id="searchInput" placeholder="🔍 Kunden suchen..." class="search-input">
+                <select id="statusFilter" class="filter-select">
+                    <option value="all">Alle Status</option>
+                    <option value="active">Aktiv</option>
+                    <option value="inactive">Inaktiv</option>
+                    <option value="suspended">Gesperrt</option>
+                </select>
+                <select id="sortSelect" class="filter-select">
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                    <option value="date-asc">Älteste zuerst</option>
+                    <option value="date-desc">Neueste zuerst</option>
+                    <option value="status">Status</option>
+                </select>
+            </div>
+            
+            <div id="customerList">
+                <p>Lade Kundendaten...</p>
+            </div>
+        </section>
+        
+    </div>
+    
+    <div id="createModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Neue Firma anlegen & Admin zuweisen</h2>
+            <form id="newCompanyForm">
+                
+                <h3>Firmendetails</h3>
+                <label for="companyName">Firmenname:</label>
+                <input type="text" id="companyName" required>
+
+                <label for="address">Anschrift:</label>
+                <input type="text" id="address" required>
+                
+                <label for="zipCity">PLZ und Ort:</label>
+                <input type="text" id="zipCity" placeholder="z.B. 44534 Lünen" required>
+
+                <label for="phone">Telefonnummer:</label>
+                <input type="text" id="phone">
+                
+                <label for="companyEmail">Allgemeine E-Mail:</label>
+                <input type="email" id="companyEmail" required>
+
+                <label for="companyId">Eindeutige ID (intern):</label>
+                <input type="text" id="companyId" placeholder="z.B. feuerwehr-luenen" required>
+                <small style="color: #666; display: block; margin-top: -10px; margin-bottom: 10px;">
+                    Nur Kleinbuchstaben, Zahlen und Bindestriche. Wird als Subdomain verwendet.
+                </small>
+
+                <label for="companySubdomain">Subdomain:</label>
+                <input type="text" id="companySubdomain" placeholder="z.B. feuerwehr-luenen" required>
+                <small style="color: #666; display: block; margin-top: -10px; margin-bottom: 10px;">
+                    Die Subdomain für den Login (z.B. feuerwehr-luenen.rettbase.de)
+                </small>
+                
+                <hr style="margin: 20px 0;">
+
+                <h3>Erster Admin-Benutzer</h3>
+                <p>Dieser Benutzer erhält automatisch die Rolle 'admin' für diese Firma.</p>
+                <label for="adminEmail">E-Mail (Admin-Login):</label>
+                <input type="email" id="adminEmail" required>
+
+                <label for="adminPassword">Initial-Passwort:</label>
+                <input type="password" id="adminPassword" required>
+
+                <hr style="margin: 20px 0;">
+
+                <h3>Module freischalten</h3>
+                <p>Wählen Sie die Module aus, die für diese Firma verfügbar sein sollen:</p>
+                <div id="moduleCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0;">
+                    <!-- Wird dynamisch von JS gefüllt -->
+                </div>
+
+                <div class="modal-actions">
+                    <button type="submit" class="save-btn">Firma registrieren & Admin anlegen</button>
+                    <button type="button" id="closeCreateModal" class="cancel-btn">Abbrechen</button>
+                </div>
+            </form>
+            <p id="companyMessage" class="message"></p>
+        </div>
+    </div>
+    
+    <div id="editModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Kunden bearbeiten</h2>
+            <form id="editCompanyForm">
+                <input type="hidden" id="editCompanyId"> 
+
+                <label for="editName">Firmenname:</label>
+                <input type="text" id="editName" required>
+
+                <label for="editAddress">Anschrift:</label>
+                <input type="text" id="editAddress" required>
+                
+                <label for="editZipCity">PLZ und Ort:</label>
+                <input type="text" id="editZipCity" required>
+
+                <label for="editPhone">Telefonnummer:</label>
+                <input type="text" id="editPhone">
+                
+                <label for="editEmail">Allgemeine E-Mail:</label>
+                <input type="email" id="editEmail" required>
+                
+                <label for="editStatus">Status:</label>
+                <select id="editStatus">
+                    <option value="active">Aktiv</option>
+                    <option value="inactive">Inaktiv</option>
+                    <option value="suspended">Gesperrt</option>
+                </select>
+
+                <label for="editSubdomain">Subdomain:</label>
+                <input type="text" id="editSubdomain" required>
+                <small style="color: #666; display: block; margin-top: -10px; margin-bottom: 10px;">
+                    Die Subdomain für den Login (z.B. feuerwehr-luenen.rettbase.de)
+                </small>
+
+                <hr style="margin: 20px 0;">
+
+                <h3>Module freischalten</h3>
+                <p>Wählen Sie die Module aus, die für diese Firma verfügbar sein sollen:</p>
+                <div id="editModuleCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0;">
+                    <!-- Wird dynamisch von JS gefüllt -->
+                </div>
+
+                <div class="modal-actions">
+                    <button type="submit" class="save-btn">Speichern</button>
+                    <button type="button" id="closeEditModal" class="cancel-btn">Abbrechen</button>
+                </div>
+            </form>
+            <p id="editMessage" class="message"></p>
+        </div>
+    </div>
+    
+    <script type="module" src="./kundenverwaltung.js"></script>
+</body>
+</html>

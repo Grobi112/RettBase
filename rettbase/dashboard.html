@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>RettBase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#00bcd4" />
+  <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/RBapp.png">
+  <link rel="manifest" href="/manifest.json">
+  
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <header>
+    <button id="menuToggle">
+      <div></div>
+      <div></div>
+      <div></div>
+    </button>
+    <img src="/img/rettbase.png" alt="RettBase Logo" class="header-logo">
+    
+    <div class="user-menu-wrapper">
+      <button id="userMenuToggle" class="user-menu-toggle">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="user-icon">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <span class="user-name-wrap">
+          <span id="userNameDisplay">Lädt...</span>
+          <span id="chatUnreadIndicator" class="chat-unread-indicator" title="Neue Chatnachrichten"><span id="chatUnreadCount">0</span></span>
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="dropdown-icon">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+      <div id="userDropdownMenu" class="user-dropdown-menu">
+        <a href="#" class="user-menu-item" id="profileLink">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>Profil</span>
+        </a>
+        <a href="#" class="user-menu-item user-menu-item-with-badge" id="chatLink">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Chat</span>
+          <span id="chatUnreadBadge" class="chat-unread-badge" style="display:none">0</span>
+        </a>
+        <a href="#" class="user-menu-item user-menu-item-logout" id="userDropdownLogout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          <span>Logout</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div id="menuBackdrop" class="menu-backdrop"></div>
+  <div id="userDropdownBackdrop" class="user-dropdown-backdrop" style="display:none"></div>
+  <div id="dropdownMenu" class="dropdown-menu">
+    <!-- Wird dynamisch von dashboard.js gefüllt -->
+    <a href="#" class="menu-item" id="logoutLink">Logout</a>
+  </div>
+
+  <main>
+    <iframe id="contentFrame" src="home.html" frameborder="0" allow="microphone"></iframe>
+  </main>
+
+  <script type="module" src="./dashboard.js"></script>
+</body>
+</html>

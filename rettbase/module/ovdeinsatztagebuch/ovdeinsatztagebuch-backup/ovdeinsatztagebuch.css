@@ -1,0 +1,765 @@
+/* --- Allgemeines Design für OVD Einsatztagebuch --- */
+
+:root {
+    --primary-color: #0ea5e9; /* Sky Blue (Header-Farbe) */
+    --secondary-color: #f3f4f6; /* Light Gray */
+    --text-color: #1e293b; /* Dark Slate */
+    --border-color: #e5e7eb;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    padding-bottom: 30px;
+}
+
+/* --- Header --- */
+
+#topBar {
+    padding: 15px 25px;
+    background-color: white;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    position: static;
+    z-index: 10;
+}
+
+.title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.back-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    transition: opacity 0.2s;
+}
+
+.back-btn:hover {
+    opacity: 0.7;
+}
+
+.back-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.controls-group {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    position: relative;
+}
+
+.control-btn {
+    padding: 10px 15px;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    background-color: white;
+    color: var(--text-color);
+}
+
+.control-btn:hover {
+    background-color: var(--secondary-color);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.icon-btn {
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+    color: var(--text-color);
+}
+
+.icon-btn:hover {
+    background-color: var(--secondary-color);
+}
+
+.icon-btn svg {
+    stroke: var(--text-color);
+}
+
+/* --- Main Content --- */
+
+#mainContent {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.container {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+}
+
+.error-message {
+    color: #dc2626;
+    padding: 20px;
+    text-align: center;
+    background: #fee2e2;
+    border-radius: 8px;
+    border: 1px solid #fecaca;
+}
+
+/* --- Tabellen-Header --- */
+
+.table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--primary-color);
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.table-header h2 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.date-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.date-selector label {
+    font-weight: 500;
+    color: var(--text-color);
+    font-size: 14px;
+    margin: 0;
+}
+
+.date-selector input[type="date"] {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.date-selector input[type="date"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.primary-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.primary-btn:hover {
+    background-color: #0b93d0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Events Tabelle --- */
+
+#eventsTableContainer {
+    overflow-x: auto;
+}
+
+.events-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    table-layout: fixed; /* Feste Tabellenbreite ermöglicht automatischen Zeilenumbruch */
+}
+
+.events-table thead {
+    background-color: var(--secondary-color);
+}
+
+.events-table th {
+    padding: 12px 15px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-color);
+    border-bottom: 2px solid var(--border-color);
+    font-size: 14px;
+}
+
+.events-table th:nth-child(1),
+.events-table td:nth-child(1) {
+    width: 120px;
+    min-width: 120px;
+    padding-right: 5px; /* Reduzierter Abstand zur nächsten Spalte */
+}
+
+.events-table th:nth-child(2),
+.events-table td:nth-child(2) {
+    width: 150px;
+    min-width: 150px;
+    padding-left: 0; /* Kein linker Padding, da Abstand bereits in Spalte 1 definiert */
+    padding-right: 15px; /* Standard-Padding rechts beibehalten */
+}
+
+.events-table th:nth-child(3),
+.events-table td:nth-child(3) {
+    width: auto; /* Auto-Breite für Text-Spalte, nimmt restlichen Platz ein */
+    min-width: 200px;
+    padding-right: 10px; /* 10px Abstand zur nächsten Spalte */
+}
+
+.events-table th:nth-child(4),
+.events-table td:nth-child(4) {
+    width: 200px;
+    min-width: 200px;
+    padding-left: 0; /* Kein linker Padding, da Abstand bereits in Text-Spalte definiert */
+    text-align: right; /* Rechtsbündige Ausrichtung */
+    padding-right: 0; /* Kein Padding rechts, da Text am rechten Rand ausgerichtet werden soll */
+}
+
+.events-table th:nth-child(5),
+.events-table td:nth-child(5) {
+    width: 50px;
+    min-width: 50px;
+}
+
+.events-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: top;
+    font-size: 14px;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    overflow: hidden; /* Verhindert Überlauf */
+}
+
+.events-table td:nth-child(3) {
+    max-width: 0; /* Ermöglicht Textumbruch bei table-layout: fixed */
+}
+
+.events-table td:nth-child(3) {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.events-table tbody tr {
+    transition: background-color 0.2s;
+}
+
+.events-table tbody tr:hover {
+    background-color: var(--secondary-color);
+}
+
+.events-table tbody tr.clickable {
+    cursor: pointer;
+}
+
+.events-table tbody tr.clickable:hover {
+    background-color: #e0f2fe;
+}
+
+.delete-cell {
+    text-align: center;
+    cursor: pointer;
+    padding: 8px !important;
+}
+
+.delete-cell svg {
+    color: #000000;
+    transition: color 0.2s, transform 0.1s;
+}
+
+.delete-cell:hover svg {
+    color: #333333;
+    transform: scale(1.1);
+}
+
+.no-events {
+    text-align: center;
+    color: #666;
+    padding: 40px !important;
+    font-style: italic;
+}
+
+.no-events.error {
+    color: #dc2626;
+}
+
+/* --- Popup Overlay und Form --- */
+
+.popup-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    cursor: pointer;
+}
+
+.popup-form {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    z-index: 1001;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow: hidden;
+    cursor: default;
+    flex-direction: column;
+}
+
+/* Einstellungs-Dropdown-Menü */
+.settings-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 220px;
+    z-index: 1000;
+    overflow: hidden;
+    padding: 4px 0;
+}
+
+.settings-dropdown .settings-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #1e1f26;
+    transition: background-color 0.2s;
+    line-height: 1.5;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.settings-dropdown .settings-menu-item:hover {
+    background-color: #f3f4f6;
+}
+
+.settings-dropdown .settings-menu-item svg {
+    stroke: currentColor;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    stroke-width: 2;
+}
+
+.settings-dropdown .settings-menu-item span {
+    flex: 1;
+    white-space: nowrap;
+    overflow: visible;
+}
+
+.popup-content {
+    padding: 30px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+}
+
+/* Einstellungs-Popup Content - kein Scroll nötig */
+#settingsPopupForm .popup-content {
+    padding: 0;
+    overflow: visible;
+}
+
+.popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 30px 30px 15px 30px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.popup-form h2 {
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 1.5rem;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    color: var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.close-btn:hover {
+    background-color: var(--secondary-color);
+    color: var(--primary-color);
+}
+
+.close-btn svg {
+    stroke: currentColor;
+}
+
+.input-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.popup-form label {
+    position: absolute;
+    top: -8px;
+    left: 12px;
+    background: white;
+    padding: 0 4px;
+    font-weight: normal;
+    font-size: 14px;
+    color: #64748b;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.popup-form input[type="text"],
+.popup-form textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    background: white;
+}
+
+.popup-form input[type="text"]:focus,
+.popup-form textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.textarea-wrapper label {
+    top: -8px;
+}
+
+.popup-form textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.popup-form input[readonly] {
+    background-color: white;
+    cursor: not-allowed;
+}
+
+.form-row {
+    margin-bottom: 15px;
+}
+
+.input-with-button {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.input-with-button .input-wrapper {
+    flex: 1;
+}
+
+.btn-small {
+    padding: 10px 15px;
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-small:hover {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.save-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-btn:hover {
+    background-color: #0b93d0;
+}
+
+.cancel-btn {
+    background-color: white;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+    background-color: var(--secondary-color);
+}
+
+/* --- Einstellungsmenü --- */
+
+.header-right {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.secondary-btn {
+    background-color: white;
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 15px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.secondary-btn:hover {
+    background-color: var(--secondary-color);
+    border-color: var(--primary-color);
+}
+
+.secondary-btn svg {
+    stroke: currentColor;
+}
+
+
+.settings-menu-item:last-child {
+    border-bottom: none;
+}
+
+.settings-menu-item:hover {
+    background-color: var(--secondary-color);
+}
+
+.settings-menu-item svg {
+    stroke: currentColor;
+    flex-shrink: 0;
+}
+
+.settings-menu-item span {
+    flex: 1;
+}
+
+/* --- Ereignisse verwalten Popup --- */
+
+.events-manage-form {
+    width: 100%;
+}
+
+.events-list-container {
+    margin-top: 25px;
+}
+
+.events-list-container h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-color);
+    margin-bottom: 15px;
+}
+
+.events-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.event-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: white;
+    cursor: move;
+    transition: all 0.2s;
+}
+
+.event-item.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+}
+
+.event-item.drag-over {
+    border-color: var(--primary-color);
+    background-color: #e0f2fe;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.drag-handle {
+    cursor: grab;
+    padding: 5px 10px;
+    color: #64748b;
+    font-size: 18px;
+    user-select: none;
+    margin-right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.event-item:hover .drag-handle {
+    color: var(--primary-color);
+}
+
+.event-item.dragging .drag-handle {
+    cursor: grabbing;
+}
+
+.event-item span:not(.drag-handle) {
+    flex: 1;
+    color: var(--text-color);
+}
+
+.delete-event-btn {
+    background: none;
+    border: none;
+    color: #000000;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.delete-event-btn:hover {
+    background-color: #f3f4f6;
+    color: #000000;
+}
+
+.no-items {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Dropdown Styling */
+
+.popup-form select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    background: white;
+    cursor: pointer;
+}
+
+.popup-form select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}

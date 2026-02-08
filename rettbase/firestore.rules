@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+    
+    // ============================================
+    // COLLECTION GROUP QUERIES (explizit für getAuthData)
+    // ============================================
+    // mitarbeiter: Lesen für alle (Login, getAuthData-Fallback)
+    match /{path=**}/mitarbeiter/{mitarbeiterId} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+    // users: Lesen/Schreiben nur für eingeloggte Benutzer
+    match /{path=**}/users/{userId} {
+      allow read, write: if isLoggedIn();
+    }
+    
+    // ============================================
+    // KUNDEN-COLLECTIONS
+    // ============================================
+    match /kunden/{kundenId} {
+      allow read, write: if isLoggedIn();
+      
+      // ============================================
+      // MITARBEITER COLLECTION
+      // ============================================
+      // Erlaube unauthentifizierten Benutzern, die mitarbeiter Collection zu lesen
+      // Dies ist notwendig für den Login mit Personalnummer
+      // ⚠️ SICHERHEIT: Nur Lesezugriff für Login-Zwecke
+      match /mitarbeiter/{mitarbeiterId} {
+        // Erlaube Lesen für alle (auch unauthentifizierte Benutzer)
+        // Dies ist notwendig, um nach Personalnummern zu suchen beim Login
+        allow read: if true;
+        
+        // Schreiben nur für authentifizierte Benutzer
+        allow write: if isLoggedIn();
+      }
+      
+      match /users/{userId} {
+        allow read, write: if isLoggedIn();
+        
+        match /userTiles/{docId} {
+          allow read, write: if isLoggedIn();
+        }
+      }
+      
+      match /modules/{moduleId} {
+        allow read, write: if isLoggedIn();
+      }
+      
+      // Chat: Alle eingeloggten Benutzer (jede Rolle) dürfen lesen und schreiben
+      match /chats/{chatId} {
+        allow read, write: if isLoggedIn();
+        match /messages/{messageId} {
+          allow read, write: if isLoggedIn();
+        }
+      }
+      
+      // Alle anderen Collections unter kunden/{kundenId}
+      match /{document=**} {
+        allow read, write: if isLoggedIn();
+      }
+    }
+    
+    // Globale Module
+    match /modules/{moduleId} {
+      allow read, write: if isLoggedIn();
+    }
+    
+    // Globale Einstellungen (Module, Menüstruktur)
+    match /settings/{document=**} {
+      allow read, write: if isLoggedIn();
+    }
+  }
+}

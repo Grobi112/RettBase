@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Digitales Logbuch</title>
+    <link rel="stylesheet" href="logbuch.css">
+    
+    <!-- Lade Firebase und die Logik -->
+    <script type="module" src="./logbuch.js"></script>
+</head>
+<body>
+
+    <header id="topBar">
+        <h1 class="page-title">Digitales Logbuch</h1>
+        <div class="controls-group">
+            <label for="daySelect" class="sr-only">Vorhandenen Tag auswählen:</label>
+            <select id="daySelect" class="control-select">
+                <option value="" selected>-- Tag auswählen --</option>
+                <!-- Optionen werden von JS geladen -->
+            </select>
+            <button id="showNewDayFormBtn" class="control-btn primary-btn">+ Neuen Tag anlegen</button>
+        </div>
+    </header>
+
+    <main class="logbook-container">
+
+        <!-- NEUEN TAG ANLEGEN / AKTUELLEN TAG ANZEIGEN -->
+        <section id="dayCreationSection" class="card day-card hidden">
+            <h2 id="dayTitle" class="section-title">Tag-Information</h2>
+            
+            <div id="dayInfoDisplay" class="day-info-display hidden">
+                <p><strong>Datum:</strong> <span id="currentDayDate"></span></p>
+                <p><strong>Ersteller:</strong> <span id="currentDayCreator"></span></p>
+                <p><strong>Status:</strong> <span id="currentDayStatus" class="status-badge">Offen</span></p>
+            </div>
+
+            <div id="newDayForm" class="input-group">
+                <label for="dayDateInput">Datum (Eingabe: TTMMJJ):</label>
+                <input type="text" id="dayDateInput" placeholder="z.B. 221125 für 22.11.2025" maxlength="10">
+                <button id="createDayBtn" class="primary-btn">Tag anlegen</button>
+            </div>
+            
+            <div id="dayActions" class="day-actions-group hidden">
+                <button id="saveDayBtn" class="save-btn">Tag speichern & abschließen</button>
+            </div>
+        </section>
+
+        <!-- EREIGNISSE ERSTELLEN -->
+        <section id="eventCreationSection" class="card event-card hidden">
+            <h2 class="section-title">Neues Ereignis eintragen</h2>
+            <form id="newEventForm">
+                <div class="input-row">
+                    <div class="input-group">
+                        <label for="eventStartTime">Startzeit (Eingabe: HHMM):</label>
+                        <input type="text" id="eventStartTime" placeholder="z.B. 0800 für 08:00" maxlength="5" required>
+                        <button type="button" id="setStartTimeNow" class="now-btn">Jetzt (Aktuelle Zeit)</button>
+                    </div>
+                    <div class="input-group">
+                        <label for="eventEndTime">Endzeit (HH:MM):</label>
+                        <input type="text" id="eventEndTime" placeholder="Optional, z.B. 0930" maxlength="5">
+                    </div>
+                </div>
+                
+                <div class="input-group full-width">
+                    <label for="eventDescription">Ereignis-Beschreibung:</label>
+                    <textarea id="eventDescription" placeholder="Hier das Ereignis eintragen..." required></textarea>
+                </div>
+                
+                <p id="eventCreatorDisplay">Eingetragen von: <span id="eventCreatorName">Wird geladen...</span></p>
+
+                <button type="submit" id="saveEventBtn" class="primary-btn">Ereignis speichern</button>
+            </form>
+        </section>
+        
+        <!-- EINGETRAGENE EREIGNISSE LESEN / ANZEIGEN -->
+        <section class="card events-list-card">
+            <h2 class="section-title">Alle Einträge des Tages</h2>
+            <div id="eventsList" class="events-list">
+                <p class="placeholder-text" id="eventsPlaceholder">Wählen Sie einen Tag aus, um die Ereignisse anzuzeigen, oder legen Sie einen neuen Tag an.</p>
+            </div>
+        </section>
+        
+    </main>
+    
+    <!-- Custom Modal/Notification Area -->
+    <div id="customModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="modalTitle"></h3>
+            <p id="modalMessage"></p>
+            <div class="modal-buttons">
+                <button id="modalCloseBtn" class="primary-btn">Schließen</button>
+            </div>
+        </div>
+    </div>
+    
+</body>
+</html>

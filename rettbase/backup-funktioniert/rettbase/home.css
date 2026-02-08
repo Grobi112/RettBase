@@ -1,0 +1,151 @@
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: "Segoe UI", sans-serif; -webkit-touch-callout: none; }
+
+:root {
+  --primary-color: #0ea5e9;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+}
+
+body {
+  background: #f4f5f7; 
+  color: #1e1f26; 
+  min-height: 100vh;
+  padding-bottom: 30px;
+}
+
+/* Header Stil - wie Mitarbeiterverwaltung */
+#topBar {
+  padding: 15px 25px;
+  background-color: white;
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  position: static;
+  z-index: 10;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.greeting-text {
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: #666;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.controls-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+.date-time-display {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #000000;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.content-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding-top: 40px;
+}
+.grid {
+  display: grid; 
+  grid-template-columns: repeat(4, 1fr); 
+  gap: 20px 10px; /* Vertikal: 20px, Horizontal: 10px */
+  width: fit-content; 
+  margin: 0 auto;
+  margin-bottom: 25px;
+}
+.grid-item-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 80px;
+}
+.grid-item {
+  background: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: all 0.2s ease; cursor: pointer; width: 80px; height: 80px; text-align: center; color: #1e1f26;
+  user-select: none; -webkit-user-select: none; padding: 4px;
+  position: relative;
+}
+.grid-item:hover { background: #e8f5fe; transform: translateY(-2px); box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
+.grid-item svg { width: 28px; height: 28px; stroke: #1e1f26; stroke-width: 1.8; flex-shrink: 0; }
+.grid-item-label { 
+  font-size: 12px; 
+  font-weight: 500; 
+  line-height: 1.3;
+  text-align: center;
+  max-width: 80px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  -moz-hyphens: auto;
+  text-align: center;
+  padding: 0 2px;
+  box-sizing: border-box;
+}
+.placeholder { background: #e0e0e0; cursor: pointer; }
+.placeholder svg { stroke: #888; }
+/* 📧 E-Mail-Badge für Kacheln */
+.grid-item .email-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #ef4444;
+  color: white;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+.context-menu {
+  position: absolute; background: white; border: 1px solid #ccc; border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: none; flex-direction: column; z-index: 100; padding: 5px 0;
+}
+.context-menu button { background: none; border: none; padding: 8px 16px; text-align: left; width: 100%; font-size: 14px; cursor: pointer; }
+.context-menu button:hover { background: #f0f0f0; }
+.context-menu button.has-submenu { display: flex; align-items: center; justify-content: space-between; }
+.context-menu-back { font-weight: 600; border-top: 1px solid #e5e7eb; margin-top: 5px; padding-top: 10px; }
+.hint-text { color: #000; font-size: 0.85rem; line-height: 1.4; text-align: center; max-width: 90%; opacity: 0.85; }
+

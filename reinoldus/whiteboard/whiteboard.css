@@ -1,0 +1,429 @@
+/* --- Allgemeines Design (Konsolidiert) --- */
+:root {
+    --primary-color: #0ea5e9; /* Sky Blue (Header-Farbe) */
+    --secondary-color: #f3f4f6; /* Light Gray */
+    --text-color: #1e293b; /* Dark Slate */
+    --border-color: #e5e7eb;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+    --color-unmanned: #ffe0e0; /* Rot (Sehr hell) */
+    --color-fully-manned: #a8f3a8; /* Grün (Sehr hell) */
+    --color-unmanned-border: #b91c1c; /* Dunkelrot */
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    padding-bottom: 30px;
+}
+
+/* --- Top Bar / Header --- */
+#topBar {
+    padding: 15px 25px;
+    background-color: white;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    /* FIX: Position wird auf static gesetzt, um Rendering-Fehler bei Dropdowns zu vermeiden */
+    position: static; 
+    z-index: 10; 
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+/* Controls Group */
+.controls-group {
+    display: flex;
+    gap: 10px;
+    /* FIX: Richtet alle Elemente (Label-Gruppe und Button) an der UNTEREN Kante aus */
+    align-items: flex-end; 
+}
+
+/* Styling für das Select-Label */
+.controls-group label {
+    display: block; 
+    color: white; 
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 3px; 
+    display: block; 
+    
+    /* FIX: Setzt Position auf Standard zurück */
+    position: static; 
+    z-index: auto;
+}
+
+.control-select, .control-btn {
+    padding: 10px 15px;
+    font-size: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    /* FIX: Stellt sicher, dass die Select-Liste über allen anderen Elementen liegt */
+    /* Position wird beibehalten, da es das Element selbst ist, das das Menü rendert */
+    position: relative; 
+    z-index: 12; 
+}
+
+.control-select {
+    background-color: white;
+    color: var(--text-color);
+    min-width: 150px;
+    /* Korrektur: Entfernt manuellen Margin */
+    margin-top: 0; 
+}
+
+.primary-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    /* Korrektur: Entfernt manuellen Margin */
+    margin-top: 0;
+}
+
+.primary-btn:hover {
+    background-color: #0b93d0;
+}
+
+/* --- Tage Grid und Day Card (Full Width / Vertikal) --- */
+.days-grid {
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    gap: 25px; 
+    padding: 0 20px;
+    width: 100%; 
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.day-card {
+    width: 100%; 
+    max-width: 1100px; 
+    background: white;
+    border-radius: 12px;
+    box-shadow: var(--shadow); 
+    overflow: hidden;
+}
+
+/* Header (Datumshintergrund) */
+.day-header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 12px 15px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.day-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.day-content {
+    padding: 0; 
+}
+
+/* Placeholder/Info */
+.info-card {
+    width: 100%;
+    text-align: center;
+    padding: 30px;
+    color: #64748b;
+}
+
+/* --- Schicht-Status und Zeilen-Layout --- */
+
+.shift-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 15px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.3s ease;
+    background-color: var(--color-unmanned); /* Rot (Unbesetzt / Teilbesetzt) */
+}
+
+.shift-row:last-child {
+    border-bottom: none;
+}
+
+.shift-row.fully-manned {
+    background-color: var(--color-fully-manned); /* Grün, wenn voll besetzt */
+}
+
+.shift-select {
+    flex-shrink: 0;
+    width: 120px;
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    margin-right: 15px;
+}
+
+.personnel-slot {
+    flex-grow: 1;
+    display: flex;
+    gap: 10px;
+}
+
+.personnel-label {
+    flex-basis: 50%;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    text-align: center;
+    border: 1px solid #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    position: relative;
+    user-select: none;
+}
+
+.personnel-label.unassigned {
+    color: var(--color-unmanned-border); 
+    background-color: var(--color-unmanned); 
+    border-color: var(--color-unmanned-border);
+}
+
+.personnel-label.assigned {
+    color: var(--text-color);
+    background-color: var(--secondary-color);
+    font-weight: 500;
+    border-color: #c9d2de;
+}
+
+.remove-btn {
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+/* --- Button-Styles --- */
+
+/* Tag Löschen Icon (Papierkorb) */
+.delete-day-btn {
+    background-color: transparent; 
+    color: white; 
+    border: none;
+    font-size: 1.2rem; 
+    padding: 5px 8px; 
+    line-height: 1;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.delete-day-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2); 
+    color: white; 
+}
+
+.add-shift-btn {
+    background-color: rgba(255, 255, 255, 0.2); 
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.add-shift-btn:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Löschen-Button für Schicht (🗑️ in der Zeile) */
+.delete-shift-btn {
+    background-color: transparent;
+    color: #ef4444; 
+    border: none;
+    font-size: 1.2rem;
+    margin-left: 10px;
+    padding: 0 5px;
+    line-height: 1;
+    cursor: pointer; 
+    flex-shrink: 0;
+    transition: color 0.2s;
+}
+.delete-shift-btn:hover {
+    color: #dc2626;
+}
+
+/* --- Popup Form --- */
+
+.popup-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 999;
+    display: none; 
+    backdrop-filter: blur(2px);
+}
+
+.popup-form {
+    display: none; 
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    z-index: 1000;
+    width: 90%;
+    max-width: 400px;
+}
+
+.popup-form h2 {
+    margin-bottom: 20px;
+    font-size: 1.3rem;
+    color: var(--text-color);
+}
+
+.popup-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.popup-form input, .popup-form select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.popup-form input:focus, .popup-form select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.qualification-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+.qualification-group label {
+    display: flex;
+    align-items: center; 
+    font-weight: normal;
+    font-size: 0.9rem;
+    color: var(--text-color);
+    cursor: pointer; 
+}
+
+/* Endgültiger Fix für Checkbox-Ausrichtung */
+.qualification-group input[type="checkbox"] {
+    margin: 0 5px 0 0; 
+    padding: 0; 
+    width: auto; 
+    vertical-align: middle; 
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.form-actions button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background-color 0.2s;
+}
+
+.form-actions button:first-child {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.form-actions button:first-child:hover {
+    background-color: #0b93d0;
+}
+
+.cancel-btn {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+}
+
+.cancel-btn:hover {
+    background-color: #e2e8f0;
+}
+
+/* --- Responsive Anpassungen (Mobile) --- */
+@media (max-width: 768px) {
+    #topBar {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 15px;
+    }
+    .controls-group {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        /* Vertikale Ausrichtung auch mobil beibehalten */
+        align-items: flex-end; 
+    }
+    .control-select, .control-btn {
+        flex-grow: 1;
+        min-width: unset;
+    }
+    .days-grid {
+        padding: 0 10px; 
+    }
+    .shift-row {
+        flex-wrap: wrap;
+        padding: 10px;
+    }
+    .shift-select {
+        margin-right: 0;
+        margin-bottom: 10px;
+        width: 100%;
+    }
+    .personnel-slot {
+        width: 100%;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .personnel-label {
+        flex-basis: 100%;
+        font-size: 13px;
+        padding-right: 30px; 
+    }
+}

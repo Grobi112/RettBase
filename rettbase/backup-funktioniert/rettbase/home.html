@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/RBapp.png">
+  <title>RettBase - Home</title>
+  <link rel="stylesheet" href="/home.css">
+</head>
+<body>
+  <header id="topBar">
+    <div class="title-group">
+      <h1 class="page-title">Startseite</h1>
+      <p class="greeting-text" id="greetingText">Guten Tag</p>
+    </div>
+    <div class="controls-group">
+      <div class="date-time-display" id="dateTimeDisplay">--, --.-- --:--</div>
+    </div>
+  </header>
+  
+  <div class="content-wrapper">
+    <div class="grid" id="homeGrid"></div>
+
+    <div class="hint-text">
+      <p>Hier kannst Du deine eigenen Shorts platzieren.</p>
+      <p><strong>Beim Handy oder Tablet:</strong> Lange auf das Feld drücken und ein Menüpunkt auswählen.</p>
+      <p><strong>Beim Desktop-PC:</strong> Mit der rechten Maustaste auf das Feld klicken und ein Menüpunkt aussuchen.</p>
+    </div>
+  </div>
+
+  <div id="contextMenu" class="context-menu"></div>
+
+  <script type="module" src="/home.js"></script>
+</body>
+</html>

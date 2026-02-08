@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/RBapp.png">
+  <title>RettBase - Home</title>
+  <script type="module">
+    import { auth, db } from "./firebase-config.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { collection, query, where, getDocs, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const grid = document.getElementById("homeGrid");
+      const contextMenu = document.getElementById("contextMenu");
+      const totalTiles = 9;
+      let currentTileIndex = null;
+      let userUID = null;
+      let userRole = "user";
+      let tiles = Array(totalTiles).fill(null);
+
+      const menuOptions = [
+        { label: "Home", page: "home.html" },
+        { label: "Whiteboard", page: "whiteboard/whiteboard.html" },
+        { label: "Admin", page: "admin.html" },
+        { label: "Logout", page: "logout" },
+        { label: "Leeren", page: null }
+      ];
+
+      const icons = {
+        Home: `<path d="M3 9.5L12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V9.5z"/>`,
+        Whiteboard: `<rect x="9" y="2" width="6" height="4" rx="1" ry="1"></rect><path d="M9 2H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-4"></path>`,
+        Admin: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>`,
+        Logout: `<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>`,
+        Plus: `<circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line>`
+      };
+
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          window.location.href = "login.html";
+          return;
+        }
+        userUID = user.uid;
+
+        const q = query(collection(db, "users"), where("email", "==", user.email));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          snap.forEach(doc => {
+            const data = doc.data();
+            userRole = data.role?.toLowerCase() || "user";
+          });
+        }
+
+        const saved = localStorage.getItem(`userTiles_${userUID}`);
+        if (saved) tiles = JSON.parse(saved);
+
+        renderGrid();
+        await mergeFromFirestore();
+      });
+
+      function renderGrid() {
+        grid.innerHTML = "";
+        for (let i = 0; i < totalTiles; i++) {
+          const tile = tiles[i];
+          const div = document.createElement("div");
+          div.classList.add("grid-item");
+          if (!tile) div.classList.add("placeholder");
+          div.dataset.index = i;
+
+          div.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+              ${icons[tile?.label || "Plus"]}
+            </svg>
+            <div class="label">${tile?.label || "+"}</div>
+          `;
+
+          div.addEventListener("click", () => {
+            if (tile && tile.page) navigate(tile.page);
+          });
+
+          div.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            currentTileIndex = i;
+            showContextMenu(e.pageX, e.pageY);
+          });
+
+          let pressTimer;
+          let longPressFired = false;
+          let startX = 0, startY = 0;
+
+          div.addEventListener("touchstart", (e) => {
+            longPressFired = false;
+            const t = e.touches[0];
+            startX = t.clientX;
+            startY = t.clientY;
+
+            pressTimer = setTimeout(() => {
+              longPressFired = true;
+              currentTileIndex = i;
+              showContextMenu(t.pageX, t.pageY);
+            }, 600);
+          }, { passive: true });
+
+          div.addEventListener("touchmove", (e) => {
+            const t = e.touches[0];
+            if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10)
+              clearTimeout(pressTimer);
+          }, { passive: true });
+
+          div.addEventListener("touchend", (e) => {
+            clearTimeout(pressTimer);
+            if (!longPressFired) {
+              e.preventDefault();
+              if (tile && tile.page) navigate(tile.page);
+            }
+          });
+
+          grid.appendChild(div);
+        }
+      }
+
+      function showContextMenu(x, y) {
+        contextMenu.innerHTML = "";
+        menuOptions.forEach(opt => {
+          if (opt.label === "Admin" && userRole !== "admin") return;
+          const btn = document.createElement("button");
+          btn.textContent = opt.label;
+          btn.addEventListener("click", () => setTile(opt));
+          contextMenu.appendChild(btn);
+        });
+        contextMenu.style.left = `${x}px`;
+        contextMenu.style.top = `${y}px`;
+        contextMenu.style.display = "flex";
+      }
+
+      document.addEventListener("click", (e) => {
+        if (!contextMenu.contains(e.target)) contextMenu.style.display = "none";
+      });
+
+      async function setTile(option) {
+        if (option.page === null) tiles[currentTileIndex] = null;
+        else tiles[currentTileIndex] = option;
+
+        localStorage.setItem(`userTiles_${userUID}`, JSON.stringify(tiles));
+        await saveToFirestore();
+        renderGrid();
+        contextMenu.style.display = "none";
+      }
+
+      function navigate(page) {
+        if (!page) return;
+        if (page === "logout") {
+          import("./auth.js").then(mod => mod.logout());
+          return;
+        }
+        const frame = window.parent?.document.getElementById("contentFrame");
+        if (frame) frame.src = page;
+        else window.location.href = page;
+      }
+
+      async function mergeFromFirestore() {
+        try {
+          const ref = doc(db, "users", userUID, "userTiles", "config");
+          const snap = await getDoc(ref);
+          if (!snap.exists()) return;
+          const remote = snap.data().tiles;
+          if (!remote) return;
+          let changed = false;
+          const len = Math.max(tiles.length, remote.length);
+          for (let i = 0; i < len; i++) {
+            const r = remote[i];
+            const l = tiles[i];
+            if (r === null && l !== null) {
+              tiles[i] = null;
+              changed = true;
+            } else if ((l === null || l === undefined) && r) {
+              tiles[i] = r;
+              changed = true;
+            }
+          }
+          if (changed) {
+            localStorage.setItem(`userTiles_${userUID}`, JSON.stringify(tiles));
+            renderGrid();
+          }
+        } catch (e) {
+          console.warn("⚠️ Firestore konnte nicht geladen werden:", e);
+        }
+      }
+
+      async function saveToFirestore() {
+        try {
+          const ref = doc(db, "users", userUID, "userTiles", "config");
+          await setDoc(ref, { tiles: tiles }, { merge: true });
+        } catch (e) {
+          console.warn("⚠️ Firestore konnte nicht gespeichert werden:", e);
+        }
+      }
+    });
+  </script>
+
+  <style>
+    .rettbase-heading {
+      color: #00bcd4;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-weight: 600;
+      font-size: 1.3rem;
+      letter-spacing: 0.5px;
+      background: transparent;
+      text-align: center;
+      margin-top: 15px;
+      margin-bottom: 25px;
+      position: relative;
+      display: inline-block;
+      opacity: 0.95;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.25);
+    }
+    .rettbase-heading::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -5px;
+      transform: translateX(-50%);
+      width: 40%;
+      height: 2px;
+      background-color: #00bcd4;
+      border-radius: 2px;
+      opacity: 0.7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Segoe UI", sans-serif; -webkit-touch-callout: none; }
+    body {
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      min-height: 100vh; background: #f4f5f7; color: #1e1f26; padding: 24px 0 32px;
+    }
+    .grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 90%; max-width: 420px; justify-items: center; margin-bottom: 25px;
+    }
+    .grid-item {
+      background: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      transition: all 0.2s ease; cursor: pointer; width: 80px; height: 80px; text-align: center; color: #1e1f26;
+      user-select: none; -webkit-user-select: none;
+    }
+    .grid-item:hover { background: #e8f5fe; transform: translateY(-2px); box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
+    .grid-item svg { width: 28px; height: 28px; stroke: #1e1f26; stroke-width: 1.8; margin-bottom: 5px; }
+    .label { font-size: 12px; font-weight: 500; }
+    .placeholder { background: #e0e0e0; cursor: pointer; }
+    .placeholder svg { stroke: #888; }
+    .context-menu {
+      position: absolute; background: white; border: 1px solid #ccc; border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: none; flex-direction: column; z-index: 100; padding: 5px 0;
+    }
+    .context-menu button { background: none; border: none; padding: 8px 16px; text-align: left; width: 100%; font-size: 14px; cursor: pointer; }
+    .context-menu button:hover { background: #f0f0f0; }
+    .hint-text { color: #000; font-size: 0.85rem; line-height: 1.4; text-align: center; max-width: 90%; opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <h1 class="rettbase-heading">RettBase - Home</h1>
+  <div class="grid" id="homeGrid"></div>
+
+  <div class="hint-text">
+    <p>Hier kannst Du deine eigenen Shorts platzieren.</p>
+    <p><strong>Beim Handy oder Tablet:</strong> Lange auf das Feld drücken und ein Menüpunkt auswählen.</p>
+    <p><strong>Beim Desktop-PC:</strong> Mit der rechten Maustaste auf das Feld klicken und ein Menüpunkt aussuchen.</p>
+  </div>
+
+  <div id="contextMenu" class="context-menu"></div>
+
+  <!-- 🧩 Service Worker & Version -->
+  <script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js")
+      .then(() => console.log("✅ Service Worker aktiv"))
+      .catch((err) => console.warn("⚠️ Service Worker Fehler:", err));
+
+    // Behält den Listener für manuelle PWA-Updates via Service Worker
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "NEW_VERSION") {
+        console.log("⚡ Neue Version erkannt, Seite wird neu geladen...");
+        window.location.reload(true);
+      }
+    });
+  }
+</script>
+</body>
+</html>

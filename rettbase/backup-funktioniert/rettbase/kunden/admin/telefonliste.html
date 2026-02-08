@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Telefonliste</title>
+    <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/RBapp.png">
+    <link rel="stylesheet" href="/kunden/admin/telefonliste.css">
+</head>
+<body>
+
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück zur Startseite">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Telefonliste</h1>
+        </div>
+    </header>
+    
+    <div class="container">
+        <section id="telefonlisteSection" class="card list-card">
+            <div class="telefonliste-header">
+                <h2>Telefonliste</h2>
+                <input type="text" id="telefonlisteSearch" placeholder="Suche..." class="search-input">
+            </div>
+            <div id="telefonlisteList">
+                <p>Lade Telefonliste...</p>
+            </div>
+        </section>
+    </div>
+    
+    <!-- Modal: Mitarbeiter bearbeiten -->
+    <div id="editModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Mitarbeiter bearbeiten</h2>
+                <button type="button" id="closeEditModalX" class="close-modal-btn" aria-label="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editMitarbeiterForm">
+                    <input type="hidden" id="editMitarbeiterId">
+                    
+                    <!-- Nachname (nur Admin/Rettungsdienstleiter) -->
+                    <fieldset id="editNachnameFieldset" style="display: none;">
+                        <legend>Nachname</legend>
+                        <input type="text" id="editNachname" placeholder="Nachname">
+                    </fieldset>
+                    
+                    <!-- Vorname (nur Admin/Rettungsdienstleiter) -->
+                    <fieldset id="editVornameFieldset" style="display: none;">
+                        <legend>Vorname</legend>
+                        <input type="text" id="editVorname" placeholder="Vorname">
+                    </fieldset>
+                    
+                    <!-- Qualifikation (nur Admin/Rettungsdienstleiter) -->
+                    <fieldset id="editQualifikationFieldset" style="display: none;">
+                        <legend>Qualifikation</legend>
+                        <div class="qualification-group" id="editQualifikationGroup">
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="editQualifikation" value="RH">
+                                <span>RH</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="editQualifikation" value="RS">
+                                <span>RS</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="editQualifikation" value="RA">
+                                <span>RA</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="editQualifikation" value="NFS">
+                                <span>NFS</span>
+                            </label>
+                        </div>
+                    </fieldset>
+                    
+                    <!-- Führerschein (nur Admin/Rettungsdienstleiter) -->
+                    <fieldset id="editFuehrerscheinFieldset" style="display: none;">
+                        <legend>Führerscheinklasse</legend>
+                        <input type="text" id="editFuehrerschein" placeholder="Führerscheinklasse">
+                    </fieldset>
+                    
+                    <!-- Telefonnummer (alle mit Bearbeitungsrechten) -->
+                    <fieldset>
+                        <legend>Telefonnummer</legend>
+                        <input type="text" id="editTelefon" placeholder="Telefonnummer">
+                    </fieldset>
+                    
+                    <!-- Handynummer (alle mit Bearbeitungsrechten) -->
+                    <fieldset>
+                        <legend>Handynummer</legend>
+                        <input type="text" id="editHandynummer" placeholder="Handynummer">
+                    </fieldset>
+                    
+                    <div id="editMessage" style="margin-top: 15px; padding: 10px; border-radius: 4px; display: none;"></div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="primary-btn">Speichern</button>
+                        <button type="button" id="closeEditModal" class="cancel-btn">Abbrechen</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/kunden/admin/telefonliste.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Fahrzeuge</title>
+    <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/RBapp.png">
+    <link rel="stylesheet" href="./fahrzeuge.css">
+</head>
+<body>
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Fahrzeuge</h1>
+        </div>
+        <div class="controls-group">
+            <button id="createFahrzeugBtn" class="control-btn primary-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: middle;">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Neues Fahrzeug hinzufügen
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <section id="fahrzeugListSection" class="card list-card">
+            <div class="section-header">
+                <h2>Fahrzeuge verwalten</h2>
+                <input type="text" id="fahrzeugSearch" placeholder="Suche nach Fahrzeug..." class="search-input">
+            </div>
+            <div id="fahrzeugList">
+                <p>Lade Fahrzeuge...</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal: Neues Fahrzeug hinzufügen -->
+    <div id="createModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Neues Fahrzeug hinzufügen</h2>
+                <button type="button" id="closeCreateModalX" class="close-modal-btn" aria-label="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="createFahrzeugForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="rufname">Rufname</label>
+                        <input type="text" id="rufname" name="rufname" placeholder="z.B. RTW-1">
+                    </div>
+                    <div class="form-group">
+                        <label for="fahrzeugtyp">Fahrzeugtyp</label>
+                        <input type="text" id="fahrzeugtyp" name="fahrzeugtyp" placeholder="z.B. RTW, KTW, NEF">
+                    </div>
+                    <div class="form-group">
+                        <label for="wache">Wache</label>
+                        <input type="text" id="wache" name="wache" placeholder="z.B. Wache 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="aktiv">Aktiv</label>
+                        <select id="aktiv" name="aktiv">
+                            <option value="true">Ja</option>
+                            <option value="false">Nein</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="kennzeichen">Kennzeichen</label>
+                        <input type="text" id="kennzeichen" name="kennzeichen" placeholder="z.B. B-AB 1234">
+                    </div>
+                    <div class="form-group">
+                        <label for="hersteller">Hersteller</label>
+                        <input type="text" id="hersteller" name="hersteller" placeholder="z.B. Mercedes-Benz">
+                    </div>
+                    <div class="form-group">
+                        <label for="modell">Modell</label>
+                        <input type="text" id="modell" name="modell" placeholder="z.B. Sprinter">
+                    </div>
+                    <div class="form-group">
+                        <label for="baujahr">Baujahr</label>
+                        <input type="number" id="baujahr" name="baujahr" placeholder="z.B. 2020" min="1900" max="2100">
+                    </div>
+                    <div class="form-group">
+                        <label for="indienststellung">Indienststellung</label>
+                        <input type="date" id="indienststellung" name="indienststellung">
+                    </div>
+                    <div class="form-group">
+                        <label for="traeger">Träger</label>
+                        <input type="text" id="traeger" name="traeger" placeholder="z.B. Stadt XY">
+                    </div>
+                    <div class="form-group">
+                        <label for="kostenstelle">Kostenstelle</label>
+                        <input type="text" id="kostenstelle" name="kostenstelle" placeholder="z.B. 12345">
+                    </div>
+                    <div class="form-group">
+                        <label for="gruppe">Gruppe</label>
+                        <input type="text" id="gruppe" name="gruppe" placeholder="z.B. Gruppe 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="kraftstoff">Kraftstoff</label>
+                        <input type="text" id="kraftstoff" name="kraftstoff" placeholder="z.B. Diesel, Benzin, Elektro">
+                    </div>
+                    <div class="form-group">
+                        <label for="antrieb">Antrieb</label>
+                        <input type="text" id="antrieb" name="antrieb" placeholder="z.B. 4x4, 2WD">
+                    </div>
+                </div>
+                <div id="fahrzeugMessage" class="message"></div>
+                <div class="modal-actions">
+                    <button type="button" id="closeCreateModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Fahrzeug hinzufügen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Fahrzeug bearbeiten -->
+    <div id="editModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Fahrzeug bearbeiten</h2>
+                <button type="button" id="closeEditModalX" class="close-modal-btn" aria-label="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="editFahrzeugForm">
+                <input type="hidden" id="editFahrzeugId" name="id">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="editRufname">Rufname</label>
+                        <input type="text" id="editRufname" name="rufname" placeholder="z.B. RTW-1">
+                    </div>
+                    <div class="form-group">
+                        <label for="editFahrzeugtyp">Fahrzeugtyp</label>
+                        <input type="text" id="editFahrzeugtyp" name="fahrzeugtyp" placeholder="z.B. RTW, KTW, NEF">
+                    </div>
+                    <div class="form-group">
+                        <label for="editWache">Wache</label>
+                        <input type="text" id="editWache" name="wache" placeholder="z.B. Wache 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="editAktiv">Aktiv</label>
+                        <select id="editAktiv" name="aktiv">
+                            <option value="true">Ja</option>
+                            <option value="false">Nein</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editKennzeichen">Kennzeichen</label>
+                        <input type="text" id="editKennzeichen" name="kennzeichen" placeholder="z.B. B-AB 1234">
+                    </div>
+                    <div class="form-group">
+                        <label for="editHersteller">Hersteller</label>
+                        <input type="text" id="editHersteller" name="hersteller" placeholder="z.B. Mercedes-Benz">
+                    </div>
+                    <div class="form-group">
+                        <label for="editModell">Modell</label>
+                        <input type="text" id="editModell" name="modell" placeholder="z.B. Sprinter">
+                    </div>
+                    <div class="form-group">
+                        <label for="editBaujahr">Baujahr</label>
+                        <input type="number" id="editBaujahr" name="baujahr" placeholder="z.B. 2020" min="1900" max="2100">
+                    </div>
+                    <div class="form-group">
+                        <label for="editIndienststellung">Indienststellung</label>
+                        <input type="date" id="editIndienststellung" name="indienststellung">
+                    </div>
+                    <div class="form-group">
+                        <label for="editTraeger">Träger</label>
+                        <input type="text" id="editTraeger" name="traeger" placeholder="z.B. Stadt XY">
+                    </div>
+                    <div class="form-group">
+                        <label for="editKostenstelle">Kostenstelle</label>
+                        <input type="text" id="editKostenstelle" name="kostenstelle" placeholder="z.B. 12345">
+                    </div>
+                    <div class="form-group">
+                        <label for="editGruppe">Gruppe</label>
+                        <input type="text" id="editGruppe" name="gruppe" placeholder="z.B. Gruppe 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="editKraftstoff">Kraftstoff</label>
+                        <input type="text" id="editKraftstoff" name="kraftstoff" placeholder="z.B. Diesel, Benzin, Elektro">
+                    </div>
+                    <div class="form-group">
+                        <label for="editAntrieb">Antrieb</label>
+                        <input type="text" id="editAntrieb" name="antrieb" placeholder="z.B. 4x4, 2WD">
+                    </div>
+                </div>
+                <div id="editFahrzeugMessage" class="message"></div>
+                <div class="modal-actions">
+                    <button type="button" id="closeEditModal" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Änderungen speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="./fahrzeuge.js"></script>
+</body>
+</html>
+

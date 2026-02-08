@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Schichtplan</title>
+    <link rel="stylesheet" href="./schichtplan.css">
+    
+</head>
+
+<body>
+
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück zur Startseite">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Schichtplan</h1>
+        </div>
+        <div class="controls-group">
+            <!-- Entfernt: Offene Schichten, Bereitschaften, Standort-Auswahl, Neuer Tag -->
+            <button id="openShiftsBtn" class="control-btn icon-btn" title="Offene Dienste anzeigen">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Neuer Bereich: Kalender dauerhaft im Layout -->
+    <section id="calendarSection">
+        <div id="calendarContainer"></div>
+    </section>
+
+    <!-- Tages-Gesamtübersicht (alle Standorte) – Inhalt wird jetzt ausschließlich im Tages-Popup angezeigt -->
+    <main id="daysArea" class="days-grid">
+        <!-- bewusst leer gelassen, da Tagesdetails im Popup dargestellt werden -->
+    </main>
+
+    <div class="popup-overlay" id="datePopupOverlay"></div>
+    <div class="popup-form" id="datePopupForm">
+        <h2>Neuen Tag erstellen</h2>
+        <label for="newDayDate">Datum auswählen (DD.MM.JJJJ):</label>
+        <input type="date" id="newDayDate" required>
+        <div class="form-actions">
+            <button id="saveDayBtn">Speichern</button>
+            <button onclick="closeDatePopup()" class="cancel-btn">Abbrechen</button>
+        </div>
+    </div>
+
+    <div class="popup-overlay" id="personnelPopupOverlay"></div>
+    <div class="popup-form" id="personnelPopupForm">
+        <h2>Personal eintragen</h2>
+        <label for="personnelMitarbeiterSearch">Mitarbeiter suchen:</label>
+        <input type="text" id="personnelMitarbeiterSearch" placeholder="Nachname oder Vorname eingeben..." autocomplete="off">
+        <label for="personnelMitarbeiterSelect">Mitarbeiter auswählen:</label>
+        <select id="personnelMitarbeiterSelect" size="8" required>
+            <option value="">-- Bitte auswählen --</option>
+        </select>
+        <div id="personnelMitarbeiterList" class="personnel-mitarbeiter-list"></div>
+        
+        <!-- Bereitschafts-Typ Dropdown (versteckt, wird bei Bedarf angezeigt) -->
+        <label id="bereitschaftsTypLabel" style="display: none;">Bereitschafts-Typ:</label>
+        <select id="bereitschaftsTypSelect" style="display: none; width: 100%; padding: 12px; border: 2px solid #007bff; border-radius: 8px; font-size: 16px; margin-bottom: 15px; background-color: white;">
+            <option value="">-- Bitte auswählen --</option>
+        </select>
+
+        <label for="personnelColor" id="personnelColorLabel">Hintergrundfarbe:</label>
+        <select id="personnelColor">
+            <option value="#ffffff" selected>Weiß</option>
+            <option value="#ffef94">Gelb (Highlight)</option>
+        </select>
+
+        <div class="form-actions">
+            <button id="savePersonnelBtn">Speichern</button>
+            <button onclick="closePersonnelPopup()" class="cancel-btn">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Mitarbeiter-Datenblatt Modal -->
+    <div class="popup-overlay" id="mitarbeiterDatenblattOverlay"></div>
+    <div class="popup-form" id="mitarbeiterDatenblattForm">
+        <div class="settings-header">
+            <h2>Mitarbeiter-Datenblatt</h2>
+            <button class="close-btn" onclick="closeMitarbeiterDatenblatt()">×</button>
+        </div>
+        <div id="mitarbeiterDatenblattContent">
+            <!-- Wird dynamisch gefüllt -->
+        </div>
+    </div>
+
+    <!-- Kommentar-Popup Modal -->
+    <div class="popup-overlay" id="kommentarPopupOverlay"></div>
+    <div class="popup-form" id="kommentarPopupForm">
+        <div class="settings-header">
+            <h2>Kommentar hinzufügen</h2>
+            <button class="close-btn" onclick="closeKommentarPopup()">×</button>
+        </div>
+        <div class="form-content">
+            <label for="kommentarText">Kommentar:</label>
+            <textarea id="kommentarText" rows="4" placeholder="Kommentar eingeben..."></textarea>
+            <div class="form-actions">
+                <button id="saveKommentarBtn">Speichern</button>
+                <button onclick="closeKommentarPopup()" class="cancel-btn">Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Offene Dienste Popup Modal -->
+    <div class="popup-overlay" id="openShiftsPopupOverlay"></div>
+    <div class="popup-form fullscreen" id="openShiftsPopupForm">
+        <div class="settings-header">
+            <h2>Offene Dienste</h2>
+            <button class="close-btn" onclick="closeOpenShiftsPopup()">×</button>
+        </div>
+        <div class="form-content">
+            <label for="openShiftsSchichtartSelect" style="display: block; margin-bottom: 10px; font-weight: 500;">Art auswählen:</label>
+            <select id="openShiftsSchichtartSelect" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; margin-bottom: 15px;">
+                <option value="">-- Bitte Art auswählen --</option>
+                <option value="KTW">KTW-Schichten</option>
+                <option value="RTW">RTW-Schichten</option>
+            </select>
+            <p style="margin-bottom: 15px; color: #666;">Hier die aktuellen offenen Dienste:</p>
+            <textarea id="openShiftsTextarea" readonly style="width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 6px; font-family: monospace; font-size: 14px; resize: none; white-space: pre-wrap; overflow-y: auto; max-height: 50vh;"></textarea>
+            <div class="form-actions" style="margin-top: 15px;">
+                <button onclick="copyOpenShifts()" class="primary-btn">In Zwischenablage kopieren</button>
+                <button onclick="closeOpenShiftsPopup()" class="cancel-btn">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Einstellungs-Modal -->
+    <div class="popup-overlay" id="settingsPopupOverlay" style="display: none;"></div>
+    <div class="popup-form large" id="settingsPopupForm" style="display: none;">
+        <div class="settings-header">
+            <h2>Einstellungen</h2>
+            <button class="close-btn" onclick="closeSettingsPopup()">×</button>
+        </div>
+        <div class="settings-tabs">
+            <button class="tab-btn active" data-tab="standorte">Standorte</button>
+            <button class="tab-btn" data-tab="schichten">Schichten</button>
+            <button class="tab-btn" data-tab="bereitschaften">Bereitschaften</button>
+        </div>
+        <div class="settings-content">
+            <!-- Standorte Tab -->
+            <div class="tab-pane active" id="tab-standorte">
+                <div class="settings-section">
+                    <h3>Standorte verwalten</h3>
+                    <button id="addStandortBtn" class="control-btn primary-btn">+ Standort hinzufügen</button>
+                    <div id="standorteList" class="settings-list"></div>
+                </div>
+            </div>
+            <!-- Schichten Tab -->
+            <div class="tab-pane" id="tab-schichten">
+                <div class="settings-section">
+                    <h3>Schichten verwalten</h3>
+                    <button id="addSchichtBtn" class="control-btn primary-btn">+ Schicht hinzufügen</button>
+                    <div id="schichtenList" class="settings-list"></div>
+                </div>
+            </div>
+            <!-- Bereitschaften Tab -->
+            <div class="tab-pane" id="tab-bereitschaften">
+                <div class="settings-section">
+                    <h3>Bereitschafts-Typen verwalten</h3>
+                    <button id="addBereitschaftsTypBtn" class="control-btn primary-btn">+ Bereitschafts-Typ hinzufügen</button>
+                    <div id="bereitschaftsTypenList" class="settings-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Standort Form Modal -->
+    <div class="popup-overlay" id="standortFormOverlay"></div>
+    <div class="popup-form" id="standortForm">
+        <h2 id="standortFormTitle">Standort hinzufügen</h2>
+        <label for="standortName">Name:</label>
+        <input type="text" id="standortName" placeholder="z.B. RW Holzwickede" required>
+        <div class="form-actions">
+            <button id="saveStandortBtn">Speichern</button>
+            <button onclick="closeStandortForm()" class="cancel-btn">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Schicht Form Modal -->
+    <div class="popup-overlay" id="schichtFormOverlay"></div>
+    <div class="popup-form" id="schichtForm">
+        <h2 id="schichtFormTitle">Schicht hinzufügen</h2>
+        <label for="schichtName">Name:</label>
+        <input type="text" id="schichtName" placeholder="z.B. RH1" required>
+        <label for="schichtStandort">Standort:</label>
+        <select id="schichtStandort" required>
+            <option value="">-- Bitte auswählen --</option>
+        </select>
+        <label for="schichtSchichtart">Schichtart:</label>
+        <select id="schichtSchichtart" required>
+            <option value="">-- Bitte auswählen --</option>
+            <option value="KTW">KTW</option>
+            <option value="RTW">RTW</option>
+            <option value="ITW">ITW</option>
+            <option value="S-RTW">S-RTW</option>
+            <option value="N-KTW">N-KTW</option>
+        </select>
+        <div class="form-actions">
+            <button id="saveSchichtBtn">Speichern</button>
+            <button onclick="closeSchichtForm()" class="cancel-btn">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Mitarbeiter Form Modal -->
+    <div class="popup-overlay" id="mitarbeiterFormOverlay"></div>
+    <div class="popup-form" id="mitarbeiterForm">
+        <h2 id="mitarbeiterFormTitle">Mitarbeiter hinzufügen</h2>
+        <label for="mitarbeiterVorname">Vorname:</label>
+        <input type="text" id="mitarbeiterVorname" required>
+        <label for="mitarbeiterNachname">Nachname:</label>
+        <input type="text" id="mitarbeiterNachname" required>
+        <label>Qualifikationen:</label>
+        <div class="qualification-group" id="mitarbeiterQualifikationen">
+            <!-- Wird dynamisch gefüllt -->
+        </div>
+        <label for="mitarbeiterFuehrerschein">Führerschein:</label>
+        <input type="text" id="mitarbeiterFuehrerschein" placeholder="z.B. C1, B">
+        <label for="mitarbeiterTelefon">Telefonnummer:</label>
+        <input type="tel" id="mitarbeiterTelefon" placeholder="+49 123 456789">
+        <div class="form-actions">
+            <button id="saveMitarbeiterBtn">Speichern</button>
+            <button onclick="closeMitarbeiterForm()" class="cancel-btn">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Bereitschafts-Typ Form Modal -->
+    <div class="popup-overlay" id="bereitschaftsTypFormOverlay"></div>
+    <div class="popup-form" id="bereitschaftsTypForm">
+        <h2 id="bereitschaftsTypFormTitle">Bereitschafts-Typ hinzufügen</h2>
+        <label for="bereitschaftsTypName">Name:</label>
+        <input type="text" id="bereitschaftsTypName" placeholder="z.B. BTRK, BNRK, BTK, BNK" required>
+        <label for="bereitschaftsTypBeschreibung">Beschreibung (optional):</label>
+        <input type="text" id="bereitschaftsTypBeschreibung" placeholder="z.B. Bereitschaft RTW/KTW">
+        <div class="form-actions">
+            <button id="saveBereitschaftsTypBtn">Speichern</button>
+            <button onclick="closeBereitschaftsTypForm()" class="cancel-btn">Abbrechen</button>
+        </div>
+    </div>
+
+
+    <!-- Tages-Detail Popup (Kalender-Tag in Popup anzeigen) -->
+    <div class="popup-overlay" id="dayPopupOverlay" style="display: none;"></div>
+    <div class="popup-form large" id="dayPopupForm" style="display: none;">
+        <div class="calendar-header">
+            <h2 id="dayPopupTitle">Tag-Übersicht</h2>
+            <button class="close-btn" onclick="closeDayPopup()">×</button>
+        </div>
+        <!-- Bereitschaften oben im Popup -->
+        <section id="dayBereitschaftenSection">
+            <div class="day-bereitschaften-header">
+                <h3>Bereitschaft</h3>
+                <button id="addBereitschaftForDayBtn" class="control-btn primary-btn">+ Bereitschaft</button>
+            </div>
+            <div id="dayBereitschaftenTop"></div>
+        </section>
+        <!-- Gesamtübersicht aller Standorte im Popup -->
+        <div id="dayOverviewContent"></div>
+    </div>
+
+    <script type="module" src="./schichtplan.js"></script>
+
+</body>
+</html>

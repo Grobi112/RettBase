@@ -1,0 +1,1333 @@
+// dashboard.js 
+
+import { auth, logout, getAuthData, onAuthStateChanged } from "./auth.js"; 
+import { getUserModules, getDefaultModulesForRole, initializeDefaultModules, setCompanyModules } from "./modules.js";
+import { doc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+import { db } from "./firebase-config.js";
+
+const menuToggle = document.getElementById("menuToggle");
+const dropdownMenu = document.getElementById("dropdownMenu");
+const menuBackdrop = document.getElementById("menuBackdrop");
+const contentFrame = document.getElementById("contentFrame");
+const logoutLink = document.getElementById("logoutLink");
+const userMenuToggle = document.getElementById("userMenuToggle");
+const userDropdownMenu = document.getElementById("userDropdownMenu");
+const userNameDisplay = document.getElementById("userNameDisplay");
+const profileLink = document.getElementById("profileLink");
+const posteingangLink = document.getElementById("posteingangLink");
+
+let userAuthData = null;
+let userModules = []; // Speichert die für den Benutzer sichtbaren Module
+let menuStructure = null; // Gespeicherte Menüstruktur aus Firestore
+let isRenderingMenu = false; // Verhindert mehrfaches gleichzeitiges Rendern
+
+// 🔒 SESSION-TIMEOUT: Automatische Abmeldung nach 30 Minuten Inaktivität
+let inactivityTimer = null;
+let warningTimer = null;
+let activityListenersSetup = false; // Verhindert mehrfache Event-Listener-Registrierung
+const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 Minuten in Millisekunden 
+
+
+// --- FUNKTION: DATEN AN IFRAME SENDEN (Handshake-Antwort) ---
+function sendAuthDataToIframe() {
+    // Prüfe ob iFrame existiert und geladen ist
+    if (!contentFrame || !contentFrame.contentWindow) {
+        // iFrame ist noch nicht bereit - das ist normal beim ersten Laden
+        return;
+    }
+    
+    // Prüfe ob Auth-Daten vorhanden sind
+    if (!userAuthData) {
+        // Auth-Daten sind noch nicht geladen - das ist normal beim ersten Laden
+        return;
+    }
+
+    // 🔥 NEU: Sende auch die verfügbaren Module an das iframe
+    try {
+        contentFrame.contentWindow.postMessage({
+            type: 'AUTH_DATA',
+            data: userAuthData,
+            modules: userModules // Verfügbare Module für Kachelbelegung
+        }, '*'); 
+        console.log(`✉️ Auth-Daten (Role: ${userAuthData.role}, Company: ${userAuthData.companyId}) und ${userModules.length} Module gesendet.`);
+    } catch (error) {
+        // Fehler beim Senden - kann passieren wenn iFrame noch nicht vollständig geladen ist
+        console.debug("⚠️ Konnte Auth-Daten nicht senden (iFrame möglicherweise noch nicht bereit):", error.message);
+    }
+}
+
+
+// --- HANDSHAKE-LISTENER: Empfängt die 'READY' Nachricht vom iFrame ---
+window.addEventListener('message', async (event) => {
+    if (event.source !== contentFrame.contentWindow) {
+        return;
+    }
+
+    if (event.data && event.data.type === 'IFRAME_READY') {
+        console.log("🤝 Handshake empfangen: iFrame ist bereit.");
+        sendAuthDataToIframe(); 
+    }
+    
+    // Reagiere auf Modul-Änderungen: Lade Module neu und aktualisiere Menü
+    // 🔥 WICHTIG: Nur verarbeiten, wenn wirklich Module geändert wurden (reason === 'saved')
+    // Verhindert unnötiges Re-Rendering bei normaler Navigation
+    if (event.data && event.data.type === 'MODULES_UPDATED' && event.data.reason === 'saved') {
+        console.log("🔄 Module wurden aktualisiert (reason: saved), lade Menü neu...");
+        if (userAuthData && !isRenderingMenu) {
+            userModules = await getUserModules(userAuthData.companyId, userAuthData.role);
+            menuStructure = null; // Lade Menüstruktur neu
+            console.log(`📋 Module neu geladen:`, userModules.map(m => `${m.label} (${m.id})`));
+            await safeRenderMenu();
+            sendAuthDataToIframe(); // Aktualisiere auch die Module im iframe
+        }
+    } else if (event.data && event.data.type === 'MODULES_UPDATED' && event.data.reason !== 'saved') {
+        console.debug("⚠️ MODULES_UPDATED ohne reason='saved' ignoriert (normale Navigation?)");
+    }
+    
+    // 🔥 NEU: Reagiere auf Menü-Änderungen: Lade globale Menüstruktur neu und rendere Menü
+    if (event.data && event.data.type === 'MENU_UPDATED') {
+        console.log("🔄 Globale Menüstruktur wurde aktualisiert, lade Menü neu...");
+        if (userAuthData && !isRenderingMenu) {
+            // Globale Menüstruktur gilt für alle Firmen - immer neu laden
+            menuStructure = null; // Lade Menüstruktur neu
+            await loadMenuStructure(); // Explizit neu laden
+            await safeRenderMenu();
+            console.log("✅ Menü wurde aktualisiert (global)");
+        }
+    }
+    
+    // Reagiere auf Navigation-Requests vom iframe (z.B. von Profil-Seite zurück zu Home)
+    if (event.data && event.data.type === 'NAVIGATE_TO_HOME') {
+        const homeModule = userModules.find(m => m.id === 'home');
+        if (homeModule && contentFrame) {
+            contentFrame.src = homeModule.url;
+        }
+    }
+});
+
+
+// Initialisiere beim Laden
+window.onload = () => {
+    // contentFrame.src wird nach dem Laden der Module gesetzt
+};
+
+// --- EVENTS ---
+
+/**
+ * Schließt alle geöffneten Submenüs im Hamburger-Menü
+ */
+function closeAllSubmenus() {
+    // Finde alle geöffneten Submenüs (display !== 'none')
+    const openSubmenus = dropdownMenu.querySelectorAll('.menu-submenu');
+    openSubmenus.forEach(submenu => {
+        if (submenu.style.display !== 'none') {
+            submenu.style.display = 'none';
+        }
+    });
+    
+    // Entferne 'expanded' Klasse von allen Menu-Items
+    const expandedItems = dropdownMenu.querySelectorAll('.menu-item.expanded');
+    expandedItems.forEach(item => {
+        item.classList.remove('expanded');
+    });
+    
+    // Setze alle Pfeile zurück (rotation = 0deg)
+    const arrows = dropdownMenu.querySelectorAll('.menu-arrow');
+    arrows.forEach(arrow => {
+        arrow.style.transform = 'rotate(0deg)';
+    });
+}
+
+// Funktion zum Schließen des Menüs
+function closeMenu() {
+    dropdownMenu.classList.remove("show");
+    if (menuBackdrop) {
+        menuBackdrop.style.display = "none";
+    }
+    // 🔥 NEU: Schließe alle Submenüs, wenn das Hauptmenü geschlossen wird
+    closeAllSubmenus();
+}
+
+// Funktion zum Öffnen des Menüs
+function openMenu() {
+    dropdownMenu.classList.add("show");
+    if (menuBackdrop) {
+        menuBackdrop.style.display = "block";
+    }
+    // 🔥 NEU: Stelle sicher, dass alle Submenüs geschlossen sind, wenn das Menü geöffnet wird
+    closeAllSubmenus();
+}
+
+// Toggle Menu - schaltet zwischen offen/geschlossen um
+menuToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (dropdownMenu.classList.contains("show")) {
+        closeMenu();
+    } else {
+        openMenu();
+    }
+});
+
+// Touch-Logik für Menu-Toggle
+menuToggle.addEventListener("touchend", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (dropdownMenu.classList.contains("show")) {
+        closeMenu();
+    } else {
+        openMenu();
+    }
+}, { passive: false });
+
+// Backdrop: Schließe Menü bei Klick auf Backdrop
+if (menuBackdrop) {
+    menuBackdrop.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeMenu();
+    });
+    
+    menuBackdrop.addEventListener("touchend", (e) => {
+        e.stopPropagation();
+        closeMenu();
+    }, { passive: true });
+}
+
+// --- USER DROPDOWN MENU ---
+
+// Funktion zum Schließen des User-Dropdowns
+function closeUserMenu() {
+    if (userDropdownMenu) {
+        userDropdownMenu.classList.remove("show");
+        userDropdownMenu.style.display = "none";
+    }
+}
+
+// Funktion zum Öffnen des User-Dropdowns
+function openUserMenu() {
+    if (userDropdownMenu) {
+        userDropdownMenu.classList.add("show");
+        userDropdownMenu.style.display = "flex";
+    }
+}
+
+// Toggle User Menu
+if (userMenuToggle) {
+    userMenuToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (userDropdownMenu && userDropdownMenu.classList.contains("show")) {
+            closeUserMenu();
+        } else {
+            // Schließe das Hamburger-Menü, falls es offen ist
+            closeMenu();
+            openUserMenu();
+        }
+    });
+    
+    userMenuToggle.addEventListener("touchend", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (userDropdownMenu && userDropdownMenu.classList.contains("show")) {
+            closeUserMenu();
+        } else {
+            closeMenu();
+            openUserMenu();
+        }
+    }, { passive: false });
+}
+
+// Schließe User-Dropdown bei Klick außerhalb
+document.addEventListener("click", (e) => {
+    if (userMenuToggle && userDropdownMenu && 
+        !userMenuToggle.contains(e.target) && 
+        !userDropdownMenu.contains(e.target)) {
+        closeUserMenu();
+    }
+});
+
+// Profil-Link Event Listener
+if (profileLink) {
+    profileLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeUserMenu();
+        // Lade Profil-Seite im iframe
+        if (contentFrame) {
+            contentFrame.src = "profile.html";
+        }
+    });
+    
+    profileLink.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeUserMenu();
+        if (contentFrame) {
+            contentFrame.src = "profile.html";
+        }
+    }, { passive: false });
+}
+
+// Posteingang-Link Event Listener
+if (posteingangLink) {
+    posteingangLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeUserMenu();
+        // Lade Posteingang-Seite im iframe (TODO: Seite erstellen)
+        if (contentFrame) {
+            contentFrame.src = "posteingang.html"; // Wird später erstellt
+        }
+    });
+    
+    posteingangLink.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeUserMenu();
+        if (contentFrame) {
+            contentFrame.src = "posteingang.html"; // Wird später erstellt
+        }
+    }, { passive: false });
+}
+
+/**
+ * Ruft den Namen (Vor- und Nachname) eines Mitarbeiters aus der zentralen mitarbeiter Collection ab
+ * 🔥 NEU: Verwendet die zentrale mitarbeiter Collection statt users/schichtplanMitarbeiter
+ */
+async function getUserName(uid, companyId) {
+  try {
+    if (!uid || !companyId) {
+      console.warn("getUserName: Keine UID oder companyId verfügbar");
+      return null;
+    }
+    
+    // 🔥 NEUE ZENTRALE MITARBEITER-COLLECTION: Suche direkt nach UID
+    // Versuche 1: Direkte Abfrage mit UID als Dokument-ID
+    const mitarbeiterRef = doc(db, "kunden", companyId, "mitarbeiter", uid);
+    const mitarbeiterSnap = await getDoc(mitarbeiterRef);
+    
+    if (mitarbeiterSnap.exists()) {
+      const mitarbeiterData = mitarbeiterSnap.data();
+      const vorname = mitarbeiterData.vorname || '';
+      const nachname = mitarbeiterData.nachname || '';
+      
+      if (vorname || nachname) {
+        // Formatiere als "Nachname, Vorname"
+        if (vorname && nachname) {
+          return `${nachname}, ${vorname}`;
+        } else if (nachname) {
+          return nachname;
+        } else if (vorname) {
+          return vorname;
+        }
+      }
+    }
+    
+    // Versuche 2: Suche nach uid-Feld in der mitarbeiter Collection
+    const mitarbeiterCollection = collection(db, "kunden", companyId, "mitarbeiter");
+    const uidQuery = query(mitarbeiterCollection, where("uid", "==", uid));
+    const uidSnapshot = await getDocs(uidQuery);
+    
+    if (!uidSnapshot.empty) {
+      const mitarbeiterDoc = uidSnapshot.docs[0];
+      const mitarbeiterData = mitarbeiterDoc.data();
+      const vorname = mitarbeiterData.vorname || '';
+      const nachname = mitarbeiterData.nachname || '';
+      
+      if (vorname || nachname) {
+        // Formatiere als "Nachname, Vorname"
+        if (vorname && nachname) {
+          return `${nachname}, ${vorname}`;
+        } else if (nachname) {
+          return nachname;
+        } else if (vorname) {
+          return vorname;
+        }
+      }
+    }
+    
+    // Fallback: Verwende Email (nur den Teil vor dem @)
+    const userEmail = auth.currentUser?.email || "";
+    const emailName = userEmail.split('@')[0];
+    return emailName || "Benutzer";
+  } catch (error) {
+    console.error("Fehler beim Abrufen des Benutzernamens:", error);
+    return null;
+  }
+}
+
+/**
+ * Aktualisiert die Anzeige des Benutzernamens im Header
+ */
+async function updateUserNameDisplay() {
+    if (!userAuthData || !userNameDisplay) return;
+    
+    try {
+        const userName = await getUserName(userAuthData.uid, userAuthData.companyId);
+        if (userName) {
+            userNameDisplay.textContent = userName;
+        } else {
+            // Fallback: Verwende Email
+            const email = auth.currentUser?.email || "";
+            const emailName = email.split('@')[0] || "Benutzer";
+            userNameDisplay.textContent = emailName;
+        }
+    } catch (error) {
+        console.error("Fehler beim Aktualisieren des Benutzernamens:", error);
+        userNameDisplay.textContent = "Benutzer";
+    }
+}
+
+/**
+ * Lädt die globale Menüstruktur aus Firestore (gilt für alle Firmen)
+ */
+async function loadMenuStructure() {
+    try {
+        // 🔥 GLOBAL: Lade Menüstruktur aus globalem Pfad (nicht firmenspezifisch)
+        const menuRef = doc(db, "settings", "globalMenu");
+        console.log("🔍 Lade globale Menüstruktur von: settings/globalMenu");
+        console.log("🔍 Aktueller Benutzer:", userAuthData ? `UID: ${userAuthData.uid}, Role: ${userAuthData.role}, Company: ${userAuthData.companyId}` : "nicht eingeloggt");
+        
+        const menuSnap = await getDoc(menuRef);
+        console.log("🔍 [LOAD] Firestore-Abfrage abgeschlossen, exists:", menuSnap.exists());
+        
+        if (menuSnap.exists()) {
+            const data = menuSnap.data();
+            console.log("📋 [LOAD] Firestore-Daten gefunden:", Object.keys(data));
+            console.log("📋 [LOAD] data.items:", data.items);
+            console.log("📋 [LOAD] data.items ist Array:", Array.isArray(data.items));
+            console.log("📋 [LOAD] data.items.length:", Array.isArray(data.items) ? data.items.length : "N/A");
+            
+            // 🔥 WICHTIG: Leeres Array sollte nicht zu null werden!
+            menuStructure = Array.isArray(data.items) ? data.items : (data.items || []);
+            console.log("📋 [LOAD] Globale Menüstruktur geladen:", menuStructure.length, "Items");
+            console.log("📋 [LOAD] menuStructure:", menuStructure);
+            
+            if (menuStructure.length > 0) {
+                console.log("📋 Menüstruktur-Items Details:");
+                menuStructure.forEach((item, index) => {
+                    console.log(`   [${index}] ${item.label || item.id} - type: ${item.type}, level: ${item.level || 0}, order: ${item.order || 0}`);
+                    if (item.roles) {
+                        console.log(`       Rollen: ${item.roles.join(', ')}`);
+                    }
+                });
+            } else {
+                console.log("⚠️ Menüstruktur ist leer (0 Items) - möglicherweise wurde sie noch nicht erstellt");
+                console.log("💡 Tipp: Gehe zur Menü-Verwaltung (als Superadmin) und erstelle/speichere eine Menüstruktur");
+            }
+            return menuStructure;
+        }
+        console.log("📋 Keine globale Menüstruktur gefunden in Firestore (settings/globalMenu existiert nicht)");
+        console.log("💡 Tipp: Gehe zur Menü-Verwaltung (als Superadmin) und erstelle/speichere eine Menüstruktur");
+        menuStructure = []; // Leeres Array statt null
+        return [];
+    } catch (error) {
+        console.error("❌ Fehler beim Laden der globalen Menüstruktur:", error);
+        console.error("   Fehler-Details:", error.message);
+        console.error("   Fehler-Code:", error.code);
+        console.error("   Stack:", error.stack);
+        
+        // Prüfe ob es ein Berechtigungsproblem ist
+        if (error.code === 'permission-denied') {
+            console.error("🔒 BEREchtIGUNGSPROBLEM: Firestore Rules erlauben keinen Lesezugriff auf settings/globalMenu");
+            console.error("💡 Lösung: Aktualisiere die Firestore Rules (siehe firestore-rules-mit-settings.txt)");
+        }
+        
+        // Bei Fehler: Leeres Array statt null, damit Fallback funktioniert
+        menuStructure = [];
+        return [];
+    }
+}
+
+/**
+ * Findet Modul-Informationen für ein Menü-Item
+ */
+function findModuleInfo(item) {
+    if (item.type === 'module') {
+        const module = userModules.find(m => m.id === item.id);
+        if (!module) {
+            console.log(`   ⚠️ Modul '${item.id}' nicht in verfügbaren Modulen gefunden. Verfügbare Module:`, userModules.map(m => m.id));
+        }
+        return module;
+    }
+    return null;
+}
+
+/**
+ * Klappt ein Untermenü ein oder aus
+ */
+function toggleSubmenu(menuItem, submenuContainer) {
+    const isExpanded = submenuContainer.style.display !== 'none';
+    const arrow = menuItem.querySelector('.menu-arrow');
+    
+    if (isExpanded) {
+        // Einklappen
+        submenuContainer.style.display = 'none';
+        if (arrow) {
+            arrow.style.transform = 'rotate(0deg)';
+        }
+        menuItem.classList.remove('expanded');
+    } else {
+        // Ausklappen
+        submenuContainer.style.display = 'block';
+        if (arrow) {
+            arrow.style.transform = 'rotate(180deg)';
+        }
+        menuItem.classList.add('expanded');
+    }
+}
+
+/**
+ * Gruppiert Menü-Items nach ihrer Hierarchie (Parent-Child-Beziehungen)
+ */
+function groupMenuItems(items) {
+    const grouped = [];
+    let i = 0;
+    
+    while (i < items.length) {
+        const item = items[i];
+        const level = item.level || 0;
+        
+        if (level === 0) {
+            // Top-Level Item - prüfe ob es Untermenüs hat
+            const children = [];
+            let j = i + 1;
+            
+            while (j < items.length && (items[j].level || 0) > 0) {
+                children.push(items[j]);
+                j++;
+            }
+            
+            grouped.push({
+                ...item,
+                children: children,
+                hasChildren: children.length > 0
+            });
+            
+            i = j; // Überspringe die Kinder, da sie bereits hinzugefügt wurden
+        } else {
+            // Sollte nicht vorkommen, da alle Level > 0 Items bereits als Kinder hinzugefügt wurden
+            i++;
+        }
+    }
+    
+    return grouped;
+}
+
+/**
+ * Rendert die Menüpunkte basierend auf der gespeicherten Menüstruktur oder den verfügbaren Modulen
+ */
+/**
+ * Sicherer Wrapper für renderMenu() - verhindert mehrfaches gleichzeitiges Rendern
+ */
+async function safeRenderMenu() {
+    if (isRenderingMenu) {
+        console.log("⚠️ renderMenu() wird bereits ausgeführt – überspringe erneuten Aufruf");
+        return;
+    }
+    isRenderingMenu = true;
+    try {
+        await renderMenu();
+    } finally {
+        isRenderingMenu = false;
+    }
+}
+
+async function renderMenu() {
+    console.log("🎨 [RENDER] ====== renderMenu() START ======");
+    console.log("🎨 [RENDER] Aktueller menuStructure-Wert:", menuStructure);
+    console.log("🎨 [RENDER] userAuthData:", userAuthData ? `Role: ${userAuthData.role}, Company: ${userAuthData.companyId}` : "null");
+    console.log("🎨 [RENDER] userModules:", userModules.length, "Module");
+    
+    // Entferne alle Menüpunkte außer Logout
+    const existingItems = dropdownMenu.querySelectorAll('.menu-item[data-page], .menu-subitem[data-page], .menu-group');
+    console.log(`🎨 [RENDER] Entferne ${existingItems.length} bestehende Menüpunkte`);
+    existingItems.forEach(item => item.remove());
+    
+    // Lade globale Menüstruktur, falls noch nicht geladen (gilt für alle Firmen)
+    // WICHTIG: Nur laden, wenn menuStructure noch null/undefined ist
+    if (!menuStructure || menuStructure === null) {
+        console.log("🔄 [RENDER] Lade globale Menüstruktur (noch nicht geladen)...");
+        await loadMenuStructure(); // Keine companyId mehr nötig, da global
+        console.log("🔄 [RENDER] Menüstruktur geladen:", Array.isArray(menuStructure) ? `${menuStructure.length} Items` : `Typ: ${typeof menuStructure}`);
+    } else {
+        console.log("🔄 [RENDER] Verwende bereits geladene Menüstruktur:", Array.isArray(menuStructure) ? `${menuStructure.length} Items` : `Typ: ${typeof menuStructure}`);
+    }
+    
+    console.log("🎨 [RENDER] Menüstruktur nach Prüfung:", Array.isArray(menuStructure) ? `${menuStructure.length} Items` : `Typ: ${typeof menuStructure}`);
+    console.log("🎨 [RENDER] Verfügbare Module:", userModules.length, "Module");
+    console.log("🎨 [RENDER] Verfügbare Module IDs:", userModules.map(m => m.id).join(', '));
+    
+    // Wenn Menüstruktur vorhanden und nicht leer, verwende diese
+    // 🔥 WICHTIG: Auch leere Menüstruktur sollte verarbeitet werden, damit Container angezeigt werden können
+    if (Array.isArray(menuStructure) && menuStructure.length > 0) {
+        console.log("✅ Verwende globale Menüstruktur mit", menuStructure.length, "Items");
+        
+        // Sortiere nach order
+        const sortedItems = [...menuStructure].sort((a, b) => (a.order || 0) - (b.order || 0));
+        
+        // Gruppiere Items nach Hierarchie
+        const groupedItems = groupMenuItems(sortedItems);
+        console.log("📋 Gruppierte Items:", groupedItems.length, "Gruppen");
+        console.log("📋 Gruppierte Items Details:", groupedItems.map(g => `${g.label || g.id} (${g.hasChildren ? g.children.length + ' Kinder' : 'keine Kinder'})`));
+        
+        let renderedItemsCount = 0;
+        groupedItems.forEach(group => {
+            const level = group.level || 0;
+            
+            // Prüfe ob benutzerdefiniertes Item ohne URL (Container) oder mit URL
+            const isContainer = group.type === 'custom' && (!group.url || group.url === '#');
+            const hasChildren = group.hasChildren || false;
+            
+            console.log(`🔍 Prüfe Menüpunkt: ${group.label || group.id} (type: ${group.type}, isContainer: ${isContainer}, hasChildren: ${hasChildren}, id: ${group.id})`);
+            
+            // 🔥 WICHTIG: Container-Items (custom ohne URL) müssen auch auf Modul-Verfügbarkeit geprüft werden
+            if (isContainer) {
+                // Container-Item - prüfe Rollen
+                if (group.roles && Array.isArray(group.roles) && group.roles.length > 0) {
+                    // Prüfe ob Benutzer eine der erlaubten Rollen hat
+                    if (!userAuthData || !userAuthData.role || !group.roles.includes(userAuthData.role)) {
+                        // Benutzer hat nicht die erforderliche Rolle - überspringe Container
+                        console.log(`❌ Container '${group.label}' wird ausgeblendet - Benutzer hat nicht die erforderliche Rolle (${group.roles.join(', ')})`);
+                        return;
+                    }
+                }
+                
+                // 🔥 NEU: Prüfe nur für Container, die einem Modul entsprechen (z.B. "Office" → "office")
+                // Andere Container wie "OVD" oder "Admin" haben kein direktes Modul
+                const containerLabel = (group.label || group.id || '').toLowerCase().trim();
+                
+                // Mapping: Container-Label → Modul-ID
+                // Liste der Container-Labels, die einem Modul entsprechen
+                const containerToModuleMapping = {
+                    'office': 'office'
+                };
+                
+                const correspondingModuleId = containerToModuleMapping[containerLabel];
+                if (correspondingModuleId) {
+                    const correspondingModule = userModules.find(m => m.id === correspondingModuleId);
+                    console.log(`🔍 [CONTAINER-MODULE-CHECK] Container '${group.label}' (Label: ${containerLabel}) → Modul-ID: ${correspondingModuleId}`);
+                    console.log(`   Verfügbare Module: ${userModules.map(m => m.id).join(', ')}`);
+                    console.log(`   Gefundenes Modul: ${correspondingModule ? correspondingModule.id : 'KEINES'}`);
+                    
+                    if (!correspondingModule) {
+                        console.log(`❌ Container '${group.label}' wird ausgeblendet - zugehöriges Modul '${correspondingModuleId}' nicht verfügbar`);
+                        return;
+                    } else {
+                        console.log(`✅ Container '${group.label}' wird angezeigt - zugehöriges Modul '${correspondingModuleId}' verfügbar`);
+                    }
+                } else {
+                    // Container ohne direktes Modul (z.B. "OVD", "Admin") - nur Rollenprüfung
+                    console.log(`✅ Container '${group.label}' wird angezeigt - kein Modul-Check erforderlich (Label: ${containerLabel})`);
+                }
+            } else {
+                // NICHT-Container: Prüfe Module oder benutzerdefinierte Items mit URL
+                if (group.type === 'module') {
+                    // Prüfe ob Modul verfügbar ist
+                    const module = findModuleInfo(group);
+                    if (!module) {
+                        // Modul nicht verfügbar für diesen Benutzer - überspringe
+                        console.log(`❌ Modul '${group.label}' (${group.id}) wird ausgeblendet - nicht verfügbar für Benutzer`);
+                        console.log(`   Verfügbare Module: ${userModules.map(m => m.id).join(', ')}`);
+                        return;
+                    } else {
+                        console.log(`✅ Modul '${group.label}' (${group.id}) wird angezeigt - verfügbar`);
+                    }
+                } else if (group.type === 'custom') {
+                    // Benutzerdefiniertes Item mit URL - prüfe Rollen
+                    if (group.roles && Array.isArray(group.roles) && group.roles.length > 0) {
+                        if (!userAuthData || !userAuthData.role || !group.roles.includes(userAuthData.role)) {
+                            console.log(`❌ Custom-Item '${group.label}' wird ausgeblendet - Benutzer hat nicht die erforderliche Rolle (${group.roles.join(', ')})`);
+                            return;
+                        } else {
+                            console.log(`✅ Custom-Item '${group.label}' wird angezeigt - Benutzer hat passende Rolle`);
+                        }
+                    } else {
+                        console.log(`✅ Custom-Item '${group.label}' wird angezeigt - keine Rollenprüfung`);
+                    }
+                }
+            }
+            
+            // Erstelle Menüpunkt-Container
+            const menuItemContainer = document.createElement('div');
+            menuItemContainer.className = 'menu-group';
+            
+            // Erstelle Haupt-Menüpunkt
+            const menuItem = document.createElement('a');
+            menuItem.href = hasChildren || isContainer ? '#' : '#';
+            menuItem.className = 'menu-item';
+            menuItem.dataset.page = group.id;
+            menuItem.dataset.itemType = group.type || 'module';
+            menuItem.dataset.hasChildren = hasChildren || isContainer ? 'true' : 'false';
+            
+            // Pfeil-Icon für Items mit Untermenüs
+            const arrowIcon = hasChildren || isContainer ? `
+                <svg class="menu-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            ` : '';
+            
+            menuItem.innerHTML = `
+                <span class="menu-item-text">${group.label || group.id}</span>
+                ${arrowIcon}
+            `;
+            
+            // Setze URL falls vorhanden (für benutzerdefinierte Items)
+            if (group.url && group.type === 'custom' && !isContainer) {
+                menuItem.dataset.url = group.url;
+            }
+            
+            menuItemContainer.appendChild(menuItem);
+            
+            // Erstelle Untermenü-Container (wird ausgeblendet/angezeigt)
+            if (hasChildren || isContainer) {
+                const submenuContainer = document.createElement('div');
+                submenuContainer.className = 'menu-submenu';
+                submenuContainer.style.display = 'none'; // Standardmäßig ausgeblendet
+                
+                // Füge Untermenü-Items hinzu
+                let visibleChildrenCount = 0;
+                group.children.forEach(child => {
+                    // Prüfe ob Kind ein Modul ist und ob der Benutzer Zugriff hat
+                    if (child.type === 'module') {
+                        const module = findModuleInfo(child);
+                        if (!module) {
+                            // Modul nicht verfügbar - überspringe
+                            console.log(`   ❌ Untermenü-Item '${child.label}' wird ausgeblendet - Modul nicht verfügbar`);
+                            return;
+                        }
+                    } else if (child.type === 'custom') {
+                        // Prüfe Rollen für benutzerdefinierte Untermenü-Items
+                        if (child.roles && Array.isArray(child.roles) && child.roles.length > 0) {
+                            if (!userAuthData || !userAuthData.role || !child.roles.includes(userAuthData.role)) {
+                                console.log(`   ❌ Untermenü-Item '${child.label}' wird ausgeblendet - Rolle nicht passend`);
+                                return;
+                            }
+                        }
+                        
+                        // 🔥 NEU: Prüfe ob custom Submenu-Item zu einem Modul gehört und ob das Modul verfügbar ist
+                        // Beispiel: "email" gehört zu "office" - prüfe ob "office" verfügbar ist
+                        if (child.id === 'email' && group.id === 'office') {
+                            const officeModule = userModules.find(m => m.id === 'office');
+                            if (!officeModule) {
+                                console.log(`   ❌ Untermenü-Item '${child.label}' wird ausgeblendet - übergeordnetes Modul 'office' nicht verfügbar`);
+                                return;
+                            }
+                        }
+                    }
+                    
+                    const subItem = document.createElement('a');
+                    subItem.href = '#';
+                    subItem.className = 'menu-subitem';
+                    subItem.dataset.page = child.id;
+                    subItem.dataset.itemType = child.type || 'module';
+                    subItem.textContent = child.label || child.id;
+                    
+                    // Setze URL falls vorhanden
+                    if (child.url && child.type === 'custom') {
+                        subItem.dataset.url = child.url;
+                    }
+                    
+                    submenuContainer.appendChild(subItem);
+                    visibleChildrenCount++;
+                });
+                
+                // Wenn Container keine sichtbaren Kinder hat, zeige trotzdem den Container an
+                // (kann später gefüllt werden, wenn Module freigeschaltet werden)
+                if (visibleChildrenCount === 0 && isContainer) {
+                    console.log(`   ⚠️ Container '${group.label}' hat keine sichtbaren Kinder, wird aber trotzdem angezeigt`);
+                }
+                
+                menuItemContainer.appendChild(submenuContainer);
+                
+                // Event Listener für Ein-/Ausklappen
+                menuItem.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleSubmenu(menuItem, submenuContainer);
+                });
+                
+                menuItem.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleSubmenu(menuItem, submenuContainer);
+                }, { passive: false });
+            }
+            
+            dropdownMenu.insertBefore(menuItemContainer, logoutLink);
+            renderedItemsCount++;
+        });
+        
+        console.log(`✅ Menü gerendert: ${renderedItemsCount} von ${groupedItems.length} Items wurden angezeigt`);
+        
+        if (renderedItemsCount === 0 && groupedItems.length > 0) {
+            console.error("❌ PROBLEM: Alle Menü-Items wurden herausgefiltert!");
+            console.error("📊 Analyse:");
+            console.error(`   - Menüstruktur hat ${groupedItems.length} Items`);
+            console.error(`   - Verfügbare Module: ${userModules.length} (${userModules.map(m => m.id).join(', ')})`);
+            console.error(`   - Benutzer-Rolle: ${userAuthData?.role || 'unbekannt'}`);
+            console.error(`   - Firma: ${userAuthData?.companyId || 'unbekannt'}`);
+            console.error("💡 Mögliche Ursachen:");
+            console.error("   1. Module sind nicht für diese Firma freigeschaltet");
+            console.error("   2. Rollenprüfung filtert alles heraus");
+            console.error("   3. Benutzer hat keine passenden Module");
+            console.error("💡 Lösung: Prüfe die Console-Ausgaben oben für jedes Item");
+        } else if (renderedItemsCount > 0) {
+            console.log(`✅ Erfolg: ${renderedItemsCount} Menü-Items werden angezeigt`);
+        }
+    } else if (Array.isArray(menuStructure) && menuStructure.length === 0) {
+        // Menüstruktur ist leer - verwende Fallback
+        console.log("⚠️ Menüstruktur ist ein leeres Array - verwende Fallback");
+        // Fallback: Verwende die Standard-Module-Liste
+        console.log("📋 Verfügbare Module für Fallback:", userModules.map(m => `${m.label} (${m.id})`));
+        
+        if (userModules.length === 0) {
+            console.error("❌ Keine Module verfügbar - Menü bleibt leer!");
+            return;
+        }
+        
+        userModules.forEach(module => {
+            const menuItem = document.createElement('a');
+            menuItem.href = '#';
+            menuItem.className = 'menu-item';
+            menuItem.dataset.page = module.id;
+            menuItem.dataset.itemType = 'module';
+            menuItem.textContent = module.label;
+            
+            dropdownMenu.insertBefore(menuItem, logoutLink);
+        });
+        
+        console.log(`✅ ${userModules.length} Module als Fallback-Menü gerendert`);
+    } else {
+        // Fallback: Verwende die Standard-Module-Liste
+        console.log("⚠️ Keine globale Menüstruktur gefunden oder leer - verwende Standard-Module-Liste");
+        console.log("📋 Verfügbare Module für Fallback:", userModules.map(m => `${m.label} (${m.id})`));
+        
+        if (userModules.length === 0) {
+            console.error("❌ Keine Module verfügbar - Menü bleibt leer!");
+            return;
+        }
+        
+        userModules.forEach(module => {
+            const menuItem = document.createElement('a');
+            menuItem.href = '#';
+            menuItem.className = 'menu-item';
+            menuItem.dataset.page = module.id;
+            menuItem.dataset.itemType = 'module';
+            menuItem.textContent = module.label;
+            
+            dropdownMenu.insertBefore(menuItem, logoutLink);
+        });
+        
+        console.log(`✅ ${userModules.length} Module als Fallback-Menü gerendert`);
+    }
+    
+    // Event Listener für Navigation hinzufügen
+    // Nur für Items OHNE Untermenüs und für Untermenü-Items selbst
+    document.querySelectorAll(".menu-item[data-page]:not([data-has-children='true']), .menu-subitem[data-page]").forEach(item => {
+        // Click Event (für Maus)
+        item.addEventListener("click", (e) => {
+            e.stopPropagation(); // Verhindere, dass der Klick als "außerhalb" erkannt wird
+            e.preventDefault();
+            const itemId = item.dataset.page;
+            const itemType = item.dataset.itemType || 'module';
+            
+            let targetUrl = null;
+            
+            if (itemType === 'custom') {
+                // Benutzerdefiniertes Item
+                const customUrl = item.dataset.url;
+                if (customUrl && customUrl !== '#') {
+                    targetUrl = customUrl;
+                } else {
+                    // Container ohne URL - tue nichts
+                    return;
+                }
+            } else {
+                // Modul
+                const module = userModules.find(m => m.id === itemId);
+                if (module) {
+                    targetUrl = module.url;
+                } else {
+                    console.error(`❌ Modul nicht gefunden: ${itemId}`);
+                    return;
+                }
+            }
+            
+            if (targetUrl) {
+                // Stelle sicher, dass die URL mit / beginnt (außer bei absoluten URLs)
+                if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/')) {
+                    targetUrl = '/' + targetUrl;
+                }
+                console.log(`🔄 Lade: ${item.textContent} (${targetUrl})`);
+                contentFrame.src = targetUrl;
+                // Menü schließen nach Auswahl eines Menüpunkts
+                closeMenu();
+            }
+        });
+        
+        // Touch Event (für Touch-Geräte)
+        item.addEventListener("touchend", (e) => {
+            e.stopPropagation(); // Verhindere, dass der Touch als "außerhalb" erkannt wird
+            e.preventDefault();
+            const itemId = item.dataset.page;
+            const itemType = item.dataset.itemType || 'module';
+            
+            let targetUrl = null;
+            
+            if (itemType === 'custom') {
+                // Benutzerdefiniertes Item
+                const customUrl = item.dataset.url;
+                if (customUrl && customUrl !== '#') {
+                    targetUrl = customUrl;
+                } else {
+                    // Container ohne URL - tue nichts
+                    return;
+                }
+            } else {
+                // Modul
+                const module = userModules.find(m => m.id === itemId);
+                if (module) {
+                    targetUrl = module.url;
+                } else {
+                    console.error(`❌ Modul nicht gefunden: ${itemId}`);
+                    return;
+                }
+            }
+            
+            if (targetUrl) {
+                // Stelle sicher, dass die URL mit / beginnt (außer bei absoluten URLs)
+                if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/')) {
+                    targetUrl = '/' + targetUrl;
+                }
+                console.log(`🔄 Lade: ${item.textContent} (${targetUrl})`);
+                contentFrame.src = targetUrl;
+                // Menü schließen nach Auswahl eines Menüpunkts
+                closeMenu();
+            }
+        }, { passive: false });
+    });
+}
+
+// Logout
+logoutLink.addEventListener("click", (e) => {
+    e.stopPropagation(); // Verhindere, dass der Klick als "außerhalb" erkannt wird
+    e.preventDefault();
+    // Schließe das Menü beim Logout
+    closeMenu();
+    // Stoppe den Inaktivitäts-Timer beim manuellen Logout
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
+    logout();
+});
+
+// Touch-Logik für Logout
+logoutLink.addEventListener("touchend", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    // Schließe das Menü beim Logout
+    closeMenu();
+    // Stoppe den Inaktivitäts-Timer beim manuellen Logout
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
+    logout();
+}, { passive: false });
+
+/**
+ * Initialisiert die Datenbankstruktur automatisch (nur für Superadmin)
+ */
+async function initializeDatabaseIfNeeded(companyId, userId) {
+    try {
+        // Prüfe, ob Module bereits existieren
+        const modulesRef = doc(db, "modules", "home");
+        const modulesSnap = await getDoc(modulesRef);
+        
+        if (!modulesSnap.exists()) {
+            console.log("🔧 Initialisiere Datenbankstruktur...");
+            
+            // 1. Standard-Module anlegen
+            await initializeDefaultModules();
+            
+            // 2. Module für Firma freischalten
+            await setCompanyModules(companyId, {
+                'home': true,
+                'admin': true,
+                'kundenverwaltung': true,
+                'modulverwaltung': true,
+                'schichtplan': true // 🔥 NEU: Schichtplan aktivieren
+            });
+            
+            console.log("✅ Datenbankstruktur initialisiert");
+        }
+    } catch (error) {
+        console.warn("⚠️ Automatische Initialisierung fehlgeschlagen (möglicherweise Rules-Problem):", error);
+    }
+}
+
+/**
+ * Führt die vollständige Initialisierung aus (Module + Tiles)
+ */
+async function runFullInitialization(companyId, userId) {
+    try {
+        console.log("🚀 Starte vollständige Firestore-Initialisierung...");
+        
+        // 1. Standard-Module anlegen
+        console.log("📦 Initialisiere Standard-Module...");
+        await initializeDefaultModules();
+        
+        // 2. Module für Firma freischalten
+        console.log(`🔓 Schalte Module für Firma '${companyId}' frei...`);
+        await setCompanyModules(companyId, {
+            'home': true,
+            'admin': true,
+            'kundenverwaltung': true,
+            'modulverwaltung': true,
+            'schichtplan': true // 🔥 NEU: Schichtplan aktivieren
+        });
+        
+        // 3. Standard-Tiles für den Benutzer anlegen (falls noch nicht vorhanden)
+        console.log(`🎨 Lege Standard-Tiles für Benutzer an...`);
+        const tilesRef = doc(db, "kunden", companyId, "users", userId, "userTiles", "config");
+        const tilesSnap = await getDoc(tilesRef);
+        
+        if (!tilesSnap.exists()) {
+            const defaultTiles = [
+                { label: "Home", page: "home.html" },
+                { label: "Mitglieder", page: "kunden/admin/admin.html" },
+                { label: "Kunden", page: "kunden/admin/kundenverwaltung.html" },
+                { label: "Module", page: "kunden/admin/modulverwaltung.html" },
+                null, null, null, null, null
+            ];
+            
+            await setDoc(tilesRef, { tiles: defaultTiles });
+            console.log("✅ Standard-Tiles angelegt");
+        } else {
+            console.log("ℹ️ Tiles existieren bereits");
+        }
+        
+        console.log("✅ Vollständige Initialisierung abgeschlossen!");
+        
+    } catch (error) {
+        console.error("❌ Fehler bei der vollständigen Initialisierung:", error);
+        console.error("Details:", error.message);
+        throw error;
+    }
+}
+
+
+// ✅ AUTH UND MULTI-TENANT-PRÜFUNG
+onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+        // 🔒 Stoppe Session-Timeouts-Timer wenn Benutzer ausgeloggt ist
+        if (inactivityTimer) {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = null;
+        }
+        
+        // 🔥 PRÜFE: Gibt es gespeicherte Superadmin-Daten für Wiederherstellung?
+        const restoreEmail = localStorage.getItem('superadmin_restore_email');
+        const restoreUid = localStorage.getItem('superadmin_restore_uid');
+        
+        if (restoreEmail && restoreUid) {
+            console.log("⚠️ Kein eingeloggter Benutzer, aber Superadmin-Wiederherstellungsdaten gefunden.");
+            console.log("   Bitte melden Sie sich erneut als Superadmin an.");
+            // Lösche die Wiederherstellungsdaten, da sie nicht mehr benötigt werden
+            localStorage.removeItem('superadmin_restore_email');
+            localStorage.removeItem('superadmin_restore_uid');
+        }
+        
+        window.location.href = "login.html";
+        return;
+    }
+
+    try {
+        // 🔥 PRÜFE: Ist dies eine Wiederherstellung nach Kunden-Anlage?
+        const restoreEmail = localStorage.getItem('superadmin_restore_email');
+        if (restoreEmail && user.email === restoreEmail) {
+            console.log("✅ Superadmin-Session wiederhergestellt nach Kunden-Anlage");
+            // Lösche die Wiederherstellungsdaten, da sie nicht mehr benötigt werden
+            localStorage.removeItem('superadmin_restore_email');
+            localStorage.removeItem('superadmin_restore_uid');
+        }
+        
+        // 🔥 KORREKTUR: user.email MUSS an getAuthData übergeben werden
+        const authData = await getAuthData(user.uid, user.email); 
+        
+        userAuthData = authData; 
+        
+        console.log(`✅ Nutzer ${user.email} angemeldet für Company ID: ${authData.companyId} mit Rolle: ${authData.role}`);
+
+        // Automatische Initialisierung für Superadmin (falls Datenbankstruktur fehlt)
+        if (authData.role === 'superadmin' && authData.companyId === 'admin') {
+            await initializeDatabaseIfNeeded(authData.companyId, authData.uid);
+            
+            // Zusätzlich: Vollständige Initialisierung versuchen (Module + Tiles)
+            try {
+                await runFullInitialization(authData.companyId, authData.uid);
+            } catch (err) {
+                console.warn("⚠️ Vollständige Initialisierung fehlgeschlagen:", err);
+            }
+        }
+        
+        // Lade die für diesen Benutzer verfügbaren Module
+        console.log("🔄 [AUTH] Lade Module für Benutzer...");
+        try {
+            userModules = await getUserModules(authData.companyId, authData.role);
+            console.log(`📋 Verfügbare Module für ${user.email}:`, userModules.map(m => `${m.label} (${m.id})`));
+        } catch (moduleError) {
+            console.error("❌ [AUTH] Fehler beim Laden der Module:", moduleError);
+            userModules = getDefaultModulesForRole(authData.role);
+            console.warn("⚠️ Verwende Default-Module als Fallback");
+        }
+        
+        // Fallback, falls keine Module geladen werden konnten
+        if (!userModules || userModules.length === 0) {
+            userModules = getDefaultModulesForRole(authData.role);
+            console.warn("⚠️ Keine Module geladen – nutze Default-Module für Rolle:", authData.role);
+        }
+        
+        console.log("🔄 [AUTH] ====== STARTE MENÜ-LADEN ======");
+        console.log("🔄 [AUTH] Firma:", authData.companyId, "Rolle:", authData.role);
+        console.log("🔄 [AUTH] Verfügbare Module:", userModules.length, userModules.map(m => m.id).join(', '));
+        
+        menuStructure = null; // Reset für Neuladen
+        console.log("🔄 [AUTH] menuStructure auf null gesetzt");
+        
+        try {
+            console.log("🔄 [AUTH] Rufe loadMenuStructure() auf...");
+            const loadedStructure = await loadMenuStructure();
+            console.log("🔄 [AUTH] loadMenuStructure() zurückgegeben:", loadedStructure);
+            console.log("🔄 [AUTH] loadMenuStructure() abgeschlossen");
+            console.log("📋 [AUTH] Menüstruktur nach Laden:", Array.isArray(menuStructure) ? `${menuStructure.length} Items` : `Typ: ${typeof menuStructure}`);
+            
+            if (Array.isArray(menuStructure)) {
+                if (menuStructure.length > 0) {
+                    console.log("✅ [AUTH] Menüstruktur wurde erfolgreich geladen mit", menuStructure.length, "Items");
+                    console.log("📋 [AUTH] Menüstruktur-Items Details:");
+                    menuStructure.forEach((item, index) => {
+                        console.log(`   [${index}] ${item.label || item.id} - type: ${item.type}, level: ${item.level || 0}, order: ${item.order || 0}`);
+                        if (item.roles) {
+                            console.log(`       Rollen: ${item.roles.join(', ')}`);
+                        }
+                    });
+                } else {
+                    console.warn("⚠️ [AUTH] Menüstruktur ist ein leeres Array (0 Items)");
+                    console.warn("⚠️ [AUTH] Mögliche Ursachen:");
+                    console.warn("   1. Menüstruktur wurde noch nicht in Firestore gespeichert");
+                    console.warn("   2. Menüstruktur wurde gelöscht");
+                    console.warn("   3. Firestore-Dokument existiert, aber items-Array ist leer");
+                }
+            } else {
+                console.error("❌ [AUTH] Menüstruktur ist kein Array:", typeof menuStructure, menuStructure);
+            }
+            
+            console.log("🎨 [AUTH] Rufe renderMenu() auf...");
+            await safeRenderMenu();
+            console.log("✅ [AUTH] renderMenu() abgeschlossen");
+        } catch (error) {
+            console.error("❌ [AUTH] Fehler beim Laden/Rendern des Menüs:", error);
+            console.error("   Details:", error.message);
+            console.error("   Stack:", error.stack);
+            // Auch bei Fehler: Versuche Fallback-Menü zu rendern
+            console.log("🔄 [AUTH] Versuche Fallback-Menü zu rendern...");
+            try {
+                await safeRenderMenu();
+            } catch (fallbackError) {
+                console.error("❌ [AUTH] Auch Fallback-Menü fehlgeschlagen:", fallbackError);
+            }
+        }
+        
+        // Setze Standard-Seite auf Home (falls verfügbar)
+        console.log("🔄 [AUTH] Setze Standard-Seite auf Home...");
+        const homeModule = userModules.find(m => m.id === 'home');
+        if (homeModule) {
+            console.log(`🔄 Lade Standard-Modul: ${homeModule.label} (${homeModule.url})`);
+            contentFrame.src = homeModule.url;
+        } else {
+            console.warn("⚠️ Home-Modul nicht gefunden");
+        }
+
+        // Nach erfolgreichem Abruf der AuthData, sende die Daten an alle wartenden iFrames.
+        console.log("🔄 [AUTH] Sende Auth-Daten an iFrame...");
+        sendAuthDataToIframe();
+        console.log("🔄 [AUTH] Auth-Daten gesendet");
+        
+        // Aktualisiere Benutzernamen-Anzeige
+        await updateUserNameDisplay();
+        
+        // 🔒 Starte Session-Timeouts-Überwachung
+        startInactivityTimer();
+
+    } catch (err) {
+        console.error("❌ [AUTH] Fehler beim Abrufen der Auth-Daten im Dashboard:", err);
+        console.error("   Details:", err.message);
+        console.error("   Stack:", err.stack);
+        // Fallback: Nur Home anzeigen
+        userModules = getDefaultModulesForRole("user");
+        console.log("🔄 [AUTH] Fallback: Verwende Default-Module für 'user'");
+        await safeRenderMenu();
+    }
+});
+
+// 🔒 SESSION-TIMEOUT-FUNKTIONEN
+
+/**
+ * Startet den Inaktivitäts-Timer
+ * Wird bei jeder Benutzeraktivität zurückgesetzt
+ */
+function startInactivityTimer() {
+    if (!userAuthData || !userAuthData.uid) {
+        return; // Kein Timer, wenn kein Benutzer angemeldet ist
+    }
+    
+    // Lösche vorhandene Timer
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
+    if (warningTimer) {
+        clearTimeout(warningTimer);
+        warningTimer = null;
+    }
+    
+    // Warnung nach 25 Minuten (5 Minuten vor Timeout)
+    const warningTime = INACTIVITY_TIMEOUT - (5 * 60 * 1000); // 25 Minuten
+    
+    // Setze Timer für Warnung
+    warningTimer = setTimeout(() => {
+        if (userAuthData && userAuthData.uid) {
+            // Zeige Warnung nur wenn noch eingeloggt
+            const warningBanner = document.createElement('div');
+            warningBanner.id = 'session-warning';
+            warningBanner.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #ff9800;
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                z-index: 10001;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 14px;
+                max-width: 90%;
+                text-align: center;
+            `;
+            warningBanner.textContent = '⚠️ Warnung: Ihre Session läuft in 5 Minuten ab. Bitte aktiv werden, um angemeldet zu bleiben.';
+            document.body.appendChild(warningBanner);
+            
+            // Entferne Warnung nach 30 Sekunden
+            setTimeout(() => {
+                if (warningBanner.parentNode) {
+                    warningBanner.remove();
+                }
+            }, 30000);
+        }
+    }, warningTime);
+    
+    // Setze neuen Timer für Timeout
+    inactivityTimer = setTimeout(() => {
+        console.warn("⏰ Session-Timeout: 30 Minuten Inaktivität erreicht. Abmelden...");
+        handleSessionTimeout();
+    }, INACTIVITY_TIMEOUT);
+    
+    console.log("🔒 Session-Timeouts-Überwachung gestartet (30 Minuten)");
+}
+
+/**
+ * Setzt den Inaktivitäts-Timer zurück
+ * Wird bei jeder Benutzeraktivität aufgerufen
+ */
+function resetInactivityTimer() {
+    if (userAuthData && userAuthData.uid) {
+        startInactivityTimer();
+    }
+}
+
+/**
+ * Behandelt das Session-Timeout
+ * Meldet den Benutzer ab und zeigt eine Nachricht
+ */
+async function handleSessionTimeout() {
+    // Stoppe alle Timer
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
+    if (warningTimer) {
+        clearTimeout(warningTimer);
+        warningTimer = null;
+    }
+    
+    // Entferne Warnungs-Banner falls vorhanden
+    const warningBanner = document.getElementById('session-warning');
+    if (warningBanner) {
+        warningBanner.remove();
+    }
+    
+    // Zeige Warnung
+    alert("⏰ Ihre Session ist abgelaufen (30 Minuten Inaktivität). Sie werden jetzt abgemeldet.");
+    
+    // Melde ab
+    await logout();
+}
+
+/**
+ * Initialisiert Event-Listener für Benutzeraktivität
+ * Wird nur einmal aufgerufen, um mehrfache Registrierungen zu vermeiden
+ */
+function setupActivityListeners() {
+    // Verhindere mehrfache Registrierung
+    if (activityListenersSetup) {
+        return;
+    }
+    activityListenersSetup = true;
+    
+    // Liste aller Events, die als Aktivität zählen
+    const activityEvents = [
+        'mousedown',
+        'mousemove',
+        'keypress',
+        'scroll',
+        'touchstart',
+        'click',
+        'keydown'
+    ];
+    
+    // Füge Event-Listener für alle Aktivitäts-Events hinzu
+    activityEvents.forEach(eventType => {
+        document.addEventListener(eventType, resetInactivityTimer, { passive: true });
+    });
+    
+    // Überwache auch iframe-Aktivitäten
+    const contentFrame = document.getElementById("contentFrame");
+    if (contentFrame && contentFrame.contentWindow) {
+        try {
+            // Versuche, auf iframe-Events zuzugreifen (nur wenn gleiche Domain)
+            contentFrame.addEventListener('load', resetInactivityTimer);
+        } catch (e) {
+            // CORS-Beschränkung - kann nicht auf iframe-Events zugreifen
+            console.log("⚠️ Kann iframe-Aktivitäten nicht überwachen (CORS)");
+        }
+    }
+    
+    // Überwache auch Navigation im iframe über postMessage
+    // Hinweis: Dieser Listener wird bereits in Zeile 39 registriert, daher nicht doppelt
+    // window.addEventListener('message', ...) ist bereits vorhanden
+    
+    console.log("👂 Aktivitäts-Überwachung initialisiert");
+}
+
+// Initialisiere Activity-Listener beim Laden (nur einmal)
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', () => {
+        setupActivityListeners();
+    });
+} else {
+    // DOM ist bereits geladen
+    setupActivityListeners();
+}

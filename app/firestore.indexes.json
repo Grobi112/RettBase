@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "fahrtenbuchEintraege",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fahrzeugkennung", "order": "ASCENDING" },
+        { "fieldPath": "datum", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

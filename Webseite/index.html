@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Meine React-Seite</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    function Header() {
+      return (
+        <header style={{background:"'ffffff", color:"#fff", padding:"1rem"}}>
+          <img 
+          src="/img/logo.png" 
+          alt="Logo" 
+          style={{height:"40px", marginRight:"10px"}}
+        />
+            <h1>Protect-Alert</h1>
+          <nav>
+            <a href="#" style={{marginRight:"1rem", color:"#fff"}}>Home</a>
+            <a href="#" style={{color:"#fff"}}>About</a>
+          </nav>
+        </header>
+      );
+    }
+
+    function Footer() {
+      return (
+        <footer style={{background:"#eee", padding:"1rem", marginTop:"2rem", textAlign:"center"}}>
+          © {new Date().getFullYear()} Meine Website
+        </footer>
+      );
+    }
+
+    function App() {
+      return (
+        <div>
+          <Header />
+          <main style={{padding:"1rem"}}>
+            <h2>Willkommen!</h2>
+            <p>Das ist der Inhalt deiner Seite.</p>
+          </main>
+          <Footer />
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

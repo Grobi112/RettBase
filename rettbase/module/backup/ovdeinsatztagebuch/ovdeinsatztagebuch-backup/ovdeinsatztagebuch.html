@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · OVD Einsatztagebuch</title>
+    <link rel="stylesheet" href="./ovdeinsatztagebuch.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück zur Startseite">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">OVD Einsatztagebuch</h1>
+        </div>
+        <div class="controls-group">
+            <button id="printDayBtn" class="control-btn icon-btn" title="Drucken" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+            </button>
+            <button id="savePdfDayBtn" class="control-btn icon-btn" title="Als PDF speichern" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+            </button>
+            <div style="position: relative;">
+                <button id="settingsBtn" class="control-btn icon-btn" title="Menü" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="5" cy="12" r="1"></circle>
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="19" cy="12" r="1"></circle>
+                    </svg>
+                </button>
+                <div id="settingsMenu" class="settings-dropdown" style="display: none;">
+                    <button type="button" id="manageEventsBtn" class="settings-menu-item">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <span>Ereignisse verwalten</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="mainContent">
+        <div class="container">
+            <div class="table-header">
+                <div class="header-left">
+                    <h2>Einsatztagebuch</h2>
+                    <div class="date-selector">
+                        <label for="daySelector">Datum auswählen:</label>
+                        <input type="date" id="daySelector" title="Datum auswählen">
+                        <button type="button" id="todayBtn" class="btn-small">Heute</button>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button id="addEventBtn" class="primary-btn">Neues Ereignis</button>
+                </div>
+            </div>
+            
+            <div id="eventsTableContainer">
+                <table id="eventsTable" class="events-table">
+                    <thead>
+                        <tr>
+                            <th>Zeitpunkt</th>
+                            <th>Ereignis</th>
+                            <th>Text</th>
+                            <th>Eintragender OVD</th>
+                            <th style="width: 50px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="eventsTableBody">
+                        <tr>
+                            <td colspan="5" class="no-events">Lade Einträge...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Popup für Ereignis hinzufügen/bearbeiten -->
+    <div class="popup-overlay" id="eventPopupOverlay"></div>
+    <div class="popup-form" id="eventPopupForm">
+        <div class="popup-header">
+            <h2 id="eventPopupTitle">Neues Ereignis</h2>
+            <button type="button" id="closePopupBtn" class="close-btn" title="Schließen">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="popup-content">
+            <form id="eventForm">
+            <input type="hidden" id="eventId">
+            
+            <div class="form-row">
+                <div class="input-with-button">
+                    <div class="input-wrapper">
+                        <label for="eventDate">Datum</label>
+                        <input type="text" id="eventDate" placeholder="TT.MM.JJJJ" required>
+                    </div>
+                    <button type="button" id="setCurrentDateBtn" class="btn-small">Heute</button>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="input-with-button">
+                    <div class="input-wrapper">
+                        <label for="eventTime">Uhrzeit</label>
+                        <input type="text" id="eventTime" placeholder="HH.MM" required>
+                    </div>
+                    <button type="button" id="setCurrentTimeBtn" class="btn-small">Jetzt</button>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="input-wrapper">
+                    <label for="eventType">Ereignis</label>
+                    <select id="eventType" required>
+                        <option value="">Bitte wählen...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="input-wrapper textarea-wrapper">
+                    <label for="eventText">Text</label>
+                    <textarea id="eventText" rows="5" placeholder="Eintrag..." required></textarea>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="input-wrapper">
+                    <label for="eventOvd">Eintragender OVD</label>
+                    <input type="text" id="eventOvd" readonly>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="save-btn">Speichern</button>
+                <button type="button" id="cancelEventBtn" class="cancel-btn">Abbrechen</button>
+            </div>
+        </form>
+        </div>
+    </div>
+
+
+    <!-- Popup für Ereignisse verwalten -->
+    <div class="popup-overlay" id="eventsManagePopupOverlay"></div>
+    <div class="popup-form" id="eventsManagePopupForm">
+        <div class="popup-header">
+            <h2>Ereignisse verwalten</h2>
+            <button type="button" id="closeEventsManageBtn" class="close-btn" title="Schließen">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="popup-content">
+            <div class="events-manage-form">
+                <div class="form-row">
+                    <div class="input-wrapper">
+                        <label for="newEventName">Neues Ereignis hinzufügen:</label>
+                        <input type="text" id="newEventName" placeholder="Ereignisname eingeben">
+                    </div>
+                    <button type="button" id="addEventNameBtn" class="primary-btn">Hinzufügen</button>
+                </div>
+                
+                <div class="events-list-container">
+                    <h3>Vorhandene Ereignisse:</h3>
+                    <ul id="eventsList" class="events-list">
+                        <li>Lade Ereignisse...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./ovdeinsatztagebuch.js"></script>
+</body>
+</html>

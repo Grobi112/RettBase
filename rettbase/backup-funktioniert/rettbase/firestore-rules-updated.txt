@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // HELPER-FUNKTIONEN
+    // ============================================
+    
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+    
+    // Prüft, ob der Benutzer ein Superadmin ist
+    function isSuperadmin() {
+      return isLoggedIn() && 
+             exists(/databases/$(database)/documents/kunden/admin/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/kunden/admin/users/$(request.auth.uid)).data.role == 'superadmin';
+    }
+    
+    // Prüft, ob der Benutzer zu einer Firma gehört
+    function belongsToCompany(companyId) {
+      return isLoggedIn() && 
+             exists(/databases/$(database)/documents/kunden/$(companyId)/users/$(request.auth.uid));
+    }
+    
+    // Prüft, ob der Benutzer Admin oder Superadmin ist
+    function isAdminOrSuperadmin(companyId) {
+      return isSuperadmin() || 
+             (belongsToCompany(companyId) && 
+              get(/databases/$(database)/documents/kunden/$(companyId)/users/$(request.auth.uid)).data.role in ['admin', 'superadmin']);
+    }
+    
+    // ============================================
+    // COLLECTION GROUP QUERIES (für users-Sammlung)
+    // ============================================
+    // Erlaubt Collection Group Queries auf 'users' für eingeloggte Benutzer
+    // Dies ermöglicht es, Benutzer über alle Firmen hinweg zu finden
+    match /{path=**}/users/{userId} {
+      allow read: if isLoggedIn() && (
+        request.auth.uid == userId || 
+        isSuperadmin() ||
+        // Erlaube Lesen, wenn der Benutzer zu einer Firma gehört
+        // (Die spezifische Firma wird durch die Collection Group Query gefunden)
+        true // Temporär offen für Tests - sollte später verschärft werden
+      );
+    }
+    
+    // ============================================
+    // GLOBALE MODULE (nur lesen für alle)
+    // ============================================
+    match /modules/{moduleId} {
+      allow read: if isLoggedIn();
+      allow write: if isSuperadmin(); // Nur Superadmin kann Module verwalten
+    }
+    
+    // ============================================
+    // KUNDEN-DOKUMENTE
+    // ============================================
+    match /kunden/{kundenId} {
+      // Superadmin kann neue Kunden anlegen und alle lesen
+      allow read: if isLoggedIn() && (isSuperadmin() || belongsToCompany(kundenId));
+      allow create: if isSuperadmin(); // 🔥 NEU: Superadmin kann neue Kunden anlegen
+      allow update, delete: if isSuperadmin(); // Nur Superadmin kann Kunden bearbeiten/löschen
+      
+      // ============================================
+      // BENUTZER UNTER KUNDEN
+      // ============================================
+      match /users/{userId} {
+        // Lesen: Eigener Benutzer oder Admin/Superadmin der Firma
+        allow read: if isLoggedIn() && (
+          request.auth.uid == userId || 
+          isSuperadmin() || 
+          (belongsToCompany(kundenId) && isAdminOrSuperadmin(kundenId))
+        );
+        
+        // Schreiben: Eigener Benutzer oder Superadmin (kann neue Benutzer anlegen)
+        allow write: if isLoggedIn() && (
+          request.auth.uid == userId || 
+          isSuperadmin() || 
+          (belongsToCompany(kundenId) && isAdminOrSuperadmin(kundenId))
+        );
+        
+        // ============================================
+        // USER TILES
+        // ============================================
+        match /userTiles/{docId} {
+          allow read, write: if isLoggedIn() && (
+            request.auth.uid == userId || 
+            isSuperadmin() || 
+            (belongsToCompany(kundenId) && isAdminOrSuperadmin(kundenId))
+          );
+        }
+      }
+      
+      // ============================================
+      // FIRMEN-MODULE (Aktivierungen)
+      // ============================================
+      match /modules/{moduleId} {
+        allow read: if isLoggedIn() && (isSuperadmin() || belongsToCompany(kundenId));
+        allow write: if isLoggedIn() && (isSuperadmin() || isAdminOrSuperadmin(kundenId));
+      }
+      
+      // ============================================
+      // ALLE ANDEREN UNTERKUNDEN-DOKUMENTE
+      // ============================================
+      match /{documents=**} {
+        allow read, write: if isLoggedIn() && (isSuperadmin() || belongsToCompany(kundenId));
+      }
+    }
+  }
+}
+

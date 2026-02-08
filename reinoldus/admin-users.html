@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Benutzerverwaltung – Protect-Alert</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- 🔹 Cache-Vermeidung -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      background: #f9fafb;
+      color: #1e1f26;
+      padding: 20px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    header svg {
+      width: 26px;
+      height: 26px;
+      cursor: pointer;
+      stroke: #0ea5e9;
+      transition: stroke 0.2s;
+    }
+
+    header svg:hover {
+      stroke: #0284c7;
+    }
+
+    h1 {
+      font-size: 22px;
+      margin: 0;
+      color: #0ea5e9;
+    }
+
+    .btn-add {
+      background: #0ea5e9;
+      color: #fff;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+
+    .btn-add:hover {
+      background: #0284c7;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+    }
+
+    th {
+      background: #f1f5f9;
+      font-weight: 600;
+    }
+
+    tr:hover {
+      background: #f9fafb;
+    }
+
+    .actions button {
+      margin-right: 6px;
+      padding: 5px 8px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .edit-btn {
+      background: #0ea5e9;
+      color: #fff;
+    }
+
+    .delete-btn {
+      background: #b91c1c;
+      color: #fff;
+    }
+
+    .checkbox {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    /* Modal */
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.4);
+      z-index: 10;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .modal.show {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    .modal-content {
+      background: #fff;
+      padding: 24px;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .modal-content h2 {
+      margin-top: 0;
+      margin-bottom: 14px;
+      color: #0ea5e9;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .modal-actions {
+      text-align: right;
+    }
+
+    .modal-actions button {
+      margin-left: 8px;
+      padding: 8px 14px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .save-btn {
+      background: #0ea5e9;
+      color: #fff;
+    }
+
+    .cancel-btn {
+      background: #e5e7eb;
+      color: #1e1f26;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <!-- Zurück-Pfeil -->
+    <svg id="backArrow" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+      <path d="M15 18l-6-6 6-6"/>
+    </svg>
+    <h1>Benutzerverwaltung</h1>
+  </header>
+
+  <button class="btn-add" id="addUserBtn">+ Benutzer hinzufügen</button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>E-Mail</th>
+        <th>Rolle</th>
+        <th>Freigeschaltet</th>
+        <th>Aktionen</th>
+      </tr>
+    </thead>
+    <tbody id="userTableBody"></tbody>
+  </table>
+
+  <!-- Modal -->
+  <div class="modal" id="userModal">
+    <div class="modal-content">
+      <h2 id="modalTitle">Benutzer hinzufügen</h2>
+
+      <label for="nameInput">Name</label>
+      <input type="text" id="nameInput" placeholder="Name eingeben" />
+
+      <label for="emailInput">E-Mail</label>
+      <input type="email" id="emailInput" placeholder="E-Mail eingeben" />
+
+      <label for="passwordInput">Startpasswort</label>
+      <input type="password" id="passwordInput" placeholder="Startpasswort vergeben" />
+
+      <label for="roleSelect">Rolle</label>
+      <select id="roleSelect">
+        <option value="user">User</option>
+        <option value="admin">Admin</option>
+      </select>
+
+      <label style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="activeInput" class="checkbox" />
+        Freigeschaltet
+      </label>
+
+      <div class="modal-actions">
+        <button class="cancel-btn" id="cancelBtn">Abbrechen</button>
+        <button class="save-btn" id="saveUserBtn">Speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import {
+      getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import {
+      getAuth, createUserWithEmailAndPassword
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB_PRdGdU_f18VeKlrBUqStc6pXVu3tU04",
+      authDomain: "reinoldus-f4dc3.firebaseapp.com",
+      projectId: "reinoldus-f4dc3",
+      storageBucket: "reinoldus-f4dc3.firebasestorage.app",
+      messagingSenderId: "518113038751",
+      appId: "1:518113038751:web:04cdccdfb7b43ea0c06daa",
+      measurementId: "G-CCGFYRWEH1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const addUserBtn = document.getElementById("addUserBtn");
+    const userModal = document.getElementById("userModal");
+    const cancelBtn = document.getElementById("cancelBtn");
+    const saveUserBtn = document.getElementById("saveUserBtn");
+    const userTableBody = document.getElementById("userTableBody");
+    const nameInput = document.getElementById("nameInput");
+    const emailInput = document.getElementById("emailInput");
+    const passwordInput = document.getElementById("passwordInput");
+    const roleSelect = document.getElementById("roleSelect");
+    const activeInput = document.getElementById("activeInput");
+    const backArrow = document.getElementById("backArrow");
+    const modalTitle = document.getElementById("modalTitle");
+
+    backArrow.addEventListener("click", () => {
+      window.location.href = "admin.html";
+    });
+
+    let editUserId = null;
+
+    async function loadUsers() {
+      userTableBody.innerHTML = "";
+      const snapshot = await getDocs(collection(db, "users"));
+      snapshot.forEach((docSnap) => {
+        const user = docSnap.data();
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${user.name || "-"}</td>
+          <td>${user.email}</td>
+          <td>${user.role || "user"}</td>
+          <td><input type="checkbox" class="checkbox" ${user.active ? "checked" : ""} disabled></td>
+          <td class="actions">
+            <button class="edit-btn" data-id="${docSnap.id}">Bearbeiten</button>
+            <button class="delete-btn" data-id="${docSnap.id}">Löschen</button>
+          </td>
+        `;
+        userTableBody.appendChild(tr);
+      });
+    }
+
+    addUserBtn.addEventListener("click", () => {
+      editUserId = null;
+      modalTitle.textContent = "Benutzer hinzufügen";
+      nameInput.value = "";
+      emailInput.value = "";
+      passwordInput.value = "";
+      roleSelect.value = "user";
+      activeInput.checked = false;
+      userModal.classList.add("show");
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      userModal.classList.remove("show");
+      editUserId = null;
+    });
+
+    document.addEventListener("click", async (e) => {
+      const editBtn = e.target.closest(".edit-btn");
+      const deleteBtn = e.target.closest(".delete-btn");
+
+      if (editBtn) {
+        const id = editBtn.dataset.id;
+        const row = editBtn.closest("tr");
+        const cells = row.querySelectorAll("td");
+        const name = cells[0].textContent.trim();
+        const email = cells[1].textContent.trim();
+        const role = cells[2].textContent.trim();
+        const active = row.querySelector('input[type="checkbox"]').checked;
+
+        editUserId = id;
+        modalTitle.textContent = "Benutzer bearbeiten";
+        nameInput.value = name;
+        emailInput.value = email;
+        passwordInput.value = "";
+        roleSelect.value = role || "user";
+        activeInput.checked = !!active;
+
+        userModal.classList.add("show");
+      }
+
+      if (deleteBtn) {
+        const id = deleteBtn.dataset.id;
+        if (confirm("Benutzer wirklich löschen?")) {
+          await deleteDoc(doc(db, "users", id));
+          await loadUsers();
+        }
+      }
+    });
+
+    saveUserBtn.addEventListener("click", async () => {
+      const name = nameInput.value.trim();
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      const role = roleSelect.value;
+      const active = !!activeInput.checked;
+
+      if (!name || !email || (!editUserId && !password)) {
+        alert(editUserId ? "Name & E-Mail sind Pflicht." : "Bitte alle Felder ausfüllen!");
+        return;
+      }
+
+      try {
+        if (editUserId) {
+          await updateDoc(doc(db, "users", editUserId), {
+            name, email, role, active, updatedAt: new Date()
+          });
+        } else {
+          const cred = await createUserWithEmailAndPassword(auth, email, password);
+          const uid = cred.user.uid;
+          await addDoc(collection(db, "users"), {
+            uid, name, email, role, active, createdAt: new Date()
+          });
+        }
+
+        userModal.classList.remove("show");
+        editUserId = null;
+        await loadUsers();
+      } catch (error) {
+        alert("Fehler: " + error.message);
+      }
+    });
+
+    loadUsers();
+  </script>
+
+  <!-- 🔄 Automatische WebApp-Aktualisierung -->
+  <script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js")
+      .then(() => console.log("✅ Service Worker aktiv"))
+      .catch((err) => console.warn("⚠️ Service Worker Fehler:", err));
+
+    // 🔁 Falls eine neue Version erkannt wird → Seite automatisch neu laden
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "NEW_VERSION") {
+        console.log("⚡ Neue Version erkannt, Seite wird neu geladen...");
+        window.location.reload(true);
+      }
+    });
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Schichtplan</title>
+    <link rel="stylesheet" href="whiteboard.css">
+    
+</head>
+
+<body>
+
+    <header id="topBar">
+        <h1 class="page-title">Schichtplan</h1>
+        <div class="controls-group">
+            <label for="wacheSelect" class="sr-only">Wache auswählen:</label>
+            <select id="wacheSelect" class="control-select">
+                <option value="default" selected>-- Bitte auswählen --</option>
+                <option value="RW_Holzwickede">RW Holzwickede</option>
+                <option value="RW_Fröndenberg">RW Fröndenberg</option>
+                <option value="RW_Königsborn">RW Königsborn</option>
+                <option value="RW_Menden">RW Menden</option>
+                <option value="KTW_Wache">KTW Wache</option>
+                <option value="OVD">OVD (Übersicht)</option>
+            </select>
+            <button id="addDayBtn" class="control-btn primary-btn hidden">+ Tag erstellen</button>
+        </div>
+    </header>
+
+    <main id="daysArea" class="days-grid">
+        <div class="info-card" id="initialMessage">Bitte eine Wache auswählen.</div>
+        <div class="info-card hidden" id="loadingIndicator">Lade Schichtdaten...</div>
+        <div class="info-card hidden" id="ovdMessage">OVD-Ansicht: Zeigt alle unbesetzten Schichten an.</div>
+    </main>
+
+    <div class="popup-overlay" id="datePopupOverlay"></div>
+    <div class="popup-form" id="datePopupForm">
+        <h2>Neuen Tag erstellen</h2>
+        <label for="newDayDate">Datum auswählen (DD.MM.JJJJ):</label>
+        <input type="date" id="newDayDate" required>
+        <div class="form-actions">
+            <button id="saveDayBtn">Speichern</button>
+            <button onclick="closeDatePopup()" class="cancel-btn">Abbrechen</button>
+        </div>
+    </div>
+
+    <div class="popup-overlay" id="personnelPopupOverlay"></div>
+    <div class="popup-form" id="personnelPopupForm">
+        <h2>Personal eintragen</h2>
+        <label for="personnelName">Name:</label>
+        <input type="text" id="personnelName" placeholder="Max Mustermann" required>
+        
+        <label>Qualifikation:</label>
+        <div class="qualification-group" id="qualificationGroup">
+            </div>
+
+        <label for="personnelColor">Hintergrundfarbe:</label>
+        <select id="personnelColor">
+            <option value="#ffffff" selected>Weiß</option>
+            <option value="#ffef94">Gelb (Highlight)</option>
+        </select>
+
+        <div class="form-actions">
+            <button id="savePersonnelBtn">Speichern</button>
+            <button onclick="closePersonnelPopup()" class="cancel-btn">Abbrechen</button>
+        </div>
+    </div>
+
+    <script type="module" src="./whiteboard.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js")
+      .then(() => console.log("✅ Service Worker aktiv"))
+      .catch((err) => console.warn("⚠️ Service Worker Fehler:", err));
+
+    // Behält den Listener für manuelle PWA-Updates via Service Worker
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "NEW_VERSION") {
+        console.log("⚡ Neue Version erkannt, Seite wird neu geladen...");
+        window.location.reload(true);
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

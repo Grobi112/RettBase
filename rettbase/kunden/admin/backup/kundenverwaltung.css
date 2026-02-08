@@ -1,0 +1,466 @@
+/* Datei: /kunden/kundenverwaltung.css */
+
+:root {
+    --primary-color: #0ea5e9; /* Sky Blue */
+    --secondary-color: #f3f4f6;
+    --text-color: #1e293b;
+    --border-color: #e5e7eb;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+}
+
+.rettbase-heading {
+    color: #1e1f26;
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: 600;
+    font-size: 1.6rem;
+    text-align: center;
+    margin: 20px 0 30px;
+}
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", sans-serif;
+}
+body {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    padding-bottom: 30px;
+}
+
+/* --- Top Bar / Header --- */
+#topBar {
+    padding: 15px 25px;
+    background-color: white;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    position: static;
+    z-index: 10;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.back-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    transition: opacity 0.2s;
+}
+
+.back-btn:hover {
+    opacity: 0.7;
+}
+
+.back-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.controls-group {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    justify-content: center;
+    padding: 0 20px 20px 20px;
+}
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 450px;
+}
+h2 {
+    margin-bottom: 20px;
+    color: #00bcd4;
+    font-size: 1.3rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+h3 {
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+hr {
+    border: 0;
+    border-top: 1px solid #ddd;
+}
+form label {
+    display: block;
+    margin-top: 10px;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+/* Ausnahme: Labels für Modul-Checkboxen */
+#moduleCheckboxes label,
+#editModuleCheckboxes label,
+form #moduleCheckboxes label,
+form #editModuleCheckboxes label {
+    display: inline-block !important;
+    margin: 0 0 10px 0 !important;
+    margin-top: 0 !important;
+    padding: 0 !important;
+    font-weight: normal !important;
+    text-align: left !important;
+    width: 100% !important;
+}
+/* Korrigierte und konsolidierte Eingabefeld-Stile */
+form input[type="text"],
+form input[type="email"],
+form input[type="password"],
+form select,
+.modal-content input, 
+.modal-content select { 
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+}
+form button {
+    width: 100%;
+    padding: 12px;
+    background-color: #1e1f26;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.2s;
+}
+form button:hover {
+    background-color: #374151;
+}
+.message {
+    margin-top: 15px;
+    font-weight: 600;
+    color: green;
+}
+/* Standardmäßig versteckt, wird von JS bei Superadmin angezeigt */
+#newCompanySection {
+    display: none; 
+}
+
+/* --- Listen-Stile --- */
+.list-card {
+    max-width: 1200px;
+    width: 100%;
+}
+
+/* --- Such- und Filter-Bereich --- */
+.search-filter-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.search-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+.filter-select {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+    background: white;
+    cursor: pointer;
+    min-width: 150px;
+}
+
+/* --- Karten-Layout für Kunden --- */
+.customer-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+
+/* --- Module-Liste (Modulverwaltung) --- */
+.customer-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    margin-bottom: 15px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+}
+
+.customer-details {
+    flex: 1;
+}
+
+.customer-id {
+    font-size: 0.85em;
+    color: #666;
+    margin-top: 5px;
+}
+
+.customer-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.customer-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.customer-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.customer-title strong {
+    font-size: 1.2rem;
+    color: #1e1f26;
+}
+
+.customer-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.customer-actions button,
+.customer-actions a {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.edit-btn {
+    background: #00bcd4;
+    color: white;
+}
+
+.edit-btn:hover {
+    background: #00a4b9;
+}
+
+.delete-btn {
+    background: #e74c3c;
+    color: white;
+}
+
+.delete-btn:hover {
+    background: #c0392b;
+}
+
+.quick-access-btn {
+    background: #27ae60;
+    color: white;
+}
+
+.quick-access-btn:hover {
+    background: #229954;
+}
+
+.customer-card-body {
+    margin-top: 10px;
+}
+
+.customer-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.info-label {
+    font-size: 0.85em;
+    color: #666;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-value {
+    font-size: 0.95em;
+    color: #1e1f26;
+}
+
+.info-value a {
+    color: #00bcd4;
+    text-decoration: none;
+}
+
+.info-value a:hover {
+    text-decoration: underline;
+}
+
+/* --- Status-Badges --- */
+.status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-inactive {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-suspended {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* --- MODAL STYLES --- */
+.modal-overlay {
+    display: none; 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.modal-content h2 {
+    color: #1e1f26;
+    border-bottom: 2px solid #00bcd4;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+.modal-actions button {
+    width: auto;
+    padding: 10px 20px;
+}
+.modal-actions .save-btn {
+    background: #00bcd4;
+}
+.modal-actions .cancel-btn {
+    background: #999;
+}
+
+/* 🔥 NEUE KORREKTUR: Klasse zum zwingenden Ausblenden */
+.is-hidden {
+    display: none !important;
+}
+
+/* NEUE BUTTON STYLES */
+.primary-btn {
+    background: #00bcd4 !important;
+    color: white !important;
+    border: none !important;
+    padding: 10px 15px !important;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    width: auto !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.primary-btn:hover {
+    background: #00a4b9 !important;
+}
+#companyListSection h2 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* --- Modul-Checkboxen Stile --- */
+#moduleCheckboxes,
+#editModuleCheckboxes {
+    padding: 0 !important;
+    margin: 15px 0 !important;
+    text-align: left !important;
+    width: 100% !important;
+}
+
+#moduleCheckboxes input[type="checkbox"],
+#editModuleCheckboxes input[type="checkbox"] {
+    margin: 0 8px 0 0 !important;
+    padding: 0 !important;
+    vertical-align: middle !important;
+    display: inline !important;
+    width: auto !important;
+}

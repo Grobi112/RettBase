@@ -1,0 +1,8 @@
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /menus/{menuId} {
+      allow read, write: if true; // oder deine spezifischen Bedingungen
+    }
+  }
+}
+

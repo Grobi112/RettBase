@@ -1,0 +1,26 @@
+// Firebase Storage Security Rules für Profilbilder und E-Mail-Anhänge
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Profilbilder: Nur authentifizierte Benutzer können lesen/schreiben
+    match /kunden/{companyId}/profile-images/{fileName} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // E-Mail-Anhänge: Nur authentifizierte Benutzer können lesen/schreiben
+    match /kunden/{companyId}/email-attachments/{emailId}/{fileName} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Optional: Alle anderen Pfade blockieren (oder anpassen je nach Bedarf)
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+
+
+

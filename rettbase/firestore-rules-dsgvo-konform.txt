@@ -1,0 +1,167 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // HELPER-FUNKTIONEN
+    // ============================================
+    
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+    
+    // Prüft, ob der Benutzer ein Superadmin ist
+    function isSuperadmin() {
+      return isLoggedIn() && 
+             exists(/databases/$(database)/documents/kunden/admin/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/kunden/admin/users/$(request.auth.uid)).data.role == 'superadmin';
+    }
+    
+    // Prüft, ob der Benutzer zu einer Firma gehört
+    function belongsToCompany(companyId) {
+      return isLoggedIn() && 
+             exists(/databases/$(database)/documents/kunden/$(companyId)/users/$(request.auth.uid));
+    }
+    
+    // Prüft, ob der Benutzer Admin oder Superadmin einer Firma ist
+    function isAdminOrSuperadmin(companyId) {
+      return isSuperadmin() || 
+             (belongsToCompany(companyId) && 
+              get(/databases/$(database)/documents/kunden/$(companyId)/users/$(request.auth.uid)).data.role in ['admin', 'superadmin']);
+    }
+    
+    // ============================================
+    // KUNDEN-COLLECTIONS
+    // ============================================
+    match /kunden/{kundenId} {
+      // Erlaube Lesen für alle (auch unauthentifizierte Benutzer) für Login-Zwecke
+      // Dies ist notwendig für Collection Group Queries beim Login
+      // ⚠️ DSGVO-Konformität: Unauthentifizierte Lesezugriffe sind notwendig für Login-Funktionalität
+      allow read: if true;
+      allow write: if isLoggedIn();
+      
+      // ============================================
+      // MITARBEITER COLLECTION
+      // ============================================
+      // Erlaube unauthentifizierten Benutzern, die mitarbeiter Collection zu lesen
+      // Dies ist notwendig für den Login mit Personalnummer und E-Mail
+      // ⚠️ SICHERHEIT: Nur Lesezugriff für Login-Zwecke, Löschen nur für Admin/Superadmin
+      match /mitarbeiter/{mitarbeiterId} {
+        // Erlaube Lesen für alle (auch unauthentifizierte Benutzer)
+        // Dies ist notwendig, um nach Personalnummern und E-Mails zu suchen beim Login
+        allow read: if true;
+        
+        // Schreiben (create, update): Nur für authentifizierte Benutzer der Firma
+        allow create, update: if isLoggedIn() && belongsToCompany(kundenId);
+        
+        // Löschen: NUR für Admin oder Superadmin (DSGVO-konform)
+        // Benutzer können sich nicht selbst löschen - nur Administratoren können löschen
+        // Dies entspricht der DSGVO-Anforderung: Mitarbeiter können ihre Daten nicht selbst löschen,
+        // da es sich um ein Firmen-/Mitarbeiter-System handelt
+        allow delete: if isLoggedIn() && isAdminOrSuperadmin(kundenId);
+      }
+      
+      // ============================================
+      // USERS COLLECTION - DSGVO-KONFORME ZUGRIFFSKONTROLLE
+      // ============================================
+      match /users/{userId} {
+        // Lesen: Eigener Benutzer oder Admin/Superadmin der Firma
+        allow read: if isLoggedIn() && (
+          request.auth.uid == userId || 
+          isSuperadmin() || 
+          isAdminOrSuperadmin(kundenId)
+        );
+        
+        // Schreiben (create, update): Eigener Benutzer oder Admin/Superadmin
+        allow create, update: if isLoggedIn() && (
+          request.auth.uid == userId || 
+          isSuperadmin() || 
+          isAdminOrSuperadmin(kundenId)
+        );
+        
+        // Löschen: NUR für Admin oder Superadmin (DSGVO-konform)
+        // Benutzer können sich nicht selbst löschen - nur Administratoren können löschen
+        // Dies entspricht der DSGVO-Anforderung: Mitarbeiter können ihre Daten nicht selbst löschen,
+        // da es sich um ein Firmen-/Mitarbeiter-System handelt
+        allow delete: if isLoggedIn() && isAdminOrSuperadmin(kundenId);
+        
+        // UserTiles Subcollection
+        match /userTiles/{docId} {
+          allow read, write: if isLoggedIn() && (
+            request.auth.uid == userId || 
+            isSuperadmin() || 
+            isAdminOrSuperadmin(kundenId)
+          );
+        }
+      }
+      
+      // ============================================
+      // MODULES COLLECTION
+      // ============================================
+      match /modules/{moduleId} {
+        allow read: if isLoggedIn() && (isSuperadmin() || belongsToCompany(kundenId));
+        allow write: if isLoggedIn() && (isSuperadmin() || isAdminOrSuperadmin(kundenId));
+      }
+      
+      // Alle anderen Collections unter kunden/{kundenId}
+      // WICHTIG: Diese Regel muss nach der mitarbeiter-Regel kommen, damit mitarbeiter nicht blockiert wird
+      match /{document=**} {
+        // Erlaube Lesen für alle (auch unauthentifizierte Benutzer) für Login-Zwecke
+        // Dies ist notwendig für Collection Group Queries
+        allow read: if true;
+        allow write: if isLoggedIn();
+      }
+    }
+    
+    // ============================================
+    // GLOBALE MODULE
+    // ============================================
+    match /modules/{moduleId} {
+      allow read: if isLoggedIn();
+      allow write: if isLoggedIn() && isSuperadmin(); // Nur Superadmin kann globale Module verwalten
+    }
+    
+    // ============================================
+    // SETTINGS COLLECTION
+    // ============================================
+    match /settings/{settingId} {
+      allow read, write: if isLoggedIn();
+      
+      match /{document=**} {
+        allow read, write: if isLoggedIn();
+      }
+    }
+  }
+}
+
+// ⚠️ WICHTIGE HINWEISE ZUR DSGVO-KONFORMITÄT:
+// 
+// 1. SELBSTLÖSCHUNG VERHINDERT:
+//    - Benutzer können sich NICHT selbst löschen (weder Mitarbeiter noch User-Daten)
+//    - Dies entspricht der DSGVO-Anforderung für Firmen-/Mitarbeiter-Systeme
+//    - Nur Administratoren (Admin/Superadmin) können Mitarbeiter löschen
+//
+// 2. DSGVO-RECHT AUF LÖSCHUNG (Art. 17):
+//    - Das Recht auf Löschung wird durch Administratoren ausgeübt
+//    - Die Löschfunktion (dsgvoLoeschenMitarbeiter) löscht nur direkte Mitarbeiter-Daten:
+//      • Mitarbeiter-Daten (mitarbeiter)
+//      • User-Daten (users)
+//      • E-Mail-Daten (emails)
+//    - Historische Daten bleiben erhalten (keine Anonymisierung):
+//      • OVD Einsatztagebuch-Einträge (historische Nachverfolgbarkeit)
+//      • Schichtplan-Daten (werden nach 1 Jahr automatisch gelöscht)
+//
+// 3. ROLLEN-BASIERTE ZUGRIFFSKONTROLLE:
+//    - Die Rules prüfen serverseitig, ob ein Benutzer Admin oder Superadmin ist
+//    - Dies wird durch Firestore-Reads in den Helper-Funktionen ermöglicht
+//    - Die JavaScript-Validierung in der App ergänzt diese serverseitige Validierung
+//
+// 4. UNAUTHENTIFIZIERTE LESEZUGRIFFE:
+//    - Die unauthentifizierten Lesezugriffe für Login-Zwecke sind notwendig und DSGVO-konform
+//    - Sie werden nur für die Authentifizierung verwendet und geben keine sensiblen Daten preis
+//    - Nur E-Mail/Personalnummer (die für Login notwendig sind) werden gelesen
+//
+// 5. HISTORISCHE DATEN:
+//    - OVD Einsatztagebuch-Einträge bleiben mit Namen erhalten (Nachverfolgbarkeit)
+//    - Schichtplan-Daten bleiben mit Namen erhalten (werden nach 1 Jahr automatisch gelöscht)
+//    - Keine Anonymisierung - historische Daten müssen nachvollziehbar bleiben

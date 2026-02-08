@@ -1,0 +1,50 @@
+---
+description: Moderne UI-Standards für Popups, Dialoge und Auswahlfenster
+globs: lib/**/*.dart
+alwaysApply: false
+---
+
+# UI-Design-Standards (RettBase)
+
+Bei allen Popup-Fenstern, Modals, Bottom Sheets und Auswahl-Dialogen diese Design-Standards einhalten.
+
+## Fenster-Positionierung
+
+- **Oben ausgerichtet**: Auswahl- und Suchfenster oben am Bildrand öffnen (`Align(alignment: Alignment.topCenter)` mit `showGeneralDialog`)
+- Nicht mittig oder als klassisches Bottom Sheet von unten
+
+## Struktur
+
+1. **Drag-Handle**: Kleiner grauer Balken oben (36×4 px, 12px radius) als visueller Anker
+2. **Header**: Titel links, Schließen-Button rechts (IconButton mit grauem Hintergrund)
+3. **Suchfeld** (falls Suchfunktion): Oben angepinnt, scrollt nicht mit der Liste
+4. **Inhalt**: Darunter, scrollbar
+
+## Suchfeld
+
+- Gefülltes Feld (`filled: true`, `fillColor: Colors.grey.shade50`)
+- Abgerundete Ecken (12px)
+- Kein harter Rahmen (`borderSide: BorderSide.none`)
+- Icon `Icons.search_rounded`
+- Platzhalter z. B. „Namen durchsuchen…“
+
+## Listen-Einträge
+
+- **Avatar/Initialen**: Kreis mit Initialen (z. B. „MF“) für Personen
+- **Abstände**: `separatorBuilder` mit 4–8px zwischen Einträgen
+- **Auswahl-Hervorhebung**: Primary-Farbe als Hintergrund (8 % Opacity), dezenter Rahmen, Check-Icon rechts
+- **Tap-Bereich**: `InkWell` mit `borderRadius: 12`
+- **Padding**: horizontal 16, vertical 14
+
+## Karte/Container
+
+- Weißer Hintergrund, Schatten (`elevation: 8`, `shadowColor: Colors.black.withOpacity(0.15)`)
+- Abgerundete untere Ecken (24px)
+- `ClipRRect` für saubere Kanten
+- AppTheme-Farben nutzen (`AppTheme.primary`, `AppTheme.textPrimary`)
+
+## Technische Hinweise
+
+- `EdgeInsets.fromLTRB` statt `EdgeInsets.symmetric` wenn unterschiedliche Seiten-Paddings nötig sind
+- `ListView.separated` für Listen mit Abständen zwischen Einträgen
+- `SafeArea(top: false)` wenn Fenster am oberen Rand ausgerichtet ist

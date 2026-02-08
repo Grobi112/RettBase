@@ -1,0 +1,231 @@
+/* --- Allgemeines Design für OVD Einsatztagebuch Übersicht --- */
+
+:root {
+    --primary-color: #0ea5e9; /* Sky Blue (Header-Farbe) */
+    --secondary-color: #f3f4f6; /* Light Gray */
+    --text-color: #1e293b; /* Dark Slate */
+    --border-color: #e5e7eb;
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--secondary-color);
+    color: var(--text-color);
+    padding-bottom: 30px;
+}
+
+/* --- Header --- */
+
+#topBar {
+    padding: 15px 25px;
+    background-color: white;
+    box-shadow: var(--shadow);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    position: static;
+    z-index: 10;
+}
+
+.title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.back-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    transition: opacity 0.2s;
+}
+
+.back-btn:hover {
+    opacity: 0.7;
+}
+
+.back-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 0;
+}
+
+/* --- Container --- */
+
+.container {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+}
+
+/* --- Filter Section --- */
+
+.filter-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.filter-controls {
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-controls fieldset {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 12px;
+    position: relative;
+    min-width: 150px;
+}
+
+.filter-controls legend {
+    font-size: 12px;
+    color: #64748b;
+    padding: 0 4px;
+    background: white;
+    font-weight: normal;
+}
+
+.filter-controls select,
+.filter-controls input[type="number"] {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    color: var(--text-color);
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.filter-controls select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231e293b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 30px;
+}
+
+.filter-controls input[type="number"] {
+    cursor: text;
+}
+
+.primary-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.primary-btn:hover {
+    background-color: #0b93d0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* --- Übersicht Liste --- */
+
+.uebersicht-list {
+    margin-top: 20px;
+}
+
+.loading-message,
+.empty-message {
+    text-align: center;
+    color: #64748b;
+    padding: 40px;
+    font-style: italic;
+}
+
+.error-message {
+    text-align: center;
+    color: #dc2626;
+    padding: 20px;
+    background: #fee2e2;
+    border-radius: 8px;
+    border: 1px solid #fecaca;
+}
+
+.uebersicht-item {
+    padding: 15px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.uebersicht-item.clickable {
+    cursor: pointer;
+}
+
+.uebersicht-item.clickable:hover {
+    background-color: var(--secondary-color);
+}
+
+.uebersicht-item:last-child {
+    border-bottom: none;
+}
+
+.uebersicht-item-date {
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--text-color);
+    min-width: 120px;
+}
+
+.uebersicht-item-info {
+    flex: 1;
+    margin-left: 20px;
+    color: #64748b;
+    font-size: 14px;
+}
+
+.uebersicht-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    padding: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.uebersicht-item-icon:hover {
+    opacity: 0.7;
+}
+
+.uebersicht-item-icon svg {
+    width: 20px;
+    height: 20px;
+}
+

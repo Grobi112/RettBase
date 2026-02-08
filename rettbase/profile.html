@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profil - RettBase</title>
+  <link rel="stylesheet" href="profile.css">
+</head>
+<body>
+  <header id="topBar">
+    <div class="title-group">
+      <button id="backBtn" class="back-btn" title="Zurück">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <h1 class="page-title">Profil</h1>
+    </div>
+    <div class="controls-group"></div>
+  </header>
+
+  <div class="profile-container">
+    <!-- Formular -->
+    <div class="profile-form-section">
+      <form id="profileForm">
+        <!-- Personalnummer (nicht änderbar, über Vorname/Nachname) -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="personalnummer">Personalnummer</label>
+            <input type="text" id="personalnummer" name="personalnummer" readonly>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="vorname">Vorname</label>
+            <input type="text" id="vorname" name="vorname">
+          </div>
+          <div class="form-group">
+            <label for="nachname">Nachname</label>
+            <input type="text" id="nachname" name="nachname">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="geburtsdatum">Geburtsdatum</label>
+            <div class="date-input-wrapper">
+              <input type="date" id="geburtsdatum" name="geburtsdatum">
+              <button type="button" id="clearDateBtn" class="clear-date-btn" title="Datum löschen">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="email">E-Mail</label>
+            <input type="email" id="email" name="email">
+          </div>
+        </div>
+
+        <!-- Straße und Haus-Nr. in einer Zeile -->
+        <div class="form-row form-row-street">
+          <div class="form-group">
+            <label for="strasse">Straße</label>
+            <input type="text" id="strasse" name="strasse">
+          </div>
+          <div class="form-group">
+            <label for="hausnummer">Haus-Nr.</label>
+            <input type="text" id="hausnummer" name="hausnummer">
+          </div>
+        </div>
+
+        <!-- PLZ und Ort in einer Zeile -->
+        <div class="form-row form-row-city">
+          <div class="form-group">
+            <label for="plz">PLZ</label>
+            <input type="text" id="plz" name="plz">
+          </div>
+          <div class="form-group">
+            <label for="ort">Ort</label>
+            <input type="text" id="ort" name="ort">
+          </div>
+        </div>
+
+        <!-- Telefon und Handynummer in einer Zeile -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="telefon">Telefon</label>
+            <input type="tel" id="telefon" name="telefon">
+          </div>
+          <div class="form-group">
+            <label for="handynummer">Handynummer</label>
+            <input type="tel" id="handynummer" name="handynummer">
+          </div>
+        </div>
+
+        <!-- Trenner -->
+        <hr class="form-divider">
+
+        <!-- Passwort ändern -->
+        <div class="password-section">
+          <h3 class="password-section-title">Passwort ändern</h3>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="currentPassword">Aktuelles Passwort</label>
+              <input type="password" id="currentPassword" name="currentPassword" autocomplete="off" value="">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group password-fieldset">
+              <label for="newPassword">Neues Passwort</label>
+              <input type="password" id="newPassword" name="newPassword" autocomplete="new-password" value="">
+              <button type="button" class="password-toggle" id="newPasswordToggle" aria-label="Passwort anzeigen/verstecken">
+                <svg id="newPasswordEyeIcon" viewBox="0 0 24 24">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+            <div class="form-group password-fieldset">
+              <label for="confirmPassword">Neues Passwort wiederholen</label>
+              <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" value="">
+              <button type="button" class="password-toggle" id="confirmPasswordToggle" aria-label="Passwort anzeigen/verstecken">
+                <svg id="confirmPasswordEyeIcon" viewBox="0 0 24 24">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="save-btn">Speichern</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="profile.js"></script>
+</body>
+</html>
+
+
+
+

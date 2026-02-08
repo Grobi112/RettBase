@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Modul-Verwaltung</title>
+    <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/RBapp.png">
+    <link rel="stylesheet" href="modulverwaltung.css"> 
+</head>
+<body>
+
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück zur Startseite">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Modul-Verwaltung</h1>
+        </div>
+        <div class="controls-group"></div>
+    </header>
+    
+    <div class="container">
+        <section id="moduleListSection" class="card list-card">
+            <h2>
+                Verfügbare Module 
+                <button id="createModuleBtn" class="primary-btn is-hidden" style="float: right;">Neues Modul anlegen</button>
+            </h2>
+            <div id="moduleList">
+                <p>Lade Module...</p>
+            </div>
+        </section>
+        
+    </div>
+    
+    <div id="createModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Neues Modul anlegen</h2>
+            <form id="newModuleForm">
+                
+                <label for="moduleLabel">Modul-Name:</label>
+                <input type="text" id="moduleLabel" placeholder="z.B. Whiteboard" required>
+
+                <label for="moduleUrl">URL/Pfad:</label>
+                <input type="text" id="moduleUrl" placeholder="z.B. whiteboard.html oder kunden/module/module.html" required>
+                <small style="color: #666; display: block; margin-top: -10px; margin-bottom: 10px;">
+                    Relativer Pfad zur HTML-Datei
+                </small>
+                
+                <label for="moduleIcon">Icon-Name:</label>
+                <input type="text" id="moduleIcon" placeholder="z.B. whiteboard, logbuch, calendar" value="default">
+                <small style="color: #666; display: block; margin-top: -10px; margin-bottom: 10px;">
+                    Wird für zukünftige Icon-Darstellung verwendet
+                </small>
+
+                <label for="moduleOrder">Reihenfolge:</label>
+                <input type="number" id="moduleOrder" placeholder="1, 2, 3..." value="999" min="1" required>
+                <small style="color: #666; display: block; margin-top: -10px; margin-bottom: 10px;">
+                    Niedrigere Zahlen erscheinen zuerst im Menü
+                </small>
+
+                <label for="moduleFree">Kostenlos:</label>
+                <select id="moduleFree" required>
+                    <option value="true">Ja (kostenlos)</option>
+                    <option value="false">Nein (kostenpflichtig)</option>
+                </select>
+
+                <label for="moduleActive">Aktiv:</label>
+                <select id="moduleActive" required>
+                    <option value="true">Ja (sichtbar)</option>
+                    <option value="false">Nein (versteckt)</option>
+                </select>
+
+                <hr style="margin: 20px 0;">
+
+                <h3>Rollen-Berechtigungen</h3>
+                <p>Wählen Sie, welche Rollen Zugriff auf dieses Modul haben:</p>
+                <div id="roleCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 15px 0; justify-items: start;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="superadmin" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Superadmin</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="ovd" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">OVD</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="admin" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Admin</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="pflegedienstleitung" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Pflegedienstleitung</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="supervisor" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Supervisor</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="stützpunktleiter" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Stützpunktleiter</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="rettungsdienstleitung" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Rettungsdienstleitung</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="user" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">User</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="roles" value="wachleitung" checked style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Wachleitung</span>
+                    </label>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="submit" class="save-btn">Modul anlegen</button>
+                    <button type="button" id="closeCreateModal" class="cancel-btn">Abbrechen</button>
+                </div>
+            </form>
+            <p id="moduleMessage" class="message"></p>
+        </div>
+    </div>
+    
+    <div id="editModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Modul bearbeiten</h2>
+            <form id="editModuleForm">
+                <input type="hidden" id="editModuleId"> 
+
+                <label for="editModuleLabel">Modul-Name:</label>
+                <input type="text" id="editModuleLabel" required>
+
+                <label for="editModuleUrl">URL/Pfad:</label>
+                <input type="text" id="editModuleUrl" required>
+                <small style="color: #666; display: block; margin-top: -10px; margin-bottom: 10px;">
+                    Relativer Pfad zur HTML-Datei
+                </small>
+                
+                <label for="editModuleIcon">Icon-Name:</label>
+                <input type="text" id="editModuleIcon">
+                <small style="color: #666; display: block; margin-top: -10px; margin-bottom: 10px;">
+                    Wird für zukünftige Icon-Darstellung verwendet
+                </small>
+
+                <label for="editModuleOrder">Reihenfolge:</label>
+                <input type="number" id="editModuleOrder" min="1" required>
+
+                <label for="editModuleFree">Kostenlos:</label>
+                <select id="editModuleFree" required>
+                    <option value="true">Ja (kostenlos)</option>
+                    <option value="false">Nein (kostenpflichtig)</option>
+                </select>
+
+                <label for="editModuleActive">Aktiv:</label>
+                <select id="editModuleActive" required>
+                    <option value="true">Ja (sichtbar)</option>
+                    <option value="false">Nein (versteckt)</option>
+                </select>
+
+                <hr style="margin: 20px 0;">
+
+                <h3>Rollen-Berechtigungen</h3>
+                <p>Wählen Sie, welche Rollen Zugriff auf dieses Modul haben:</p>
+                <div id="editRoleCheckboxes" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 15px 0; justify-items: start;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="superadmin" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Superadmin</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="ovd" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">OVD</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="admin" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Admin</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="pflegedienstleitung" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Pflegedienstleitung</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="supervisor" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Supervisor</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="stützpunktleiter" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Stützpunktleiter</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="rettungsdienstleitung" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Rettungsdienstleitung</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="user" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">User</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; line-height: 1;">
+                        <input type="checkbox" name="editRoles" value="wachleitung" style="margin: 0; vertical-align: middle;">
+                        <span style="line-height: 1; vertical-align: middle;">Wachleitung</span>
+                    </label>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="submit" class="save-btn">Speichern</button>
+                    <button type="button" id="closeEditModal" class="cancel-btn">Abbrechen</button>
+                </div>
+            </form>
+            <p id="editMessage" class="message"></p>
+        </div>
+    </div>
+    
+    <script type="module" src="./modulverwaltung.js"></script>
+</body>
+</html>
+
+
+
+

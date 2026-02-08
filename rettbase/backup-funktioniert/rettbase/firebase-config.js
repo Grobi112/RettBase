@@ -1,0 +1,48 @@
+// Datei: firebase-config.js
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js"; 
+import { getFirestore, enableMultiTabIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+import { getStorage } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
+
+// 🔥 Deine Firebase Konfiguration (mit deinen Live-Daten)
+const firebaseConfig = {
+    apiKey: "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA", 
+    authDomain: "rett-fe0fa.firebaseapp.com",
+    projectId: "rett-fe0fa",
+    storageBucket: "rett-fe0fa.firebasestorage.app",
+    messagingSenderId: "740721219821",
+    appId: "1:740721219821:web:a8e7f8070f875866ccd4e4"
+    // measurementId kann optional hinzugefügt werden, falls benötigt.
+};
+
+// Initialisiere Firebase App
+const app = initializeApp(firebaseConfig);
+
+// Exportiere die Dienste-Instanzen
+export const auth = getAuth(app);
+
+// 🔥 Firestore initialisieren
+export const db = getFirestore(app);
+
+// 🔥 Storage initialisieren
+export const storage = getStorage(app);
+
+// 🔥 Aktiviere Multi-Tab-Persistenz (erlaubt mehrere Tabs gleichzeitig)
+// Dies verhindert den "Failed to obtain exclusive access" Fehler
+enableMultiTabIndexedDbPersistence(db).catch((err) => {
+  if (err.code == 'failed-precondition') {
+    // Persistenz bereits aktiviert - das ist OK
+    console.debug("ℹ️ Offline-Persistenz bereits aktiviert");
+  } else if (err.code == 'unimplemented') {
+    // Browser unterstützt keine Offline-Persistenz - das ist OK
+    console.debug("ℹ️ Browser unterstützt keine Offline-Persistenz");
+  } else {
+    // Anderer Fehler - nur dann warnen
+    console.warn("⚠️ Fehler beim Aktivieren der Multi-Tab-Persistenz:", err);
+  }
+});
+
+console.log("✅ Firestore initialisiert mit Multi-Tab-Persistenz");
+
+export default app;

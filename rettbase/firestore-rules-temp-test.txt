@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // TEMPORÄRE TEST-RULES (NUR FÜR ENTWICKLUNG!)
+    // ============================================
+    // ⚠️ WARNUNG: Diese Rules sind sehr offen und sollten NUR für Tests verwendet werden!
+    // ⚠️ In Produktion müssen diese Rules verschärft werden!
+    
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+    
+    // Für Tests: Erlaube allen eingeloggten Benutzern, Kunden anzulegen
+    // In Produktion: Nur Superadmins sollten das können
+    match /kunden/{kundenId} {
+      allow read, write: if isLoggedIn();
+      
+      match /users/{userId} {
+        allow read, write: if isLoggedIn();
+        
+        match /userTiles/{docId} {
+          allow read, write: if isLoggedIn();
+        }
+      }
+      
+      match /modules/{moduleId} {
+        allow read, write: if isLoggedIn();
+      }
+      
+      match /{documents=**} {
+        allow read, write: if isLoggedIn();
+      }
+    }
+    
+    // Globale Module
+    match /modules/{moduleId} {
+      allow read, write: if isLoggedIn();
+    }
+  }
+}
+
+
+
+
+
+
+
+

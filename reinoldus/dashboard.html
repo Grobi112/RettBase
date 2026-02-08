@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>RettBase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/RBapp.png">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    body {
+      background: #f4f5f7;
+      color: #1e1f26;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      height: 60px;
+      background: #1e1f26;
+      color: white;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      justify-content: flex-start;
+    }
+
+    #menuToggle {
+      background: none;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      padding: 4px;
+      margin-right: 30px;
+    }
+
+    #menuToggle div {
+      width: 22px;
+      height: 2px;
+      background: #fff;
+    }
+
+    /* Das Logo wird über den IMG-Tag eingebunden. Diese CSS-Regel stellt sicher, dass es in den Header passt */
+    header img {
+        height: 40px; 
+        /* Bei Bedarf können hier zusätzliche CSS-Regeln für die Grafik hinzugefügt werden */
+    }
+
+
+    .dropdown-menu {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      background-color: #ffffff;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      z-index: 100;
+      display: none;
+      flex-direction: column;
+      width: 250px;
+      border-radius: 0 0 8px 8px;
+      border: 1px solid #e5e7eb;
+      border-top: none;
+    }
+
+    .dropdown-menu.show {
+      display: flex;
+    }
+
+    .menu-item {
+      padding: 12px 20px;
+      text-decoration: none;
+      color: #374151;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      transition: background-color 0.2s;
+    }
+
+    .menu-item:hover {
+      background-color: #f3f4f6;
+    }
+
+    /* Das Admin-Element muss im CSS flex sein, damit es bei Bedarf ausgeblendet werden kann */
+    #adminLink {
+      display: none; /* Standardmäßig versteckt, wird von JS gezeigt */
+      border-top: 1px solid #e5e7eb;
+    }
+
+    main {
+      flex-grow: 1;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    #contentFrame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+    
+    #welcomeText {
+        padding-left: 20px;
+        font-size: 14px;
+        font-weight: normal;
+        color: #ddd;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button id="menuToggle">
+      <div></div>
+      <div></div>
+      <div></div>
+    </button>
+    <img src="/img/rettbase.png" alt="RettBase Logo" style="height: 40px;">
+    </header>
+
+  <div id="dropdownMenu" class="dropdown-menu">
+    <a href="#" class="menu-item" data-page="home">Home</a>
+    <a href="#" class="menu-item" data-page="whiteboard">Whiteboard</a>
+    <a href="#" class="menu-item" data-page="admin" id="adminLink">Mitgliederverwaltung</a>
+    <a href="#" class="menu-item" id="logoutLink">Logout</a>
+  </div>
+
+  <main>
+    <iframe id="contentFrame" src="home.html" frameborder="0"></iframe>
+  </main>
+
+  <script type="module">
+    // Importe für die Rollenprüfung
+    import { auth, db, logout, getUserRole } from "./auth.js"; 
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { collection, query, where, getDocs, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js"; 
+
+    const menuToggle = document.getElementById("menuToggle");
+    const dropdownMenu = document.getElementById("dropdownMenu");
+    const contentFrame = document.getElementById("contentFrame");
+    const logoutLink = document.getElementById("logoutLink");
+    const adminLink = document.getElementById("adminLink");
+    const welcomeText = document.getElementById("welcomeText"); 
+
+    // Initialisiere mit Home
+    window.onload = () => {
+      contentFrame.src = "home.html";
+    };
+
+    // Toggle Menu
+    menuToggle.addEventListener("click", () => {
+      dropdownMenu.classList.toggle("show");
+    });
+
+    // Menü bei Klick außerhalb schließen
+    document.addEventListener("click", (e) => {
+      if (!menuToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
+        dropdownMenu.classList.remove("show");
+      }
+    });
+
+    // Navigation
+    document.querySelectorAll(".menu-item[data-page]").forEach(item => {
+      item.addEventListener("click", () => {
+        const page = item.dataset.page;
+        dropdownMenu.classList.remove("show");
+
+        if (page === "home") contentFrame.src = "home.html";
+        else if (page === "whiteboard") contentFrame.src = "whiteboard/whiteboard.html";
+        else if (page === "admin") contentFrame.src = "admin.html";
+      });
+    });
+
+    // Logout
+    logoutLink.addEventListener("click", logout);
+
+    // ✅ KORREKTUR: Admin prüfen (mit neuer, schneller Rollenprüfung)
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = "login.html";
+        return;
+      }
+
+      // welcomeText.textContent = `Hallo, ${user.email}`; // Kann eingeblendet werden, falls vorhanden
+
+      try {
+        const role = await getUserRole(user.uid);
+        
+        // Zeige den Admin-Link basierend auf der Rolle
+        adminLink.style.display = role === "admin" ? "flex" : "none";
+
+      } catch (err) {
+        console.error("Fehler beim Prüfen der Admin-Rolle im Dashboard:", err);
+        adminLink.style.display = "none";
+      }
+    });
+  </script>
+</body>
+</html>

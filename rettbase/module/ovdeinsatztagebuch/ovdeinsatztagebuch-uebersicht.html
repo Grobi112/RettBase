@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · OVD Einsatztagebuch Übersicht</title>
+    <link rel="stylesheet" href="./ovdeinsatztagebuch-uebersicht.css">
+</head>
+
+<body>
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">OVD Einsatztagebuch Übersicht</h1>
+        </div>
+    </header>
+
+    <main id="mainContent">
+        <div class="container">
+            <div class="filter-section">
+                <div class="filter-controls">
+                    <fieldset>
+                        <legend>Monat</legend>
+                        <select id="monthSelect">
+                            <option value="1">Januar</option>
+                            <option value="2">Februar</option>
+                            <option value="3">März</option>
+                            <option value="4">April</option>
+                            <option value="5">Mai</option>
+                            <option value="6">Juni</option>
+                            <option value="7">Juli</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">Oktober</option>
+                            <option value="11">November</option>
+                            <option value="12">Dezember</option>
+                        </select>
+                    </fieldset>
+                    <fieldset>
+                        <legend>Jahr</legend>
+                        <input type="number" id="yearSelect" min="2000" max="2099" value="2024">
+                    </fieldset>
+                    <button id="loadBtn" class="primary-btn">Laden</button>
+                </div>
+            </div>
+
+            <div id="uebersichtList" class="uebersicht-list">
+                <div class="loading-message">Bitte Monat und Jahr auswählen und auf "Laden" klicken.</div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module" src="./ovdeinsatztagebuch-uebersicht.js"></script>
+</body>
+</html>
+
+
+
+
+

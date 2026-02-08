@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>RettBase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/RBapp.png">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    body {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #f9fafb, #e8eef2);
+      color: #1e1f26;
+    }
+
+    .login-card {
+      background: #ffffff;
+      padding: 40px 36px;
+      border-radius: 14px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e5e7eb;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .login-card:hover {
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: #1e1f26;
+      letter-spacing: 0.5px;
+    }
+
+    h1 span {
+      color: #0ea5e9;
+    }
+
+    label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+      color: #374151;
+      text-align: left;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      margin-bottom: 18px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: #fff;
+      color: #111;
+      font-size: 15px;
+      transition: border 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #0ea5e9;
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #0ea5e9;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    button:hover {
+      background: #0284c7;
+      transform: translateY(-1px);
+    }
+
+    .link {
+      display: block;
+      text-align: center;
+      color: #0ea5e9;
+      margin-top: 14px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .link:hover {
+      color: #0284c7;
+      text-decoration: underline;
+    }
+
+    .error {
+      color: #b91c1c;
+      font-size: 14px;
+      margin-bottom: 10px;
+      text-align: center;
+      min-height: 18px;
+    }
+
+    .hidden { display: none; }
+
+    footer {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #94a3b8;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <h1>Rett<span>Base</span>-Login</h1>
+
+    <!-- Login-Formular -->
+    <div id="loginForm">
+      <div class="error" id="errorMsg"></div>
+
+      <label for="email">E-Mail</label>
+      <input type="email" id="email" placeholder="E-Mail eingeben" required />
+
+      <label for="password">Passwort</label>
+      <input type="password" id="password" placeholder="Passwort eingeben" required />
+
+      <button id="loginBtn">Anmelden</button>
+
+      <span class="link" id="forgotPasswordLink">Passwort vergessen?</span>
+    </div>
+
+    <!-- Passwort-Reset -->
+    <div id="resetForm" class="hidden">
+      <div class="error" id="resetMsg"></div>
+
+      <label for="resetEmail">E-Mail</label>
+      <input type="email" id="resetEmail" placeholder="E-Mail eingeben" required />
+
+      <button id="resetBtn">Zurücksetzen senden</button>
+
+      <span class="link" id="backToLogin">Zurück zum Login</span>
+    </div>
+
+    <footer>© 2025 RettBase</footer>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import {
+      getAuth,
+      signInWithEmailAndPassword,
+      sendPasswordResetEmail,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB_PRdGdU_f18VeKlrBUqStc6pXVu3tU04",
+      authDomain: "reinoldus-f4dc3.firebaseapp.com",
+      projectId: "reinoldus-f4dc3",
+      storageBucket: "reinoldus-f4dc3.firebasestorage.app",
+      messagingSenderId: "518113038751",
+      appId: "1:518113038751:web:04cdccdfb7b43ea0c06daa",
+      measurementId: "G-CCGFYRWEH1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    const loginForm = document.getElementById("loginForm");
+    const resetForm = document.getElementById("resetForm");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const loginBtn = document.getElementById("loginBtn");
+    const errorMsg = document.getElementById("errorMsg");
+    const forgotPasswordLink = document.getElementById("forgotPasswordLink");
+    const backToLogin = document.getElementById("backToLogin");
+    const resetEmail = document.getElementById("resetEmail");
+    const resetBtn = document.getElementById("resetBtn");
+    const resetMsg = document.getElementById("resetMsg");
+
+    // Falls schon eingeloggt → weiter zum Dashboard
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        window.location.href = "dashboard.html";
+      }
+    });
+
+    // Login
+    loginBtn.addEventListener("click", async () => {
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      errorMsg.textContent = "";
+
+      if (!email || !password) {
+        errorMsg.textContent = "Bitte E-Mail und Passwort eingeben.";
+        return;
+      }
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        window.location.href = "dashboard.html";
+      } catch (error) {
+        errorMsg.textContent = "Anmeldung fehlgeschlagen: " + (error.code || error.message);
+      }
+    });
+
+    // Passwort vergessen → Formular wechseln
+    forgotPasswordLink.addEventListener("click", () => {
+      loginForm.classList.add("hidden");
+      resetForm.classList.remove("hidden");
+      resetMsg.textContent = "";
+      resetEmail.value = emailInput.value || "";
+    });
+
+    backToLogin.addEventListener("click", () => {
+      resetForm.classList.add("hidden");
+      loginForm.classList.remove("hidden");
+      errorMsg.textContent = "";
+    });
+
+    // Passwort zurücksetzen
+    resetBtn.addEventListener("click", async () => {
+      const email = resetEmail.value.trim();
+      resetMsg.textContent = "";
+      if (!email) {
+        resetMsg.textContent = "Bitte eine E-Mail eingeben.";
+        return;
+      }
+
+      try {
+        await sendPasswordResetEmail(auth, email);
+        resetMsg.style.color = "#16a34a";
+        resetMsg.textContent = "E-Mail zum Zurücksetzen wurde gesendet.";
+      } catch (error) {
+        resetMsg.style.color = "#b91c1c";
+        resetMsg.textContent = "Fehler: " + (error.code || error.message);
+      }
+    });
+  </script>
+</body>
+</html>

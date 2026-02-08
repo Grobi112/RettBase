@@ -1,0 +1,5 @@
+{
+  "firestore": {
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {"platforms":{"android":{"default":{"projectId":"rettbase-app","appId":"1:339125193380:android:e30bb095d25bdd9e8eb431","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"rettbase-app","appId":"1:339125193380:ios:9fdf0e80f69673058eb431","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"rettbase-app","appId":"1:339125193380:ios:9fdf0e80f69673058eb431","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"rettbase-app","configurations":{"android":"1:339125193380:android:e30bb095d25bdd9e8eb431","ios":"1:339125193380:ios:9fdf0e80f69673058eb431","macos":"1:339125193380:ios:9fdf0e80f69673058eb431","web":"1:339125193380:web:350966b45a875fae8eb431","windows":"1:339125193380:web:5715771016d68f6e8eb431"}}}}}}

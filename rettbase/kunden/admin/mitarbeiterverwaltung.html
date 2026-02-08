@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Mitarbeiter-Verwaltung</title>
+    <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/RBapp.png">
+    <link rel="stylesheet" href="/kunden/admin/mitarbeiterverwaltung.css"> 
+</head>
+<body>
+
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück zur Startseite">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Mitarbeiter-Verwaltung</h1>
+        </div>
+        <div class="controls-group">
+            <button id="createMitarbeiterBtn" class="control-btn primary-btn">Neuen Mitarbeiter anlegen</button>
+        </div>
+    </header>
+    
+    <div class="container">
+        <section id="mitarbeiterListSection" class="card list-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2>Mitarbeiter</h2>
+                <input type="text" id="mitarbeiterSearch" placeholder="Suche..." style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 250px;">
+            </div>
+            <div id="mitarbeiterList">
+                <p>Lade Mitarbeiter...</p>
+            </div>
+        </section>
+    </div>
+    
+    <!-- Modal: Neuen Mitarbeiter anlegen -->
+    <div id="createModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Neuen Mitarbeiter anlegen</h2>
+                <button type="button" id="closeCreateModalX" class="close-modal-btn" aria-label="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="newMitarbeiterForm">
+                <!-- 1. Personalnummer oder E-Mail -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Personalnummer</legend>
+                        <input type="text" id="personalnummer" placeholder="Personalnummer">
+                    </fieldset>
+                    <fieldset>
+                        <legend>E-Mail (falls keine Personalnummer)</legend>
+                        <input type="email" id="email" placeholder="E-Mail">
+                    </fieldset>
+                </div>
+
+                <!-- 2. Vorname und Name nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Vorname</legend>
+                        <input type="text" id="vorname" placeholder="Vorname">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Name *</legend>
+                        <input type="text" id="nachname" placeholder="Name *" required>
+                    </fieldset>
+                </div>
+
+                <!-- 4. Geburtsdatum -->
+                <fieldset>
+                    <legend>Geburtsdatum</legend>
+                    <input type="date" id="geburtsdatum" placeholder="Geburtsdatum">
+                </fieldset>
+
+                <!-- 5. Straße und Haus-Nr. nebeneinander -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Straße</legend>
+                        <input type="text" id="strasse" placeholder="Straße">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Haus-Nr.</legend>
+                        <input type="text" id="hausnummer" placeholder="Haus-Nr.">
+                    </fieldset>
+                </div>
+
+                <!-- 7. PLZ und Ort nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
+                    <fieldset>
+                        <legend>PLZ</legend>
+                        <input type="text" id="plz" placeholder="PLZ">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Ort</legend>
+                        <input type="text" id="ort" placeholder="Ort">
+                    </fieldset>
+                </div>
+
+                <!-- 9. Telefonnummer und Handynummer nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Telefonnummer</legend>
+                        <input type="tel" id="telefon" placeholder="Telefonnummer">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Handynummer</legend>
+                        <input type="tel" id="handynummer" placeholder="Handynummer">
+                    </fieldset>
+                </div>
+
+                <!-- 7. Qualifikation, Angestelltenverhältnis und Führerscheinklasse nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Qualifikation</legend>
+                        <div class="qualification-group" id="qualifikationGroup">
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="qualifikation" value="RH">
+                                <span>RH</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="qualifikation" value="RS">
+                                <span>RS</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="qualifikation" value="RA">
+                                <span>RA</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="qualifikation" value="NFS">
+                                <span>NFS</span>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Vertrag</legend>
+                        <div class="qualification-group" id="angestelltenverhaeltnisGroup">
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="VZ">
+                                <span>VZ</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="TZ">
+                                <span>TZ</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="GFB">
+                                <span>GFB</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="GFB-Service">
+                                <span>GFB-Service</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="KfB">
+                                <span>KfB</span>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Führerscheinklasse</legend>
+                        <input type="text" id="fuehrerschein" placeholder="Führerscheinklasse">
+                    </fieldset>
+                </div>
+
+                <!-- 8. Rolle und Status nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Rolle *</legend>
+                        <select id="role" required>
+                            <option value="" disabled selected style="color: #9ca3af;">Rolle *</option>
+                            <option value="admin">Admin</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="leiterssd">LeiterSSD</option>
+                            <option value="wachleitung">Wachleitung</option>
+                            <option value="ovd">OVD</option>
+                            <option value="user">User</option>
+                        </select>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Status</legend>
+                        <select id="active" required>
+                            <option value="" disabled selected style="color: #9ca3af;">Status</option>
+                            <option value="true">Aktiv</option>
+                            <option value="false">Inaktiv</option>
+                        </select>
+                    </fieldset>
+                </div>
+
+                <!-- 9. Passwort (nur beim Anlegen, nur wenn Email oder Personalnummer vorhanden) -->
+                <fieldset class="password-fieldset">
+                    <legend>Passwort</legend>
+                    <input type="password" id="password" placeholder="Passwort (nur wenn Email oder Personalnummer vorhanden)" minlength="6">
+                    <button type="button" class="password-toggle" id="passwordToggle" aria-label="Passwort anzeigen/verstecken">
+                        <svg id="eyeIcon" viewBox="0 0 24 24">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </fieldset>
+
+                <div class="modal-actions">
+                    <button type="submit" class="save-btn">Mitarbeiter anlegen</button>
+                    <button type="button" id="closeCreateModal" class="cancel-btn">Abbrechen</button>
+                </div>
+                </form>
+                <p id="mitarbeiterMessage" class="message"></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal: Mitarbeiter bearbeiten -->
+    <div id="editModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Mitarbeiter bearbeiten</h2>
+                <button type="button" id="closeEditModalX" class="close-modal-btn" aria-label="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editMitarbeiterForm">
+                <input type="hidden" id="editMitarbeiterId">
+
+                <!-- 1. Personalnummer oder E-Mail -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Personalnummer</legend>
+                        <input type="text" id="editPersonalnummer" placeholder="Personalnummer">
+                    </fieldset>
+                    <fieldset>
+                        <legend>E-Mail</legend>
+                        <input type="email" id="editEmail" placeholder="E-Mail">
+                    </fieldset>
+                </div>
+
+                <!-- 2. Vorname und Name nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Vorname</legend>
+                        <input type="text" id="editVorname" placeholder="Vorname">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Name *</legend>
+                        <input type="text" id="editNachname" placeholder="Name *" required>
+                    </fieldset>
+                </div>
+
+                <!-- 4. Geburtsdatum -->
+                <fieldset>
+                    <legend>Geburtsdatum</legend>
+                    <input type="date" id="editGeburtsdatum" placeholder="Geburtsdatum">
+                </fieldset>
+
+                <!-- 5. Straße und Haus-Nr. nebeneinander -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Straße</legend>
+                        <input type="text" id="editStrasse" placeholder="Straße">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Haus-Nr.</legend>
+                        <input type="text" id="editHausnummer" placeholder="Haus-Nr.">
+                    </fieldset>
+                </div>
+
+                <!-- 7. PLZ und Ort nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 15px;">
+                    <fieldset>
+                        <legend>PLZ</legend>
+                        <input type="text" id="editPlz" placeholder="PLZ">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Ort</legend>
+                        <input type="text" id="editOrt" placeholder="Ort">
+                    </fieldset>
+                </div>
+
+                <!-- 9. Telefonnummer und Handynummer nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Telefonnummer</legend>
+                        <input type="tel" id="editTelefon" placeholder="Telefonnummer">
+                    </fieldset>
+                    <fieldset>
+                        <legend>Handynummer</legend>
+                        <input type="tel" id="editHandynummer" placeholder="Handynummer">
+                    </fieldset>
+                </div>
+
+                <!-- 7. Qualifikation, Angestelltenverhältnis und Führerscheinklasse nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Qualifikation</legend>
+                        <div class="qualification-group" id="editQualifikationGroup">
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="editQualifikation" value="RH">
+                                <span>RH</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="editQualifikation" value="RS">
+                                <span>RS</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="editQualifikation" value="RA">
+                                <span>RA</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="radio" class="qualification-radio" name="editQualifikation" value="NFS">
+                                <span>NFS</span>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Vertrag</legend>
+                        <div class="qualification-group" id="editAngestelltenverhaeltnisGroup">
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="VZ">
+                                <span>VZ</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="TZ">
+                                <span>TZ</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="GFB">
+                                <span>GFB</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="GFB-Service">
+                                <span>GFB-Service</span>
+                            </label>
+                            <label class="qualification-pill">
+                                <input type="checkbox" class="angestelltenverhaeltnis-checkbox" value="KfB">
+                                <span>KfB</span>
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Führerscheinklasse</legend>
+                        <input type="text" id="editFuehrerschein" placeholder="Führerscheinklasse">
+                    </fieldset>
+                </div>
+
+                <!-- 8. Rolle und Status nebeneinander -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <fieldset>
+                        <legend>Rolle *</legend>
+                        <select id="editRole" required>
+                            <option value="" disabled style="color: #9ca3af;">Rolle *</option>
+                            <option value="admin">Admin</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="leiterssd">LeiterSSD</option>
+                            <option value="wachleitung">Wachleitung</option>
+                            <option value="ovd">OVD</option>
+                            <option value="user">User</option>
+                        </select>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend>Status</legend>
+                        <select id="editActive" required>
+                            <option value="" disabled style="color: #9ca3af;">Status</option>
+                            <option value="true">Aktiv</option>
+                            <option value="false">Inaktiv</option>
+                        </select>
+                    </fieldset>
+                </div>
+
+                <!-- Passwort setzen/ändern (optional) -->
+                <fieldset>
+                    <legend>Passwort (nur eintragen bei Erstvergabe oder Neuvergabe)</legend>
+                    <input type="text" id="editPassword" placeholder="Passwort" minlength="6">
+                </fieldset>
+
+                <div class="modal-actions">
+                    <button type="submit" class="save-btn">Speichern</button>
+                    <button type="button" id="closeEditModal" class="cancel-btn">Abbrechen</button>
+                </div>
+            </form>
+            <p id="editMessage" class="message"></p>
+        </div>
+    </div>
+    
+    <script type="module" src="./mitarbeiterverwaltung.js"></script>
+</body>
+</html>

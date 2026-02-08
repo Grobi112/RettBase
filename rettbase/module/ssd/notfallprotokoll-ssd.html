@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Notfallprotokoll SSD</title>
+    <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/RBapp.png">
+    <link rel="stylesheet" href="./notfallprotokoll-ssd.css">
+</head>
+<body>
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Notfallprotokoll SSD</h1>
+        </div>
+    </header>
+
+    <div class="container">
+        <section class="card form-card">
+            <form id="notfallprotokollForm">
+                <!-- Header mit Protokoll Nr. -->
+                <div class="protocol-header">
+                    <h2 class="protocol-title">Einsatzprotokoll des Schulsanitätsdienstes</h2>
+                    <div class="protocol-number">
+                        <label for="protokollNr">Protokoll Nr.:</label>
+                        <input type="text" id="protokollNr" name="protokollNr" readonly>
+                    </div>
+                </div>
+
+                <!-- Erkrankter • Verletzter -->
+                <fieldset class="form-fieldset section-fieldset">
+                    <legend class="section-legend">
+                        <span class="section-icon">■</span>
+                        Erkrankter • Verletzter
+                    </legend>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="vornamePatient">Vorname:</label>
+                            <input type="text" id="vornamePatient" name="vornamePatient">
+                        </div>
+                        <div class="form-group">
+                            <label for="namePatient">Name:</label>
+                            <input type="text" id="namePatient" name="namePatient">
+                        </div>
+                        <div class="form-group">
+                            <label for="geburtsdatumPatient">Geburtsdatum:</label>
+                            <input type="date" id="geburtsdatumPatient" name="geburtsdatumPatient">
+                        </div>
+                        <div class="form-group">
+                            <label for="klassePatient">Klasse:</label>
+                            <input type="text" id="klassePatient" name="klassePatient">
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- Schulsanitäter • Ersthelfer -->
+                <fieldset class="form-fieldset section-fieldset">
+                    <legend class="section-legend">
+                        <span class="section-icon">■</span>
+                        Schulsanitäter • Ersthelfer
+                    </legend>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="vornameHelfer1">Vorname:</label>
+                            <input type="text" id="vornameHelfer1" name="vornameHelfer1">
+                        </div>
+                        <div class="form-group">
+                            <label for="nameHelfer1">Name:</label>
+                            <input type="text" id="nameHelfer1" name="nameHelfer1">
+                        </div>
+                        <div class="form-group">
+                            <label for="vornameHelfer2">Vorname:</label>
+                            <input type="text" id="vornameHelfer2" name="vornameHelfer2">
+                        </div>
+                        <div class="form-group">
+                            <label for="nameHelfer2">Name:</label>
+                            <input type="text" id="nameHelfer2" name="nameHelfer2">
+                        </div>
+                        <div class="form-group">
+                            <label for="datumEinsatz">Datum / Uhrzeit:</label>
+                            <div class="datetime-input">
+                                <input type="date" id="datumEinsatz" name="datumEinsatz">
+                                <input type="time" id="uhrzeitEinsatz" name="uhrzeitEinsatz">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="einsatzort">Einsatzort:</label>
+                            <input type="text" id="einsatzort" name="einsatzort">
+                        </div>
+                    </div>
+                </fieldset>
+
+                <!-- Weitere Angaben -->
+                <fieldset class="form-fieldset section-fieldset">
+                    <legend class="section-legend">
+                        <span class="section-icon">■</span>
+                        Weitere Angaben
+                    </legend>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="erkrankung" name="art" value="erkrankung">
+                                <span>Erkrankung</span>
+                            </label>
+                            <input type="text" id="artErkrankung" name="artErkrankung" placeholder="Art der Erkrankung:" class="inline-input">
+                        </div>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="unfall" name="art" value="unfall">
+                                <span>Unfall</span>
+                            </label>
+                            <input type="text" id="unfallOrt" name="unfallOrt" placeholder="Wo genau ist der Unfall passiert:" class="inline-input">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="sub-label">Was hat der Verletzte zum Unfallzeitpunkt gemacht:</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="aktivitaet" value="sportunterricht">
+                                <span>Sportunterricht</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="aktivitaet" value="sonstigerUnterricht">
+                                <span>Sonstiger Unterricht</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="aktivitaet" value="pause">
+                                <span>Pause</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="aktivitaet" value="schulweg">
+                                <span>Schulweg</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="aktivitaet" value="sonstiges">
+                                <span>Sonstiges</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="schilderung">Schilderung des Unfalls oder der Erkrankung*:</label>
+                        <textarea id="schilderung" name="schilderung" rows="3" required></textarea>
+                    </div>
+                </fieldset>
+
+                <!-- Erstbefund und Körperdiagramm -->
+                <div class="erstbefund-container">
+                    <!-- Erstbefund -->
+                    <fieldset class="form-fieldset erstbefund-fieldset">
+                        <legend class="section-legend">Erstbefund</legend>
+                        <div class="form-group">
+                            <label>Schmerzen:</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="radio" name="schmerzen" value="keine">
+                                    <span>keine</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="radio" name="schmerzen" value="mittelstarke">
+                                    <span>mittelstarke</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="radio" name="schmerzen" value="starke">
+                                    <span>starke</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Atmung:</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="radio" name="atmung" value="spontanFrei">
+                                    <span>spontan / frei</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="radio" name="atmung" value="atemnot">
+                                    <span>Atemnot</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="radio" name="atmung" value="hyperventilation">
+                                    <span>Hyperventilation</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Kreislauf:</label>
+                            <div class="kreislauf-inputs">
+                                <div>
+                                    <label for="puls">Puls:</label>
+                                    <input type="text" id="puls" name="puls">
+                                </div>
+                                <div>
+                                    <label for="blutdruck">Blutdruck:</label>
+                                    <input type="text" id="blutdruck" name="blutdruck" placeholder="mm/Hg">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="sub-label">Welche Verletzung liegt vermutlich vor:</label>
+                            <p class="instruction-text">Verletztes Körperteil bitte rechts ankreuzen!</p>
+                            <div class="checkbox-group">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="verletzung" value="prellungZerrung">
+                                    <span>Prellung, Zerrung</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="verletzung" value="wunde">
+                                    <span>Wunde</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="verletzung" value="knochenbruch">
+                                    <span>Knochenbruch</span>
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="verletzung" value="sonstiges">
+                                    <span>Sonstiges</span>
+                                </label>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Körperdiagramm -->
+                    <div class="body-diagram-container">
+                        <div class="body-diagram">
+                            <svg viewBox="0 0 200 400" class="body-svg">
+                                <!-- Vorderansicht -->
+                                <g class="body-front">
+                                    <!-- Kopf -->
+                                    <circle cx="100" cy="30" r="20" fill="none" stroke="#333" stroke-width="2"/>
+                                    <!-- Körper -->
+                                    <rect x="70" y="50" width="60" height="100" fill="none" stroke="#333" stroke-width="2" rx="5"/>
+                                    <!-- Arme -->
+                                    <line x1="70" y1="70" x2="40" y2="120" stroke="#333" stroke-width="2"/>
+                                    <line x1="130" y1="70" x2="160" y2="120" stroke="#333" stroke-width="2"/>
+                                    <!-- Beine -->
+                                    <line x1="85" y1="150" x2="85" y2="220" stroke="#333" stroke-width="2"/>
+                                    <line x1="115" y1="150" x2="115" y2="220" stroke="#333" stroke-width="2"/>
+                                </g>
+                                <!-- Rückansicht -->
+                                <g class="body-back" transform="translate(0, 230)">
+                                    <!-- Kopf -->
+                                    <circle cx="100" cy="30" r="20" fill="none" stroke="#333" stroke-width="2"/>
+                                    <!-- Körper -->
+                                    <rect x="70" y="50" width="60" height="100" fill="none" stroke="#333" stroke-width="2" rx="5"/>
+                                    <!-- Arme -->
+                                    <line x1="70" y1="70" x2="40" y2="120" stroke="#333" stroke-width="2"/>
+                                    <line x1="130" y1="70" x2="160" y2="120" stroke="#333" stroke-width="2"/>
+                                    <!-- Beine -->
+                                    <line x1="85" y1="150" x2="85" y2="220" stroke="#333" stroke-width="2"/>
+                                    <line x1="115" y1="150" x2="115" y2="220" stroke="#333" stroke-width="2"/>
+                                </g>
+                            </svg>
+                            <div class="body-labels">
+                                <span class="body-label">rechte Körperseite</span>
+                                <span class="body-label">linke Körperseite</span>
+                                <span class="body-label">linke Körperseite</span>
+                                <span class="body-label">rechte Körperseite</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="beschwerden">Der/die Erkrankte/Verletzte klagt über*:</label>
+                            <textarea id="beschwerden" name="beschwerden" rows="3" required></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Getroffene Maßnahmen -->
+                <fieldset class="form-fieldset section-fieldset">
+                    <legend class="section-legend">
+                        <span class="section-icon">■</span>
+                        Getroffene Maßnahmen
+                    </legend>
+                    <div class="massnahmen-grid">
+                        <div class="massnahmen-column">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="betreuung">
+                                <span>Betreuung</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="pflaster">
+                                <span>Pflaster</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="verband">
+                                <span>Verband</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="kuehlung">
+                                <span>Kühlung</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="sonstiges">
+                                <span>Sonstiges</span>
+                            </label>
+                            <input type="text" id="sonstigesMassnahme" name="sonstigesMassnahme" placeholder="Sonstiges" class="inline-input">
+                        </div>
+                        <div class="massnahmen-column">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="elternBenachrichtigt">
+                                <span>Eltern benachrichtigt</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="elternbrief">
+                                <span>Elternbrief mitgegeben</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="arztbesuch">
+                                <span>Arztbesuch empfohlen</span>
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="massnahme" value="notruf">
+                                <span>Notruf</span>
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div id="notfallprotokollMessage" class="message"></div>
+                <div class="form-actions">
+                    <button type="button" id="resetBtn" class="btn-secondary">Zurücksetzen</button>
+                    <button type="submit" class="btn-primary">Protokoll speichern</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <script type="module" src="./notfallprotokoll-ssd.js"></script>
+</body>
+</html>
+

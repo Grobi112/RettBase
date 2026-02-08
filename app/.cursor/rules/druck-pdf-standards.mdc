@@ -1,0 +1,69 @@
+---
+description: Standards für Druck- und PDF-Vorschau-Screens
+globs: lib/**/*.dart
+alwaysApply: false
+---
+
+# Druck-/PDF-Vorschau (RettBase)
+
+Bei allen Screens mit PdfPreview (z. B. Checkliste drucken, Fahrtenbuch drucken, Unfallbericht drucken):
+
+## AppBar – immer oben
+
+- **Drucker** (`Icons.print`) und **Diskette/Speichern** (`Icons.save`) als IconButtons in der AppBar `actions`
+- Kein Platzhalter, kein umrandetes X
+- Beispiel-Titel: „Checkliste drucken / PDF“, „Fahrtenbuch drucken / PDF“ usw.
+
+## PdfPreview – keine Toolbar, kein Regler, kein Platzhalter-X
+
+- `useActions: false` – Toolbar und Regler (Zoom, Seiten) ausblenden
+- `allowPrinting: false` und `allowSharing: false` – Druck/Teilen über die AppBar-Buttons steuern
+- `onError` setzen – um das standardmäßige umrandete X (ErrorWidget) zu vermeiden; stattdessen z. B. einfachen Fehlertext anzeigen
+
+## PDF-Inhalt – nur ASCII für Platzhalter und Sonderzeichen
+
+**Immer so handhaben:** PDF-Schriften unterstützen oft kein vollständiges Unicode. Fehlende Zeichen werden als umrandetes X angezeigt.
+
+- **Leere Werte/Platzhalter:** `-` (ASCII 45) verwenden, nie `–` (En-Dash) oder `—` (Em-Dash)
+- **Listen-Aufzählung:** `-` verwenden, nie `•` (Bullet)
+- **Grundregel:** Für alle dynamisch eingefügten Texte im PDF nur ASCII-Zeichen oder Zeichen, die in Standard-PDF-Schriften vorkommen
+
+```dart
+static const String _empty = '-';  // OK
+// NICHT: return '–';  // führt zu umrandetem X
+```
+
+## Umsetzung
+
+```dart
+appBar: AppBar(
+  title: Text('Checkliste drucken / PDF', ...),
+  actions: [
+    IconButton(
+      icon: const Icon(Icons.print),
+      tooltip: 'Drucken',
+      onPressed: () async {
+        await Printing.layoutPdf(onLayout: (format) => _buildPdf(...), name: pdfName);
+      },
+    ),
+    IconButton(
+      icon: const Icon(Icons.save),
+      tooltip: 'Als PDF speichern',
+      onPressed: () async {
+        final bytes = await _buildPdf(...);
+        await Printing.sharePdf(bytes: bytes, filename: pdfName);
+      },
+    ),
+  ],
+),
+body: PdfPreview(
+  build: (format) => _buildPdf(...),
+  allowPrinting: false,
+  allowSharing: false,
+  useActions: false,  // Regler/Toolbar weg
+  onError: (_, __) => Center(
+    child: Text('PDF konnte nicht geladen werden.', style: TextStyle(color: Colors.grey[600])),
+  ),
+  ...
+),
+```

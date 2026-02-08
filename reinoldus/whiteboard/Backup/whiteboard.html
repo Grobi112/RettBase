@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Protect-Alert · Whiteboard</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:"Segoe UI",sans-serif;}
+    body{
+      background:#f3f4f6;
+      color:#1e1f26;
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+    }
+
+    main {
+      width:95%;
+      max-width:1200px;
+      padding:14px 16px;
+      display:flex;
+      flex-direction:column;
+      gap:20px;
+    }
+
+    .container {
+      background:#fff;
+      border-radius:12px;
+      box-shadow:0 2px 5px rgba(0,0,0,0.08);
+      overflow:hidden;
+      transition:max-height 0.3s ease;
+    }
+
+    .container-header {
+      background:#e3f2fd;
+      color:#1e1f26;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      cursor:pointer;
+      padding:12px 16px;
+      font-size:16px;
+      font-weight:600;
+      border-bottom:1px solid #d0e8ff;
+    }
+
+    .container-header svg {
+      width:18px;
+      height:18px;
+      stroke:#0288d1;
+      transition:transform 0.3s ease;
+    }
+
+    .container.collapsed .container-header svg {
+      transform:rotate(-90deg);
+    }
+
+    .container.collapsed .container-content {
+      display:none;
+    }
+
+    .container-content {
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .input-area{display:flex;gap:8px;}
+    .input-area input{flex:1;padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:8px;}
+    .input-area button{padding:8px 12px;font-size:14px;background:#4fc3f7;color:#fff;border:none;border-radius:8px;cursor:pointer;}
+    .input-area button:hover{background:#03a9f4;}
+    .clip{background:#e3f2fd;color:#1e1f26;padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-size:14px;cursor:grab;transition:all .2s;}
+    .clip.dragging{opacity:.5;transform:scale(1.05);}
+    .clip button{background:none;border:none;color:#b91c1c;cursor:pointer;font-weight:bold;font-size:16px;margin-left:6px;}
+    #ablageSchichten,#ablagePersonal{display:flex;flex-wrap:wrap;gap:10px;background:#fafafa;border-radius:8px;padding:8px;min-height:70px;}
+    .grid-cell .dropzone{display:flex;flex-direction:column;gap:10px;justify-content:center;align-items:center;min-height:70px;background:#fafafa;border-radius:8px;padding:8px;}
+    .dropzone.drag-over{background:#e0f7ff;border:1px dashed #4fc3f7;}
+    .grid-wrapper{width:95%;max-width:1200px;display:flex;flex-direction:column;gap:16px;margin-top:10px;}
+    .grid-header{display:flex;justify-content:space-between;align-items:center;}
+    .add-row{background:#4fc3f7;color:#fff;padding:6px 12px;border-radius:8px;border:none;cursor:pointer;font-size:14px;}
+    .main-column{background:#fff;border-radius:12px;box-shadow:0 2px 5px rgba(0,0,0,0.08);padding:16px;}
+    .grid-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .grid-cell{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.1);padding:12px;display:flex;flex-direction:column;min-height:90px;}
+    .title-wrapper{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:10px;}
+    .grid-title{font-size:15px;font-weight:600;text-align:center;min-width:200px;outline:2px dashed transparent;}
+    .grid-title[contenteditable="true"]:focus{outline:2px dashed #4fc3f7;border-radius:4px;background:#f0faff;}
+    .edit-icon{width:18px;height:18px;stroke:#6b7280;cursor:pointer;transition:stroke .2s;}
+    .edit-icon:hover{stroke:#4fc3f7;}
+
+    .grid-cell .dropzone {align-items:stretch;gap:8px;}
+    .grid-cell .dropzone .clip {width:100%;justify-content:flex-start;text-align:left;padding-left:12px;padding-right:12px;}
+
+    body {padding-bottom:20px;}
+  </style>
+</head>
+<body>
+
+<main>
+  <!-- SCHICHTEN -->
+  <div class="container collapsed" id="schichtenContainer">
+    <div class="container-header" onclick="toggleContainer('schichtenContainer')">
+      <span>Schichten</span>
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="container-content">
+      <div class="input-area">
+        <input id="schichtInput" type="text" placeholder="Neue Schicht hinzufügen...">
+        <button id="addSchicht">+</button>
+      </div>
+      <div class="dropzone" id="ablageSchichten"></div>
+    </div>
+  </div>
+
+  <!-- PERSONAL -->
+  <div class="container collapsed" id="personalContainer">
+    <div class="container-header" onclick="toggleContainer('personalContainer')">
+      <span>Personal</span>
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div class="container-content">
+      <div class="input-area">
+        <input id="personalInput" type="text" placeholder="Neues Personal hinzufügen...">
+        <button id="addPersonal">+</button>
+      </div>
+      <div class="dropzone" id="ablagePersonal"></div>
+    </div>
+  </div>
+</main>
+
+<section class="grid-wrapper">
+  <div class="grid-header">
+    <h3>Einsatzübersicht</h3>
+    <button class="add-row" id="addRow">+ Zeile</button>
+  </div>
+  <div id="rowsArea"></div>
+</section>
+
+<script type="module" src="whiteboard.js"></script>
+
+<script>
+  function toggleContainer(id) {
+    const container = document.getElementById(id);
+    container.classList.toggle('collapsed');
+  }
+</script>
+
+</body>
+</html>

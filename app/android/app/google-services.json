@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "740721219821",
+    "project_id": "rett-fe0fa",
+    "storage_bucket": "rett-fe0fa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:740721219821:android:a8e7f8070f875866ccd4e4",
+        "android_client_info": {
+          "package_name": "com.example.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

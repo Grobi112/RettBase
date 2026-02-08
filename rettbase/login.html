@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>RettBase · Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#00bcd4" />
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/RBapp.png">
+  <link rel="stylesheet" href="login.css">
+  
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-header">
+      <img src="/img/rettbase.png" alt="RettBase Logo" class="login-logo">
+    </div>
+    <h1>Login</h1>
+
+    <form id="login-form">
+      <fieldset>
+        <legend>Benutzerkennung</legend>
+        <input type="text" id="emailOrPersonalnummer" placeholder="E-Mail oder Personalnummer" autofocus required autocomplete="username" />
+      </fieldset>
+      
+      <fieldset class="password-fieldset">
+        <legend>Passwort</legend>
+        <input type="password" id="password" required autocomplete="current-password" />
+        <button type="button" class="password-toggle" id="passwordToggle" aria-label="Passwort anzeigen/verstecken">
+          <svg id="eyeIcon" viewBox="0 0 24 24">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+      </fieldset>
+      
+      <button type="submit">Anmelden</button>
+    </form>
+
+    <div class="forgot-password-link">
+      <a href="#" id="forgotPasswordLink">Passwort vergessen?</a>
+    </div>
+
+    <div id="error-message"></div>
+  </div>
+
+  <!-- Modal für Passwort zurücksetzen -->
+  <div id="resetPasswordModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Passwort zurücksetzen</h2>
+        <button type="button" class="close-modal" id="closeResetModal" aria-label="Schließen">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen Link zum Zurücksetzen Ihres Passworts.</p>
+        <form id="resetPasswordForm">
+          <fieldset>
+            <legend>E-Mail-Adresse</legend>
+            <input type="email" id="resetEmail" required autocomplete="email" />
+          </fieldset>
+          <div id="resetPasswordMessage"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cancelResetPassword">Abbrechen</button>
+            <button type="submit" class="btn-primary">Passwort zurücksetzen</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./auth.js"></script>
+  <script type="module" src="./login.js"></script>
+</body>
+</html>

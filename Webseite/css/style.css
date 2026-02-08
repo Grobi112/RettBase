@@ -1,0 +1,53 @@
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: white;
+}
+header{
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 5px 5px 15px 5px #989898;
+    background-color:white;
+    color: black;
+    font-size: 20px;
+    
+}
+header a{
+    margin-right: 16px;
+    color: black;
+    text-decoration: none;
+}
+header a:hover{
+    color: #007dff;
+    text-decoration: underline;
+}
+.Logo{
+    height: 70px;
+    padding-left: 50px;
+}
+.navigation{
+    padding-top : 10px;
+    padding-right: 30px;
+    
+}
+.container{
+    display: flex;
+    justify-content: space-evenly;
+    background-color: #cbcbcb;
+    height: 200px;
+}
+.titelbild img{
+    width: 100%;
+    z-index: -1;
+    filter:brightness(0.5)
+}
+.headline{
+    position: absolute;
+    left: 450px;
+    top: 300px;
+    color: black;
+    font-size: 50px;
+    text-shadow: 5px 5px rgb(57, 57, 57);
+}

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Menü-Verwaltung</title>
+    <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+    <link rel="apple-touch-icon" href="/RBapp.png">
+    <link rel="stylesheet" href="menue.css">
+</head>
+<body>
+
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück zur Startseite">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Menü-Verwaltung</h1>
+        </div>
+        <div class="controls-group">
+            <button id="createMenuItemBtn" class="control-btn secondary-btn">Neuer Menüpunkt</button>
+            <button id="saveMenuBtn" class="control-btn primary-btn">Menü speichern</button>
+        </div>
+    </header>
+
+    <main id="mainContent">
+        <div class="container">
+            <div class="menu-builder-section">
+                <h2>Globale Menüstruktur bearbeiten</h2>
+                <p class="description">
+                    <strong>⚠️ Wichtig:</strong> Diese Menüstruktur gilt global für alle Firmen. Änderungen werden für alle Benutzer sichtbar.
+                    <br>Ziehen Sie die Menüpunkte per Drag & Drop, um sie neu anzuordnen. Klicken Sie auf einen Punkt, um ihn als Untermenü einzurücken.
+                </p>
+                
+                <!-- Verfügbare Menüpunkte (Module) -->
+                <div class="available-items-section">
+                    <h3>Verfügbare Menüpunkte</h3>
+                    <div id="availableItems" class="menu-items-list">
+                        <!-- Wird dynamisch gefüllt -->
+                    </div>
+                </div>
+
+                <!-- Aktuelles Menü -->
+                <div class="menu-structure-section">
+                    <h3>Menüstruktur</h3>
+                    <div id="menuStructure" class="menu-structure">
+                        <!-- Wird dynamisch gefüllt -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal zum Erstellen eines neuen Menüpunkts -->
+    <div id="createMenuItemModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Neuen Menüpunkt erstellen</h2>
+                <button id="closeCreateModalBtn" class="modal-close-btn" title="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="createMenuItemForm">
+                <div class="form-group">
+                    <label for="customMenuItemLabel">Bezeichnung</label>
+                    <input type="text" id="customMenuItemLabel" name="label" required placeholder="z.B. OVD">
+                </div>
+                <div class="form-group">
+                    <label for="customMenuItemUrl">URL (optional)</label>
+                    <input type="text" id="customMenuItemUrl" name="url" placeholder="z.B. # oder leer lassen für Container">
+                    <small style="color: #64748b; font-size: 12px; margin-top: 4px; display: block;">
+                        Leer lassen für Container/Oberbegriff (mit Untermenü)
+                    </small>
+                </div>
+                <div class="form-group" id="rolesSelectionGroup">
+                    <label>Rollen-Berechtigungen</label>
+                    <p style="color: #64748b; font-size: 13px; margin-bottom: 10px;">
+                        Wählen Sie aus, welche Rollen diesen Menüpunkt sehen dürfen:
+                    </p>
+                    <div class="roles-checkbox-container">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="superadmin"> Superadmin
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="admin"> Admin
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="supervisor"> Supervisor
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="rettungsdienstleitung"> Rettungsdienstleitung
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="wachleitung"> Wachleitung
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="ovd"> OVD
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="pflegedienstleitung"> Pflegedienstleitung
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="leiterssd"> LeiterSSD
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="roles" value="user"> User
+                        </label>
+                    </div>
+                    <small style="color: #64748b; font-size: 12px; margin-top: 8px; display: block;">
+                        <strong>Hinweis:</strong> Wenn keine Rollen ausgewählt werden, ist der Menüpunkt für alle Benutzer sichtbar. 
+                        Bei Container-Menüpunkten (ohne URL) muss mindestens eine Rolle ausgewählt werden.
+                    </small>
+                </div>
+                <div id="createMenuItemMessage" class="form-message"></div>
+                <div class="form-actions">
+                    <button type="button" id="cancelCreateMenuItemBtn" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Erstellen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal zum Bearbeiten eines Menüpunkts -->
+    <div id="editMenuItemModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Menüpunkt bearbeiten</h2>
+                <button id="closeEditModalBtn" class="modal-close-btn" title="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="editMenuItemForm">
+                <input type="hidden" id="editMenuItemIndex" name="index">
+                <div class="form-group">
+                    <label for="editMenuItemLabel">Bezeichnung</label>
+                    <input type="text" id="editMenuItemLabel" name="label" required placeholder="z.B. OVD">
+                </div>
+                <div class="form-group">
+                    <label for="editMenuItemUrl">URL (optional)</label>
+                    <input type="text" id="editMenuItemUrl" name="url" placeholder="z.B. # oder leer lassen für Container">
+                    <small style="color: #64748b; font-size: 12px; margin-top: 4px; display: block;">
+                        Leer lassen für Container/Oberbegriff (mit Untermenü)
+                    </small>
+                </div>
+                <div class="form-group" id="editRolesSelectionGroup">
+                    <label>Rollen-Berechtigungen</label>
+                    <p style="color: #64748b; font-size: 13px; margin-bottom: 10px;">
+                        Wählen Sie aus, welche Rollen diesen Menüpunkt sehen dürfen:
+                    </p>
+                    <div class="roles-checkbox-container">
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="superadmin"> Superadmin
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="admin"> Admin
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="supervisor"> Supervisor
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="rettungsdienstleitung"> Rettungsdienstleitung
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="wachleitung"> Wachleitung
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="ovd"> OVD
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="pflegedienstleitung"> Pflegedienstleitung
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="leiterssd"> LeiterSSD
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" name="editRoles" value="user"> User
+                        </label>
+                    </div>
+                    <small style="color: #64748b; font-size: 12px; margin-top: 8px; display: block;">
+                        <strong>Hinweis:</strong> Wenn keine Rollen ausgewählt werden, ist der Menüpunkt für alle Benutzer sichtbar. 
+                        Bei Container-Menüpunkten (ohne URL) muss mindestens eine Rolle ausgewählt werden.
+                    </small>
+                </div>
+                <div id="editMenuItemMessage" class="form-message"></div>
+                <div class="form-actions">
+                    <button type="button" id="cancelEditMenuItemBtn" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module" src="menue.js"></script>
+</body>
+</html>
+

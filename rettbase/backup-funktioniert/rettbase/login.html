@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>RettBase · Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#00bcd4" />
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" href="/RBapp.png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/RBapp.png">
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+  <div class="login-container">
+    <h1>RettBase Login</h1>
+
+    <form id="login-form">
+      <fieldset>
+        <legend>Benutzerkennung</legend>
+        <input type="text" id="emailOrPersonalnummer" required />
+      </fieldset>
+      
+      <fieldset class="password-fieldset">
+        <legend>Passwort</legend>
+        <input type="password" id="password" required />
+        <button type="button" class="password-toggle" id="passwordToggle" aria-label="Passwort anzeigen/verstecken">
+          <svg id="eyeIcon" viewBox="0 0 24 24">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+      </fieldset>
+      
+      <button type="submit">Anmelden</button>
+    </form>
+
+    <div id="error-message"></div>
+  </div>
+
+  <script type="module" src="./auth.js"></script>
+  <script type="module" src="./login.js"></script>
+</body>
+</html>

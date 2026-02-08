@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RettBase · Interne E-Mails</title>
+    <link rel="stylesheet" href="./email.css">
+    <!-- Quill.js 2.0.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+</head>
+<body>
+
+    <header id="topBar">
+        <div class="title-group">
+            <button id="backBtn" class="back-btn" title="Zurück zur Startseite">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h1 class="page-title">Interne E-Mails</h1>
+        </div>
+        <div class="controls-group">
+            <button id="composeBtn" class="btn-primary">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                Neue Nachricht
+            </button>
+            <div class="menu-dropdown" id="emailMenuDropdown" style="display: none;">
+                <button id="emailMenuBtn" class="btn-icon" title="Weitere Optionen">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="12" cy="5" r="1"></circle>
+                        <circle cx="12" cy="19" r="1"></circle>
+                    </svg>
+                </button>
+                <div class="dropdown-menu" id="emailDropdownMenu" style="display: none;">
+                    <button id="createGroupBtn" class="dropdown-item">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        Gruppe erstellen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="mainContent">
+        <div class="container">
+            <!-- Tabs für Posteingang/Postausgang/Entwürfe/Papierkorb/Gesendet -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="inbox">Posteingang</button>
+                <button class="tab-btn" data-tab="sent">Gesendet</button>
+                <button class="tab-btn" data-tab="drafts">Entwürfe</button>
+                <button class="tab-btn" data-tab="trash">Papierkorb</button>
+            </div>
+
+            <!-- Posteingang -->
+            <div id="inboxTab" class="tab-content active">
+                <div class="email-list" id="inboxList">
+                    <div class="loading">Lade Nachrichten...</div>
+                </div>
+            </div>
+
+            <!-- Gesendet -->
+            <div id="sentTab" class="tab-content">
+                <div class="email-list" id="sentList">
+                    <div class="loading">Lade Nachrichten...</div>
+                </div>
+            </div>
+
+            <!-- Entwürfe -->
+            <div id="draftsTab" class="tab-content">
+                <div class="email-list" id="draftsList">
+                    <div class="loading">Lade Entwürfe...</div>
+                </div>
+            </div>
+
+            <!-- Papierkorb -->
+            <div id="trashTab" class="tab-content">
+                <div class="email-list" id="trashList">
+                    <div class="loading">Lade Nachrichten...</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal zum Verfassen einer neuen Nachricht -->
+    <div id="composeModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Neue Nachricht</h2>
+                <button id="closeComposeModal" class="modal-close-btn" title="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="composeForm">
+                <div class="form-group">
+                    <label for="recipientInput">An</label>
+                    <div class="recipient-input-container">
+                        <div class="recipient-icons">
+                            <button type="button" id="selectPersonBtn" class="recipient-icon-btn" title="Person auswählen">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                            </button>
+                            <button type="button" id="selectGroupBtn" class="recipient-icon-btn" title="Gruppe auswählen">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <input type="text" id="recipientInput" name="recipientInput" placeholder="Empfänger auswählen oder externe E-Mail-Adresse eingeben (mehrere mit ; trennen)" autocomplete="off" required>
+                        <div class="recipient-icons">
+                            <button type="button" id="selectEmailBtn" class="recipient-icon-btn" title="E-Mail-Adresse eingeben" style="display: none;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                    <polyline points="22,6 12,13 2,6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="emailSubject">Betreff</label>
+                    <input type="text" id="emailSubject" name="subject" required placeholder="Betreff der Nachricht">
+                </div>
+                <div class="form-group">
+                    <label for="emailBody">Nachricht</label>
+                    <!-- Quill Rich-Text-Editor Toolbar -->
+                    <div id="toolbar-container">
+                        <span class="ql-formats">
+                            <button class="ql-bold format-button-box"></button>
+                            <button class="ql-italic format-button-box"></button>
+                            <button class="ql-underline format-button-box"></button>
+                            <button class="ql-strike format-button-box"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <select class="ql-color"></select>
+                            <select class="ql-background"></select>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-script" value="sub"></button>
+                            <button class="ql-script" value="super"></button>
+                            <button class="ql-code"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-header" value="1"></button>
+                            <button class="ql-header" value="2"></button>
+                            <button class="ql-blockquote"></button>
+                            <button class="ql-code-block"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-list" value="ordered"></button>
+                            <button class="ql-list" value="bullet"></button>
+                            <button class="ql-indent" value="-1"></button>
+                            <button class="ql-indent" value="+1"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-direction" value="rtl"></button>
+                            <select class="ql-align"></select>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-link"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-clean"></button>
+                        </span>
+                    </div>
+                    <!-- Quill Rich-Text-Editor -->
+                    <div id="quillEditorContainer" style="min-height: 300px;"></div>
+                    <textarea id="emailBodyHidden" name="body" style="display: none;" required></textarea>
+                    
+                    <!-- Datei-Anhänge Bereich -->
+                    <div class="file-attachments-container" id="fileAttachmentsContainer">
+                        <div class="file-drop-zone" id="fileDropZone">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p>Dateien hier ablegen oder <button type="button" class="file-select-btn" id="fileSelectBtn">auswählen</button></p>
+                            <input type="file" id="fileInput" multiple style="display: none;">
+                        </div>
+                        <div class="attachments-list" id="attachmentsList"></div>
+                    </div>
+                </div>
+                <div id="composeMessage" class="form-message"></div>
+                <div class="form-actions">
+                    <button type="button" id="cancelComposeBtn" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Senden</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal zum Anzeigen einer Nachricht -->
+    <div id="viewEmailModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="viewEmailSubject">Betreff</h2>
+                <button id="closeViewEmailModal" class="modal-close-btn" title="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="email-view">
+                <div class="email-meta">
+                    <div class="email-meta-item">
+                        <strong>Von:</strong> <span id="viewEmailFrom"></span>
+                    </div>
+                    <div class="email-meta-item">
+                        <strong>An:</strong> <span id="viewEmailTo"></span>
+                    </div>
+                    <div class="email-meta-item">
+                        <strong>Datum:</strong> <span id="viewEmailDate"></span>
+                    </div>
+                </div>
+                <div class="email-body" id="viewEmailBody"></div>
+                <div class="email-actions">
+                    <div class="reply-options" id="replyOptions" style="display: none; margin-bottom: 15px; padding: 15px; background-color: #f9fafb; border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="radio" name="replyType" value="all" checked>
+                            <span>Antwort an alle</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 0; font-size: 14px; cursor: pointer;">
+                            <input type="radio" name="replyType" value="sender">
+                            <span>Nur an Absender</span>
+                        </label>
+                    </div>
+                    <button id="replyBtn" class="btn-primary">Antworten</button>
+                    <button id="deleteEmailBtn" class="btn-danger">Löschen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal zur Mitarbeiterauswahl (ähnlich wie Schichtplan) -->
+    <div class="popup-overlay" id="selectMitarbeiterModal" style="display: none;"></div>
+    <div class="popup-form" id="selectMitarbeiterForm" style="display: none;">
+        <h2>Mitarbeiter auswählen</h2>
+        <label for="mitarbeiterSearch">Mitarbeiter suchen:</label>
+        <input type="text" id="mitarbeiterSearch" placeholder="Nachname oder Vorname eingeben..." autocomplete="off">
+        <label for="mitarbeiterSelect">Mitarbeiter auswählen:</label>
+        <select id="mitarbeiterSelect" size="8" required>
+            <option value="">-- Bitte auswählen --</option>
+        </select>
+        <div id="mitarbeiterList" class="personnel-mitarbeiter-list"></div>
+        <div class="form-actions">
+            <button type="button" id="confirmMitarbeiterBtn" class="btn-primary">Auswählen</button>
+            <button type="button" id="cancelMitarbeiterBtn" class="btn-secondary">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Modal für normale Löschung (in Papierkorb verschieben) -->
+    <div id="deleteConfirmModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 style="font-size: 18px; font-weight: 600;">Möchten Sie diese Nachricht wirklich löschen?</h2>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <p style="font-size: 13px; line-height: 1.6; margin-bottom: 15px;">
+                    Die Nachricht wird in den Papierkorb verschoben.
+                </p>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border-color);">
+                <button id="cancelDeleteBtn" class="btn-secondary" style="padding: 8px 20px;">Abbrechen</button>
+                <button id="confirmDeleteBtn" class="btn-danger" style="padding: 8px 20px;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal für endgültige Löschung -->
+    <div id="permanentDeleteModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2 style="font-size: 18px; font-weight: 600;">E-Mail wirklich löschen?</h2>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <p style="font-size: 13px; line-height: 1.6; margin-bottom: 15px;">
+                    Möchtest Du diese E-Mail wirklich löschen?<br>
+                    Diese Aktion kann nicht rückgängig gemacht werden.
+                </p>
+                <p style="font-size: 10px; color: #64748b; margin-top: 15px;">
+                    Das Löschen wird mit einer Verzögerung durchgeführt, bitte einen Moment warten.
+                </p>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border-color);">
+                <button id="cancelPermanentDeleteBtn" class="btn-secondary" style="padding: 8px 20px;">Abbrechen</button>
+                <button id="confirmPermanentDeleteBtn" class="btn-danger" style="padding: 8px 20px;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal zur Gruppenerstellung -->
+    <div id="createGroupModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>Gruppe erstellen</h2>
+                <button id="closeCreateGroupModal" class="modal-close-btn" title="Schließen">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form id="createGroupForm">
+                <div class="form-group">
+                    <label for="groupName">Gruppenname *</label>
+                    <input type="text" id="groupName" required placeholder="z.B. Verwaltung, Rettungsdienst, etc.">
+                </div>
+                <div class="form-group">
+                    <label for="groupDescription">Beschreibung (optional)</label>
+                    <textarea id="groupDescription" rows="3" placeholder="Kurze Beschreibung der Gruppe"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Mitglieder auswählen *</label>
+                    <div class="group-members-selection">
+                        <input type="text" id="groupMemberSearch" placeholder="Mitarbeiter suchen..." autocomplete="off">
+                        <div id="groupMembersList" class="group-members-list"></div>
+                        <div id="selectedGroupMembers" class="selected-members"></div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 15px 20px; border-top: 1px solid var(--border-color);">
+                    <button type="button" id="cancelCreateGroupBtn" class="btn-secondary">Abbrechen</button>
+                    <button type="submit" class="btn-primary">Gruppe erstellen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal zur Gruppenauswahl -->
+    <div class="popup-overlay" id="selectGroupModal" style="display: none;"></div>
+    <div class="popup-form" id="selectGroupForm" style="display: none;">
+        <h2>Gruppe auswählen</h2>
+        <label for="groupSearch">Gruppe suchen:</label>
+        <input type="text" id="groupSearch" placeholder="Gruppenname eingeben..." autocomplete="off">
+        <div id="groupList" class="group-list"></div>
+        <div class="form-actions">
+            <button type="button" id="confirmGroupBtn" class="btn-primary">Auswählen</button>
+            <button type="button" id="cancelGroupBtn" class="btn-secondary">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Quill.js 2.0.3 JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+    <script type="module" src="./email.js"></script>
+</body>
+</html>
+
