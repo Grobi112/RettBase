@@ -128,12 +128,9 @@ class _MaengelmelderScreenState extends State<MaengelmelderScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text('Mängelmelder', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Mängelmelder',
+        onBack: widget.onBack,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -333,12 +330,9 @@ class _FahrzeugmangelErfassenScreenState extends State<FahrzeugmangelErfassenScr
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text('Fahrzeugmangel erfassen', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Fahrzeugmangel erfassen',
+        onBack: widget.onBack,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -762,12 +756,9 @@ class _SonstigerMangelErfassenScreenState extends State<SonstigerMangelErfassenS
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text(_title, style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: _title,
+        onBack: widget.onBack,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),

@@ -12,6 +12,86 @@ class AppTheme {
   static const Color border = Color(0xFFE5E7EB);
   static const Color errorBg = Color(0xFFFFF5F5);
   static const Color errorBorder = Color(0xFFFFCCCC);
+  /// Grau für sekundäre Header-Buttons (z.B. „Neuer Menüpunkt“)
+  static const Color headerButtonSecondary = Color(0xFF6C757D);
+
+  /// Einheitlicher Modul-Header: Weißer Hintergrund, hellblaue Chevron + Titel links,
+  /// optionale Aktionen rechts. Design wie Menü-Verwaltung.
+  static PreferredSizeWidget buildModuleAppBar({
+    String? title,
+    Widget? titleWidget,
+    VoidCallback? onBack,
+    IconData leadingIcon = Icons.arrow_back,
+    List<Widget>? actions,
+    PreferredSizeWidget? bottom,
+  }) {
+    return AppBar(
+      backgroundColor: Colors.white,
+      foregroundColor: primary,
+      elevation: 1,
+      scrolledUnderElevation: 1,
+      leading: onBack != null
+          ? IconButton(
+              icon: Icon(leadingIcon),
+              onPressed: onBack,
+              color: primary,
+            )
+          : null,
+      title: titleWidget ??
+          (title != null
+              ? Text(
+                  title,
+                  style: TextStyle(
+                    color: primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                  ),
+                )
+              : null),
+      actions: actions,
+      bottom: bottom,
+      iconTheme: IconThemeData(color: primary),
+      titleTextStyle: TextStyle(
+        color: primary,
+        fontWeight: FontWeight.w600,
+        fontSize: 18,
+      ),
+    );
+  }
+
+  /// Sekundärer Header-Button (grau, abgerundet)
+  static Widget headerSecondaryButton({
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: headerButtonSecondary,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(label),
+    );
+  }
+
+  /// Primärer Header-Button (hellblau, abgerundet)
+  static Widget headerPrimaryButton({
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: primary,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(label),
+    );
+  }
 
   static ThemeData get light {
     return ThemeData(

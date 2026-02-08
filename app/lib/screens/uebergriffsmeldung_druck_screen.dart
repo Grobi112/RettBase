@@ -141,12 +141,9 @@ class UebergriffsmeldungDruckScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.grey.shade200,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-        title: Text('Uebergriffsmeldung drucken', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Übergriffsmeldung drucken',
+        onBack: onBack,
         actions: [
           IconButton(
             icon: const Icon(Icons.print),

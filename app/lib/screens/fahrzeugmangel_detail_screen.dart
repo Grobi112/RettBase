@@ -26,12 +26,9 @@ class FahrzeugmangelDetailScreen extends StatelessWidget {
     final m = mangel;
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-        title: Text(_shortDesc(m), style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: _shortDesc(m),
+        onBack: onBack,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

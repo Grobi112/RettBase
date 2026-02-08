@@ -344,6 +344,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _goToLogin();
   }
 
+  /// Formatiert Anzeigename als "Nachname V." (z.B. Füllbeck M.)
+  String get _userDisplayShort {
+    final parts = _displayName?.split(', ');
+    if (parts != null && parts.length >= 2 && parts[1].isNotEmpty) {
+      return '${parts[0]} ${parts[1][0]}.';
+    }
+    return _displayName ?? _vorname ?? 'Benutzer';
+  }
+
   IconData _drawerIconForModule(String id) {
     switch (id) {
       case 'admin': return Icons.people;
@@ -439,6 +448,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     builder: (_) => ProfileScreen(
                       companyId: widget.companyId,
                       onBack: _goToHome,
+                      onSchnellstartChanged: _load,
                       hideAppBar: true,
                     ),
                   ),
@@ -480,19 +490,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: AppTheme.headerBg,
         foregroundColor: Colors.white,
         toolbarHeight: 70,
-        title: Image.asset(
-          'img/rettbase.png',
-          height: 48,
-          fit: BoxFit.contain,
+        title: GestureDetector(
+          onTap: _goToHome,
+          child: Image.asset(
+            'img/rettbase.png',
+            height: 48,
+            fit: BoxFit.contain,
+          ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _load,
-            tooltip: 'Aktualisieren',
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
+          Theme(
+            data: Theme.of(context).copyWith(
+              popupMenuTheme: PopupMenuThemeData(
+                color: AppTheme.surfaceBg,
+                surfaceTintColor: Colors.transparent,
+              ),
+            ),
+            child: PopupMenuButton<String>(
+              offset: const Offset(0, 48),
+              color: AppTheme.surfaceBg,
+              surfaceTintColor: Colors.transparent,
+              child: Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.person_outline, size: 20, color: AppTheme.textPrimary),
+                    const SizedBox(width: 8),
+                    Text(
+                      _userDisplayShort,
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_drop_down, color: AppTheme.textPrimary, size: 24),
+                  ],
+                ),
+              ),
             onSelected: (v) {
               if (v == 'profil') {
                 _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
@@ -500,6 +540,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     builder: (_) => ProfileScreen(
                       companyId: widget.companyId,
                       onBack: _goToHome,
+                      onSchnellstartChanged: _load,
                       hideAppBar: true,
                     ),
                   ),
@@ -521,6 +562,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const PopupMenuItem(value: 'company', child: ListTile(leading: Icon(Icons.business), title: Text('Unternehmen wechseln'), contentPadding: EdgeInsets.zero)),
               const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Abmelden'), contentPadding: EdgeInsets.zero)),
             ],
+          ),
           ),
         ],
       ),

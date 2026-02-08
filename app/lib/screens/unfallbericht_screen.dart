@@ -524,12 +524,9 @@ class _UnfallberichtScreenState extends State<UnfallberichtScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          foregroundColor: AppTheme.primary,
-          elevation: 1,
-          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-          title: Text('Unfallbericht', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+        appBar: AppTheme.buildModuleAppBar(
+          title: 'Unfallbericht',
+          onBack: widget.onBack,
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -537,12 +534,9 @@ class _UnfallberichtScreenState extends State<UnfallberichtScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text('Unfallbericht', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Unfallbericht',
+        onBack: widget.onBack,
         actions: [
           IconButton(
             icon: const Icon(Icons.print),

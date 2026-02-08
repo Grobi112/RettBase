@@ -215,15 +215,9 @@ class FahrtenbuchDruckScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.grey.shade200,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-        title: Text(
-          'Fahrtenbuch drucken / PDF',
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Fahrtenbuch drucken / PDF',
+        onBack: onBack,
       ),
       body: eintraege.isEmpty
           ? Center(

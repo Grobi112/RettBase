@@ -206,15 +206,8 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Row(
+      appBar: AppTheme.buildModuleAppBar(
+        titleWidget: Row(
           children: [
             SvgPicture.asset(
               'img/icon_informationssystem.svg',
@@ -226,6 +219,7 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
             Text('Informationssystem', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
           ],
         ),
+        onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         actions: [
           FilledButton(
             onPressed: (_loading || _saving) ? null : _saveEinstellungen,

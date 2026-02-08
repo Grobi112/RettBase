@@ -142,15 +142,9 @@ class _DokumenteEinstellungenScreenState extends State<DokumenteEinstellungenScr
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Text('Ordnerstruktur', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Ordnerstruktur',
+        onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         actions: [
           if (_canEdit)
             IconButton(

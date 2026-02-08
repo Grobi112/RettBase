@@ -254,15 +254,10 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
   Widget build(BuildContext context) {
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: widget.hideAppBar
-          ? null
-          : AppBar(
-              backgroundColor: Colors.white,
-              foregroundColor: AppTheme.primary,
-              elevation: 1,
-              leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-              title: Text('Schichtanmeldung', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Schichtanmeldung',
+        onBack: widget.onBack,
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _mitarbeiter == null

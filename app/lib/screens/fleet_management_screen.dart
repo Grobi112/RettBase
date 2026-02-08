@@ -40,16 +40,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Text('Flottenmanagement', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Flottenmanagement',
+        onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppTheme.primary,
@@ -917,12 +910,10 @@ class _MangelEditScreenState extends State<_MangelEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onBack),
-        title: Text('Mangel bearbeiten', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Mangel bearbeiten',
+        onBack: widget.onBack,
+        leadingIcon: Icons.close,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
@@ -1424,15 +1415,10 @@ class _FahrzeugEditScreenState extends State<_FahrzeugEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onBack),
-        title: Text(
-          widget.fahrzeug != null ? 'Fahrzeug bearbeiten' : 'Neues Fahrzeug',
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: widget.fahrzeug != null ? 'Fahrzeug bearbeiten' : 'Neues Fahrzeug',
+        onBack: widget.onBack,
+        leadingIcon: Icons.close,
         actions: [
           if (_saving)
             const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary)))
@@ -1607,12 +1593,10 @@ class _TerminEditScreenState extends State<_TerminEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onBack),
-        title: Text('Termin anlegen', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Termin anlegen',
+        onBack: widget.onBack,
+        leadingIcon: Icons.close,
         actions: [
           if (_saving)
             const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary)))
@@ -1784,12 +1768,10 @@ class _FleetSettingsScreenState extends State<_FleetSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onBack),
-        title: Text('Einstellungen', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Einstellungen',
+        onBack: widget.onBack,
+        leadingIcon: Icons.close,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
@@ -1945,12 +1927,10 @@ class _FahrzeugbeauftragteEditScreenState extends State<_FahrzeugbeauftragteEdit
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onBack),
-        title: Text('Fahrzeugbeauftragte', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Fahrzeugbeauftragte',
+        onBack: widget.onBack,
+        leadingIcon: Icons.close,
         actions: [
           if (_saving)
             const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary)))
@@ -2284,12 +2264,10 @@ class _FleetSettingEditScreenState extends State<_FleetSettingEditScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onBack),
-        title: Text(_title, style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: _title,
+        onBack: widget.onBack,
+        leadingIcon: Icons.close,
         actions: [
           if (_saving)
             const Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary)))

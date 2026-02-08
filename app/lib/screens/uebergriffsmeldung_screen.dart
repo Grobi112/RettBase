@@ -489,12 +489,9 @@ class _UebergriffsmeldungScreenState extends State<UebergriffsmeldungScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: AppTheme.surfaceBg,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          foregroundColor: AppTheme.primary,
-          elevation: 1,
-          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-          title: Text('Übergriff', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+        appBar: AppTheme.buildModuleAppBar(
+          title: 'Übergriff',
+          onBack: widget.onBack,
           actions: [
             if (_canEditSettings) ...[
               IconButton(icon: const Icon(Icons.list), tooltip: 'Übersicht', onPressed: _openUebersicht),
@@ -508,15 +505,12 @@ class _UebergriffsmeldungScreenState extends State<UebergriffsmeldungScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text('Uebergriff', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Übergriff',
+        onBack: widget.onBack,
         actions: [
           if (_canEditSettings) ...[
-            IconButton(icon: const Icon(Icons.list), tooltip: 'Uebersicht', onPressed: _openUebersicht),
+            IconButton(icon: const Icon(Icons.list), tooltip: 'Übersicht', onPressed: _openUebersicht),
             IconButton(icon: const Icon(Icons.settings), tooltip: 'Einstellungen', onPressed: _openEinstellungen),
           ],
         ],

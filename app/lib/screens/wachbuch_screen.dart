@@ -118,15 +118,9 @@ class _WachbuchScreenState extends State<WachbuchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack,
-        ),
-        title: Text('Wachbuch', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Wachbuch',
+        onBack: widget.onBack,
         actions: [
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert, color: AppTheme.primary),
@@ -513,12 +507,10 @@ class _EintragFormScreenState extends State<_EintragFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onCancel),
-        title: Text(widget.eintrag == null ? 'Neues Ereignis' : 'Ereignis bearbeiten', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: widget.eintrag == null ? 'Neues Ereignis' : 'Ereignis bearbeiten',
+        onBack: widget.onCancel,
+        leadingIcon: Icons.close,
         actions: [
           TextButton(onPressed: widget.onCancel, child: const Text('Abbrechen')),
           FilledButton(onPressed: _save, child: const Text('Speichern')),
@@ -671,12 +663,9 @@ class _EreignisseVerwaltenScreenState extends State<_EreignisseVerwaltenScreen> 
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).pop()),
-        title: Text('Ereignisse verwalten', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Ereignisse verwalten',
+        onBack: () => Navigator.of(context).pop(),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

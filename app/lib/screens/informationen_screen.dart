@@ -94,15 +94,8 @@ class _InformationenScreenState extends State<InformationenScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Row(
+      appBar: AppTheme.buildModuleAppBar(
+        titleWidget: Row(
           children: [
             SvgPicture.asset(
               'img/icon_informationssystem.svg',
@@ -114,6 +107,7 @@ class _InformationenScreenState extends State<InformationenScreen> {
             Text('Informationen', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
           ],
         ),
+        onBack: widget.onBack ?? () => Navigator.of(context).pop(),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
@@ -376,12 +370,10 @@ class _InformationAnlegenScreenState extends State<_InformationAnlegenScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onBack),
-        title: Text('Neue Information', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Neue Information',
+        onBack: widget.onBack,
+        leadingIcon: Icons.close,
         actions: [
           FilledButton(
             onPressed: _saving ? null : _speichern,

@@ -77,24 +77,15 @@ class _FahrtenbuchScreenState extends State<FahrtenbuchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (_selectedFahrzeug != null) {
-              setState(() => _selectedFahrzeug = null);
-            } else {
-              widget.onBack();
-            }
-          },
-        ),
-        title: Text(
-          _selectedFahrzeug?.displayLabel ?? 'Fahrtenbücher',
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 18),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: _selectedFahrzeug?.displayLabel ?? 'Fahrtenbücher',
+        onBack: () {
+          if (_selectedFahrzeug != null) {
+            setState(() => _selectedFahrzeug = null);
+          } else {
+            widget.onBack();
+          }
+        },
       ),
       body: const Center(child: CircularProgressIndicator(color: AppTheme.primary)),
     );
@@ -793,12 +784,10 @@ class _FahrtenbuchFormScreenState extends State<_FahrtenbuchFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onCancel),
-        title: Text(widget.eintrag == null ? 'Neuer Fahrtenbucheintrag' : 'Fahrtenbucheintrag bearbeiten', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: widget.eintrag == null ? 'Neuer Fahrtenbucheintrag' : 'Fahrtenbucheintrag bearbeiten',
+        onBack: widget.onCancel,
+        leadingIcon: Icons.close,
         actions: [
           TextButton(onPressed: widget.onCancel, child: const Text('Abbrechen')),
           FilledButton(

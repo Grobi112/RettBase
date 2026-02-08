@@ -270,12 +270,9 @@ class _SchnittstellenmeldungScreenState extends State<SchnittstellenmeldungScree
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text('Schnittstellenmeldung', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Schnittstellenmeldung',
+        onBack: widget.onBack,
         actions: [
           if (_canEditSettings) ...[
             IconButton(

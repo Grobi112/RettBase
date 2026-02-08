@@ -38,14 +38,60 @@ class ModulesService {
     AppModule(id: 'ssd', label: 'Notfallprotokoll SSD', url: '', order: 29, roles: _defaultRoles),
   ];
 
-  /// Lädt Shortcuts für die Dashboard-Kacheln (erste 6 für 2x3 Grid).
+  /// Lädt Shortcuts für die Dashboard-Kacheln (6 Slots).
+  /// Nutzt kunden/{companyId}/settings/schnellstart falls vorhanden, sonst erste 6 Module.
   Future<List<AppModule?>> getShortcuts(String companyId, String role) async {
     final modules = await getModulesForCompany(companyId, role);
-    final list = modules.take(6).map((m) => m as AppModule?).toList();
-    while (list.length < 6) {
-      list.add(null);
+    final modById = {for (final m in modules) m.id: m};
+
+    final custom = await _getSchnellstartSlots(companyId);
+    if (custom != null) {
+      final list = custom.map((id) => id != null && id.isNotEmpty ? modById[id] : null).toList();
+      while (list.length < 6) list.add(null);
+      return list.take(6).toList();
     }
+
+    final list = modules.take(6).map((m) => m as AppModule?).toList();
+    while (list.length < 6) list.add(null);
     return list;
+  }
+
+  /// Lädt Schnellstart-Slot-IDs für Bearbeitung (custom oder Default = erste 6 Module).
+  Future<List<String?>> getSchnellstartSlotIds(String companyId, String role) async {
+    final custom = await _getSchnellstartSlots(companyId);
+    if (custom != null) return custom;
+    final modules = await getModulesForCompany(companyId, role);
+    final list = <String?>[...modules.take(6).map((m) => m.id)];
+    while (list.length < 6) list.add(null);
+    return list;
+  }
+
+  /// Lädt gespeicherte Schnellstart-Slots aus Firestore (intern).
+  Future<List<String?>?> _getSchnellstartSlots(String companyId) async {
+    try {
+      final snap = await _db
+          .collection('kunden')
+          .doc(companyId)
+          .collection('settings')
+          .doc('schnellstart')
+          .get();
+      final list = snap.data()?['slots'] as List?;
+      if (list != null && list.isNotEmpty) {
+        return List.generate(6, (i) => i < list.length ? list[i]?.toString() : null);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Speichert Schnellstart-Slots in Firestore.
+  Future<void> saveSchnellstartSlots(String companyId, List<String?> slotIds) async {
+    final list = List.generate(6, (i) => i < slotIds.length && (slotIds[i] ?? '').isNotEmpty ? slotIds[i] : null);
+    await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('settings')
+        .doc('schnellstart')
+        .set({'slots': list, 'updatedAt': FieldValue.serverTimestamp()});
   }
 
   /// Lädt alle für Firma+Rolle freigegebenen Module.

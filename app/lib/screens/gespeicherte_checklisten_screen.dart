@@ -72,15 +72,9 @@ class _GespeicherteChecklistenScreenState extends State<GespeicherteChecklistenS
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text(
-          'Gespeicherte Checklisten',
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 18),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Gespeicherte Checklisten',
+        onBack: widget.onBack,
       ),
       body: StreamBuilder<List<ChecklisteAusfuellung>>(
         stream: _service.streamAusfuellungen(widget.companyId),

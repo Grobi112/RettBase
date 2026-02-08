@@ -229,12 +229,9 @@ class UnfallberichtDruckScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade200,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-        title: Text('Unfallbericht – Drucken / PDF', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Unfallbericht – Drucken / PDF',
+        onBack: onBack,
       ),
       body: PdfPreview(
         build: _buildPdf,

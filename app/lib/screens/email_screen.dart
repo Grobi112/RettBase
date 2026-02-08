@@ -59,16 +59,9 @@ class _EmailScreenState extends State<EmailScreen> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Text('Interne E-Mails', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Interne E-Mails',
+        onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: AppTheme.primary,
@@ -357,11 +350,9 @@ class _EmailViewScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: AppTheme.headerBg,
-        foregroundColor: Colors.white,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-        title: Text(email.subject.isEmpty ? '(Kein Betreff)' : email.subject),
+      appBar: AppTheme.buildModuleAppBar(
+        title: email.subject.isEmpty ? '(Kein Betreff)' : email.subject,
+        onBack: onBack,
         actions: [
           if (tab != 'trash' && tab != 'drafts' && onReply != null)
             IconButton(
@@ -604,13 +595,10 @@ class _EmailComposeScreenState extends State<_EmailComposeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.1),
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onBack),
-        title: Text('Neue Nachricht', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Neue Nachricht',
+        onBack: widget.onBack,
+        leadingIcon: Icons.close,
         actions: [
           if (_sending)
             const Center(child: Padding(padding: EdgeInsets.all(16), child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary))))

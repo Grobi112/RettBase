@@ -270,15 +270,9 @@ class _ChecklisteAusfuellenScreenState extends State<ChecklisteAusfuellenScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text(
-          _checkliste.title,
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: _checkliste.title,
+        onBack: widget.onBack,
         actions: [
           FilledButton.icon(
             onPressed: _saving ? null : _save,

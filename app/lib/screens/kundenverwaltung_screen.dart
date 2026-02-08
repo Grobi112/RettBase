@@ -222,18 +222,10 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
   Widget build(BuildContext context) {
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: widget.hideAppBar
-          ? null
-          : AppBar(
-              backgroundColor: Colors.white,
-              foregroundColor: AppTheme.primary,
-              elevation: 1,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-              ),
-              title: Text('Kundenverwaltung', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Kundenverwaltung',
+        onBack: widget.onBack ?? () => Navigator.of(context).pop(),
+      ),
       body: Column(
         children: [
           Padding(

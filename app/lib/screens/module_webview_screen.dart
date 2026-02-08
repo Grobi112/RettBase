@@ -27,17 +27,10 @@ class ModuleWebViewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final scaffold = Scaffold(
       backgroundColor: Colors.white,
-      appBar: hideAppBar
-          ? null
-          : AppBar(
-              backgroundColor: AppTheme.headerBg,
-              foregroundColor: Colors.white,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: onBack ?? () => Navigator.of(context).pop(),
-              ),
-              title: Text(module.label),
-            ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: module.label,
+        onBack: onBack ?? () => Navigator.of(context).pop(),
+      ),
       body: ModuleWebViewWidget(
         module: module,
         companyId: companyId,

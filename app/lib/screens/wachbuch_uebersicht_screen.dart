@@ -80,12 +80,9 @@ class _WachbuchUebersichtScreenState extends State<WachbuchUebersichtScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text('Wachbuch Übersicht', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Wachbuch Übersicht',
+        onBack: widget.onBack,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

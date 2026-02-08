@@ -42,15 +42,9 @@ class _ChecklistenUebersichtScreenState extends State<ChecklistenUebersichtScree
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text(
-          'Checklisten',
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 18),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Checklisten',
+        onBack: widget.onBack,
       ),
       body: StreamBuilder<List<Checkliste>>(
         stream: _service.streamChecklisten(widget.companyId),

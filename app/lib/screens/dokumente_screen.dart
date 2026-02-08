@@ -85,15 +85,9 @@ class _DokumenteScreenState extends State<DokumenteScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Text('Dokumente', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Dokumente',
+        onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         actions: [
           if (canEdit)
             IconButton(

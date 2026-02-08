@@ -114,12 +114,9 @@ class SchnittstellenmeldungDruckScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.grey.shade200,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-        title: Text('Schnittstellenmeldung drucken', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Schnittstellenmeldung drucken',
+        onBack: onBack,
         actions: [
           IconButton(
             icon: const Icon(Icons.print),

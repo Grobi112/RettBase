@@ -253,15 +253,10 @@ class _ChecklisteErstellenScreenState extends State<ChecklisteErstellenScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: widget.onCancel),
-        title: Text(
-          widget.checkliste == null ? 'Neue Checkliste' : 'Checkliste bearbeiten',
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: widget.checkliste == null ? 'Neue Checkliste' : 'Checkliste bearbeiten',
+        onBack: widget.onCancel,
+        leadingIcon: Icons.close,
         actions: [
           TextButton(onPressed: widget.onCancel, child: const Text('Abbrechen')),
           FilledButton(

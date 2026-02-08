@@ -408,12 +408,9 @@ class _UebergriffsmeldungBearbeitenScreenState extends State<UebergriffsmeldungB
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text('Uebergriffsmeldung bearbeiten', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Übergriffsmeldung bearbeiten',
+        onBack: widget.onBack,
         actions: [IconButton(icon: const Icon(Icons.print), tooltip: 'Drucken', onPressed: _drucken)],
       ),
       body: SingleChildScrollView(

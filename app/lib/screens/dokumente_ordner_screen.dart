@@ -186,25 +186,19 @@ class _DokumenteOrdnerScreenState extends State<DokumenteOrdnerScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (widget.breadcrumbs.length <= 1) {
-              if (widget.onBack != null) {
-                widget.onBack!();
-              } else {
-                Navigator.of(context).pop();
-              }
+      appBar: AppTheme.buildModuleAppBar(
+        title: widget.folder.name,
+        onBack: () {
+          if (widget.breadcrumbs.length <= 1) {
+            if (widget.onBack != null) {
+              widget.onBack!();
             } else {
-              _navigateToParent();
+              Navigator.of(context).pop();
             }
-          },
-        ),
-        title: Text(widget.folder.name, style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+          } else {
+            _navigateToParent();
+          }
+        },
         actions: [
           IconButton(
             icon: _uploading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primary)) : const Icon(Icons.upload_file),

@@ -22,15 +22,9 @@ class ChecklisteAusfuellungDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-        title: Text(
-          ausfuellung.checklisteTitel,
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: ausfuellung.checklisteTitel,
+        onBack: onBack,
         actions: [
           IconButton(
             icon: const Icon(Icons.print),

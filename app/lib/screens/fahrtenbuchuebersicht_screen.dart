@@ -33,24 +33,15 @@ class _FahrtenbuchuebersichtScreenState extends State<FahrtenbuchuebersichtScree
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (_selectedFahrzeug != null) {
-              setState(() => _selectedFahrzeug = null);
-            } else {
-              widget.onBack();
-            }
-          },
-        ),
-        title: Text(
-          _selectedFahrzeug?.displayLabel ?? 'Fahrtenbuchübersicht',
-          style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 18),
-        ),
+      appBar: AppTheme.buildModuleAppBar(
+        title: _selectedFahrzeug?.displayLabel ?? 'Fahrtenbuchübersicht',
+        onBack: () {
+          if (_selectedFahrzeug != null) {
+            setState(() => _selectedFahrzeug = null);
+          } else {
+            widget.onBack();
+          }
+        },
       ),
       body: _selectedFahrzeug == null ? _buildUebersicht() : _buildFahrzeugEintraege(),
     );

@@ -264,13 +264,7 @@ class ChecklisteAusfuellungDruckScreen extends StatelessWidget {
         if (snap.connectionState == ConnectionState.waiting) {
           return Scaffold(
             backgroundColor: Colors.grey.shade200,
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              foregroundColor: AppTheme.primary,
-              elevation: 1,
-              leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-              title: Text('Checkliste drucken', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            ),
+            appBar: AppTheme.buildModuleAppBar(title: 'Checkliste drucken', onBack: onBack),
             body: const Center(child: CircularProgressIndicator(color: AppTheme.primary)),
           );
         }
@@ -278,13 +272,7 @@ class ChecklisteAusfuellungDruckScreen extends StatelessWidget {
         if (checkliste == null) {
           return Scaffold(
             backgroundColor: Colors.grey.shade200,
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              foregroundColor: AppTheme.primary,
-              elevation: 1,
-              leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-              title: Text('Checkliste drucken', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            ),
+            appBar: AppTheme.buildModuleAppBar(title: 'Checkliste drucken', onBack: onBack),
             body: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -303,12 +291,9 @@ class ChecklisteAusfuellungDruckScreen extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: Colors.grey.shade200,
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            foregroundColor: AppTheme.primary,
-            elevation: 1,
-            leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-            title: Text('Checkliste drucken / PDF', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+          appBar: AppTheme.buildModuleAppBar(
+            title: 'Checkliste drucken / PDF',
+            onBack: onBack,
             actions: [
               IconButton(
                 icon: const Icon(Icons.print),

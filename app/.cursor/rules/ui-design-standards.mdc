@@ -1,10 +1,32 @@
 ---
-description: Moderne UI-Standards für Popups, Dialoge und Auswahlfenster
+description: Moderne UI-Standards für Popups, Dialoge, Header und Auswahlfenster
 globs: lib/**/*.dart
 alwaysApply: false
 ---
 
 # UI-Design-Standards (RettBase)
+
+## App-Header (Module und Unterseiten)
+
+**Einheitliches Design** für alle Module und Unterseiten – weißer Hintergrund, hellblaue Chevron + Titel links, optionale Aktionen rechts. Design wie Menü-Verwaltung.
+
+Immer `AppTheme.buildModuleAppBar()` verwenden:
+
+```dart
+appBar: AppTheme.buildModuleAppBar(
+  title: 'Titel der Seite',
+  onBack: () => Navigator.pop(context),
+  leadingIcon: Icons.arrow_back,  // oder Icons.close für modale Dialoge
+  actions: [ /* optionale IconButtons/FilledButtons */ ],
+  bottom: TabBar(...),  // optional, z.B. für Tab-Navigation
+),
+```
+
+- **Zurück-Button**: `Icons.arrow_back` für Navigation, `Icons.close` für modale Dialoge
+- **Aktionen rechts**: z.B. `AppTheme.headerPrimaryButton()` (hellblau) und `AppTheme.headerSecondaryButton()` (grau)
+- **Dashboard** behält seinen eigenen dunklen Header (Logo + User-Menü)
+
+---
 
 Bei allen Popup-Fenstern, Modals, Bottom Sheets und Auswahl-Dialogen diese Design-Standards einhalten.
 
