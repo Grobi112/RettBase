@@ -5,18 +5,22 @@ import '../theme/app_theme.dart';
 class PlaceholderModuleScreen extends StatelessWidget {
   final String moduleName;
   final VoidCallback? onBack;
+  final bool hideAppBar;
 
   const PlaceholderModuleScreen({
     super.key,
     required this.moduleName,
     this.onBack,
+    this.hideAppBar = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
+      appBar: hideAppBar
+          ? null
+          : AppBar(
         backgroundColor: AppTheme.headerBg,
         foregroundColor: Colors.white,
         leading: IconButton(
@@ -24,7 +28,7 @@ class PlaceholderModuleScreen extends StatelessWidget {
           onPressed: onBack ?? () => Navigator.of(context).pop(),
         ),
         title: Text(moduleName),
-      ),
+            ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -50,5 +54,16 @@ class PlaceholderModuleScreen extends StatelessWidget {
         ),
       ),
     );
+
+    if (hideAppBar && onBack != null) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) onBack!();
+        },
+        child: scaffold,
+      );
+    }
+    return scaffold;
   }
 }

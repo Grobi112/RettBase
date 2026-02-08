@@ -5,25 +5,37 @@ import '../models/app_module.dart';
 class ModulesService {
   final _db = FirebaseFirestore.instance;
 
-  /// Default-Module für die native App (falls Firestore leer)
+  /// Default-Module für die native App (falls Firestore leer).
+  /// Rollen möglichst breit, damit verschiedene Nutzerrollen Zugriff haben.
+  static const _defaultRoles = [
+    'superadmin', 'admin', 'leiterssd', 'geschaeftsfuehrung', 'rettungsdienstleitung',
+    'koordinator', 'wachleitung', 'ovd', 'user', 'fahrzeugbeauftragter', 'mpg-beauftragter',
+  ];
+
   static List<AppModule> get defaultNativeModules => [
-    const AppModule(id: 'schichtanmeldung', label: 'Schichtanmeldung', url: '', order: 1),
-    const AppModule(id: 'schichtuebersicht', label: 'Schichtübersicht', url: '', order: 2),
-    const AppModule(id: 'fahrtenbuch', label: 'Fahrtenbuch', url: '', order: 3),
-    const AppModule(id: 'fahrtenbuchuebersicht', label: 'Fahrtenbuch-Übersicht', url: '', order: 4),
-    const AppModule(id: 'wachbuch', label: 'Wachbuch', url: '', order: 5),
-    const AppModule(id: 'wachbuchuebersicht', label: 'Wachbuch-Übersicht', url: '', order: 6),
-    const AppModule(id: 'checklisten', label: 'Checklisten', url: '', order: 7),
-    const AppModule(id: 'informationssystem', label: 'Informationssystem', url: '', order: 8),
-    const AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9),
-    const AppModule(id: 'maengelmelder', label: 'Mängelmelder', url: '', order: 10),
-    const AppModule(id: 'fahrzeugmanagement', label: 'Fahrzeugmanagement', url: '', order: 11),
-    const AppModule(id: 'dokumente', label: 'Dokumente', url: '', order: 12),
-    const AppModule(id: 'unfallbericht', label: 'Unfallbericht', url: '', order: 13),
-    const AppModule(id: 'schnittstellenmeldung', label: 'Schnittstellenmeldung', url: '', order: 14),
-    const AppModule(id: 'uebergriffsmeldung', label: 'Übergriffsmeldung', url: '', order: 15),
-    const AppModule(id: 'telefonliste', label: 'Telefonliste', url: '', order: 16),
-    const AppModule(id: 'ssd', label: 'Notfallprotokoll SSD', url: '', order: 17),
+    // Web-Module (Admin-Bereich, laden in WebView)
+    AppModule(id: 'admin', label: 'Mitgliederverwaltung', url: 'kunden/admin/mitarbeiterverwaltung.html', order: 4, roles: ['superadmin', 'admin', 'leiterssd']),
+    AppModule(id: 'kundenverwaltung', label: 'Kundenverwaltung', url: 'kunden/admin/kundenverwaltung.html', order: 5, roles: ['superadmin']),
+    AppModule(id: 'modulverwaltung', label: 'Modul-Verwaltung', url: 'kunden/admin/modulverwaltung.html', order: 6, roles: ['superadmin']),
+    AppModule(id: 'menueverwaltung', label: 'Menü-Verwaltung', url: 'kunden/admin/menue.html', order: 10, roles: ['superadmin']),
+    // Native Module
+    AppModule(id: 'schichtanmeldung', label: 'Schichtanmeldung', url: '', order: 14, roles: _defaultRoles),
+    AppModule(id: 'schichtuebersicht', label: 'Schichtübersicht', url: '', order: 15, roles: _defaultRoles),
+    AppModule(id: 'fahrtenbuch', label: 'Fahrtenbuch', url: '', order: 16, roles: _defaultRoles),
+    AppModule(id: 'fahrtenbuchuebersicht', label: 'Fahrtenbuch-Übersicht', url: '', order: 17, roles: _defaultRoles),
+    AppModule(id: 'wachbuch', label: 'Wachbuch', url: '', order: 18, roles: _defaultRoles),
+    AppModule(id: 'wachbuchuebersicht', label: 'Wachbuch-Übersicht', url: '', order: 19, roles: _defaultRoles),
+    AppModule(id: 'checklisten', label: 'Checklisten', url: '', order: 20, roles: _defaultRoles),
+    AppModule(id: 'informationssystem', label: 'Informationssystem', url: '', order: 21, roles: _defaultRoles),
+    AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9, roles: ['superadmin', 'admin', 'leiterssd']),
+    AppModule(id: 'maengelmelder', label: 'Mängelmelder', url: '', order: 22, roles: _defaultRoles),
+    AppModule(id: 'fahrzeugmanagement', label: 'Fahrzeugmanagement', url: '', order: 23, roles: _defaultRoles),
+    AppModule(id: 'dokumente', label: 'Dokumente', url: '', order: 24, roles: _defaultRoles),
+    AppModule(id: 'unfallbericht', label: 'Unfallbericht', url: '', order: 25, roles: _defaultRoles),
+    AppModule(id: 'schnittstellenmeldung', label: 'Schnittstellenmeldung', url: '', order: 26, roles: _defaultRoles),
+    AppModule(id: 'uebergriffsmeldung', label: 'Übergriffsmeldung', url: '', order: 27, roles: _defaultRoles),
+    AppModule(id: 'telefonliste', label: 'Telefonliste', url: '', order: 28, roles: _defaultRoles),
+    AppModule(id: 'ssd', label: 'Notfallprotokoll SSD', url: '', order: 29, roles: _defaultRoles),
   ];
 
   /// Lädt Shortcuts für die Dashboard-Kacheln (erste 6 für 2x3 Grid).
@@ -37,15 +49,19 @@ class ModulesService {
   }
 
   /// Lädt alle für Firma+Rolle freigegebenen Module.
+  /// Firestore: settings/modules/items (Definitionen), kunden/{companyId}/modules (Freischaltung).
+  /// Admin-Firma: alle Module frei. Andere Firmen: nur explizit enabled.
   Future<List<AppModule>> getModulesForCompany(String companyId, String role) async {
     try {
       final roleLower = role.toLowerCase().trim();
       final companyMods = await _getCompanyEnabled(companyId);
       final allMods = await _getAllModuleDefs();
       final result = <AppModule>[];
+      final isAdminCompany = companyId.toLowerCase() == 'admin';
 
       for (final m in defaultNativeModules) {
-        final enabled = companyMods[m.id] ?? true;
+        // Admin-Firma: alle Module freigeschaltet; sonst: nur explizit enabled
+        final enabled = isAdminCompany || (companyMods[m.id] == true);
         if (!enabled) continue;
         final def = allMods[m.id];
         final roles = def?['roles'] as List? ?? m.roles;
@@ -77,9 +93,15 @@ class ModulesService {
     }
   }
 
+  /// Lädt Modul-Definitionen aus Firestore: settings/modules/items
   Future<Map<String, Map<String, dynamic>>> _getAllModuleDefs() async {
     try {
-      final snap = await _db.doc('settings/modules').collection('items').orderBy('order').get();
+      final snap = await _db
+          .collection('settings')
+          .doc('modules')
+          .collection('items')
+          .orderBy('order')
+          .get();
       return {for (final d in snap.docs) d.id: d.data()};
     } catch (_) {
       return {};

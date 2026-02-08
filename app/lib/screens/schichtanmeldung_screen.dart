@@ -13,11 +13,13 @@ class SchichtanmeldungScreen extends StatefulWidget {
   final String companyId;
   final VoidCallback onBack;
   final void Function(FahrtenbuchVorlage vorlage)? onFahrtenbuchOpen;
+  final bool hideAppBar;
 
   const SchichtanmeldungScreen({
     required this.companyId,
     required this.onBack,
     this.onFahrtenbuchOpen,
+    this.hideAppBar = false,
   });
 
   @override
@@ -250,21 +252,33 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-        title: Text('Schichtanmeldung', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
-      ),
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.primary,
+              elevation: 1,
+              leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
+              title: Text('Schichtanmeldung', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _mitarbeiter == null
               ? _buildNichtZugeordnet()
               : _buildForm(),
     );
+    if (widget.hideAppBar) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) widget.onBack();
+        },
+        child: scaffold,
+      );
+    }
+    return scaffold;
   }
 
   Widget _buildNichtZugeordnet() {

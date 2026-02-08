@@ -70,7 +70,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
     final companyConfigured = prefs.getBool('rettbase_company_configured') ?? false;
     final companyId = prefs.getString('rettbase_company_id') ??
         prefs.getString('rettbase_subdomain') ??
-        AppConfig.defaultSubdomain;
+        AppConfig.defaultKundenId;
 
     if (!mounted) return;
 

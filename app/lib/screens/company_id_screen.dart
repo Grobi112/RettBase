@@ -5,7 +5,7 @@ import '../app_config.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
 
-/// Unternehmen / Subdomain auswählen oder eingeben.
+/// Unternehmen auswählen – Kunden-ID eingeben (z.B. admin für admin.rettbase.de).
 class CompanyIdScreen extends StatefulWidget {
   const CompanyIdScreen({super.key});
 
@@ -14,7 +14,7 @@ class CompanyIdScreen extends StatefulWidget {
 }
 
 class _CompanyIdScreenState extends State<CompanyIdScreen> {
-  final _controller = TextEditingController(text: AppConfig.defaultSubdomain);
+  final _controller = TextEditingController(text: AppConfig.defaultKundenId);
   final _focusNode = FocusNode();
   bool _loading = false;
   String? _error;
@@ -26,16 +26,16 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
     super.dispose();
   }
 
-  String _normalizeSubdomain(String value) {
+  String _normalizeKundenId(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9\-]'), '');
   }
 
   Future<void> _saveAndContinue() async {
     final raw = _controller.text.trim();
-    final subdomain = raw.isEmpty ? AppConfig.defaultSubdomain : _normalizeSubdomain(raw);
-    if (subdomain.isEmpty) {
+    final kundenId = raw.isEmpty ? AppConfig.defaultKundenId : _normalizeKundenId(raw);
+    if (kundenId.isEmpty) {
       setState(() {
-        _error = 'Bitte eine gültige Subdomain eingeben.';
+        _error = 'Bitte eine gültige Kunden-ID eingeben.';
       });
       return;
     }
@@ -48,13 +48,13 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('rettbase_company_configured', true);
-      await prefs.setString('rettbase_company_id', subdomain);
-      await prefs.setString('rettbase_subdomain', subdomain);
+      await prefs.setString('rettbase_company_id', kundenId);
+      await prefs.setString('rettbase_subdomain', kundenId);
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => LoginScreen(companyId: subdomain),
+          builder: (_) => LoginScreen(companyId: kundenId),
         ),
       );
     } catch (e) {
@@ -96,7 +96,7 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Gib die Subdomain deines RettBase-Kontos ein.',
+                'Gib die Kunden-ID deines RettBase-Kontos ein.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppTheme.textSecondary,
@@ -114,7 +114,7 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
                   FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_\.]')),
                 ],
                 decoration: InputDecoration(
-                  labelText: 'Subdomain',
+                  labelText: 'Kunden-ID',
                   hintText: 'z.B. admin',
                   suffixText: '.${AppConfig.rootDomain}',
                   errorText: _error,
@@ -125,7 +125,7 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
                 onSubmitted: (_) => _saveAndContinue(),
               ),
               const SizedBox(height: 16),
-              ...AppConfig.knownSubdomains.map((s) => Padding(
+              ...AppConfig.knownKundenIds.map((s) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: OutlinedButton(
                       onPressed: _loading

@@ -9,12 +9,14 @@ class EinstellungenScreen extends StatefulWidget {
   final VoidCallback? onBack;
   /// Wird aufgerufen, wenn Informationssystem-Einstellungen gespeichert wurden
   final VoidCallback? onInformationssystemSaved;
+  final bool hideAppBar;
 
   const EinstellungenScreen({
     super.key,
     required this.companyId,
     this.onBack,
     this.onInformationssystemSaved,
+    this.hideAppBar = false,
   });
 
   @override
@@ -24,18 +26,20 @@ class EinstellungenScreen extends StatefulWidget {
 class _EinstellungenScreenState extends State<EinstellungenScreen> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Text('Einstellungen', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
-      ),
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.primary,
+              elevation: 1,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
+              ),
+              title: Text('Einstellungen', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -85,6 +89,16 @@ class _EinstellungenScreenState extends State<EinstellungenScreen> {
         ],
       ),
     );
+    if (widget.hideAppBar && widget.onBack != null) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) widget.onBack!();
+        },
+        child: scaffold,
+      );
+    }
+    return scaffold;
   }
 }
 

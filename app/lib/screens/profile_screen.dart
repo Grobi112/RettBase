@@ -8,11 +8,13 @@ import '../services/auth_data_service.dart';
 class ProfileScreen extends StatefulWidget {
   final String companyId;
   final VoidCallback? onBack;
+  final bool hideAppBar;
 
   const ProfileScreen({
     super.key,
     required this.companyId,
     this.onBack,
+    this.hideAppBar = false,
   });
 
   @override
@@ -103,18 +105,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: AppTheme.primary,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Text('Profil', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
-      ),
+      appBar: widget.hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.primary,
+              elevation: 1,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
+              ),
+              title: Text('Profil', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
           : ListView(
@@ -144,6 +148,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
     );
+    if (widget.hideAppBar && widget.onBack != null) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) widget.onBack!();
+        },
+        child: scaffold,
+      );
+    }
+    return scaffold;
   }
 }
 

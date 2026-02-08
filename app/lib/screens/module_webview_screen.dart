@@ -10,6 +10,8 @@ class ModuleWebViewScreen extends StatelessWidget {
   final String? loginEmail;
   final String? loginPassword;
   final VoidCallback? onBack;
+  /// Wenn true: keine AppBar (Header kommt vom Dashboard)
+  final bool hideAppBar;
 
   const ModuleWebViewScreen({
     super.key,
@@ -18,21 +20,24 @@ class ModuleWebViewScreen extends StatelessWidget {
     this.loginEmail,
     this.loginPassword,
     this.onBack,
+    this.hideAppBar = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: AppTheme.headerBg,
-        foregroundColor: Colors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Text(module.label),
-      ),
+      appBar: hideAppBar
+          ? null
+          : AppBar(
+              backgroundColor: AppTheme.headerBg,
+              foregroundColor: Colors.white,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: onBack ?? () => Navigator.of(context).pop(),
+              ),
+              title: Text(module.label),
+            ),
       body: ModuleWebViewWidget(
         module: module,
         companyId: companyId,
@@ -40,5 +45,17 @@ class ModuleWebViewScreen extends StatelessWidget {
         loginPassword: loginPassword,
       ),
     );
+
+    // Explizite Zurück-Navigation bei eingebetteten Modulen (verhindert Null/Bool-Fehler)
+    if (hideAppBar && onBack != null) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) onBack!();
+        },
+        child: scaffold,
+      );
+    }
+    return scaffold;
   }
 }

@@ -1,22 +1,24 @@
 /// RettBase Native App - Konfiguration
 /// Lädt die Web-App von rettbase.de (gleiche Datenbank: rett-fe0fa)
+/// Arbeitet mit Kunden-ID (nicht Subdomain) – URL: kundenId.rettbase.de
 
 class AppConfig {
   static const String rootDomain = 'rettbase.de';
 
   /// Basis-URL für die RettBase Web-App (Produktion)
-  static String getBaseUrl(String subdomain) {
-    if (subdomain.isEmpty || subdomain == 'www') {
+  /// [kundenId] Kunden-ID, z.B. 'admin' → https://admin.rettbase.de
+  static String getBaseUrl(String kundenId) {
+    if (kundenId.isEmpty || kundenId == 'www') {
       return 'https://$rootDomain';
     }
-    return 'https://$subdomain.$rootDomain';
+    return 'https://$kundenId.$rootDomain';
   }
 
-  /// Standard-Subdomain beim ersten Start (admin = Dashboard/Login)
-  static const String defaultSubdomain = 'admin';
+  /// Standard-Kunden-ID beim ersten Start (admin = Dashboard/Login)
+  static const String defaultKundenId = 'admin';
 
-  /// Bekannte Subdomains für schnelle Auswahl
-  static const List<String> knownSubdomains = [
+  /// Bekannte Kunden-IDs für schnelle Auswahl
+  static const List<String> knownKundenIds = [
     'admin',
     'www',
   ];

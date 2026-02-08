@@ -7,11 +7,11 @@ Future<bool> isSimulatorOrEmulator() async {
     final deviceInfo = DeviceInfoPlugin();
     if (Platform.isIOS) {
       final ios = await deviceInfo.iosInfo;
-      return !ios.isPhysicalDevice;
+      return (ios.isPhysicalDevice != true);
     }
     if (Platform.isAndroid) {
       final android = await deviceInfo.androidInfo;
-      return !android.isPhysicalDevice;
+      return (android.isPhysicalDevice != true);
     }
   } catch (_) {}
   return false;
