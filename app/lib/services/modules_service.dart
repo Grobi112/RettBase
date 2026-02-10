@@ -2,8 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_module.dart';
 
 /// Lädt Module für die native App (Firestore + Firmen-Freischaltung).
+/// Firestore-Pfade nutzen immer normalisierte Kunden-ID (kleingeschrieben).
 class ModulesService {
   final _db = FirebaseFirestore.instance;
+
+  static String _normalizeCompanyId(String companyId) =>
+      companyId.trim().toLowerCase();
 
   /// Default-Module für die native App (falls Firestore leer).
   /// Rollen möglichst breit, damit verschiedene Nutzerrollen Zugriff haben.
@@ -13,11 +17,11 @@ class ModulesService {
   ];
 
   static List<AppModule> get defaultNativeModules => [
-    // Web-Module (Admin-Bereich, laden in WebView)
-    AppModule(id: 'admin', label: 'Mitgliederverwaltung', url: 'kunden/admin/mitarbeiterverwaltung.html', order: 4, roles: ['superadmin', 'admin', 'leiterssd']),
-    AppModule(id: 'kundenverwaltung', label: 'Kundenverwaltung', url: 'kunden/admin/kundenverwaltung.html', order: 5, roles: ['superadmin']),
-    AppModule(id: 'modulverwaltung', label: 'Modul-Verwaltung', url: 'kunden/admin/modulverwaltung.html', order: 6, roles: ['superadmin']),
-    AppModule(id: 'menueverwaltung', label: 'Menü-Verwaltung', url: 'kunden/admin/menue.html', order: 10, roles: ['superadmin']),
+    // Native Admin-Module (keine WebView/iframe mehr)
+    AppModule(id: 'admin', label: 'Mitgliederverwaltung', url: '', order: 4, roles: ['superadmin', 'admin', 'leiterssd']),
+    AppModule(id: 'kundenverwaltung', label: 'Kundenverwaltung', url: '', order: 5, roles: ['superadmin']),
+    AppModule(id: 'modulverwaltung', label: 'Modul-Verwaltung', url: '', order: 6, roles: ['superadmin']),
+    AppModule(id: 'menueverwaltung', label: 'Menü-Verwaltung', url: '', order: 10, roles: ['superadmin']),
     // Native Module
     AppModule(id: 'schichtanmeldung', label: 'Schichtanmeldung', url: '', order: 14, roles: _defaultRoles),
     AppModule(id: 'schichtuebersicht', label: 'Schichtübersicht', url: '', order: 15, roles: _defaultRoles),
@@ -69,9 +73,10 @@ class ModulesService {
   /// Lädt gespeicherte Schnellstart-Slots aus Firestore (intern).
   Future<List<String?>?> _getSchnellstartSlots(String companyId) async {
     try {
+      final cid = _normalizeCompanyId(companyId);
       final snap = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('settings')
           .doc('schnellstart')
           .get();
@@ -86,12 +91,13 @@ class ModulesService {
   /// Speichert Schnellstart-Slots in Firestore.
   Future<void> saveSchnellstartSlots(String companyId, List<String?> slotIds) async {
     final list = List.generate(6, (i) => i < slotIds.length && (slotIds[i] ?? '').isNotEmpty ? slotIds[i] : null);
+    final cid = _normalizeCompanyId(companyId);
     await _db
         .collection('kunden')
-        .doc(companyId)
-        .collection('settings')
-        .doc('schnellstart')
-        .set({'slots': list, 'updatedAt': FieldValue.serverTimestamp()});
+        .doc(cid)
+          .collection('settings')
+          .doc('schnellstart')
+          .set({'slots': list, 'updatedAt': FieldValue.serverTimestamp()});
   }
 
   /// Lädt alle für Firma+Rolle freigegebenen Module.
@@ -99,11 +105,12 @@ class ModulesService {
   /// Admin-Firma: alle Module frei. Andere Firmen: nur explizit enabled.
   Future<List<AppModule>> getModulesForCompany(String companyId, String role) async {
     try {
+      final cid = _normalizeCompanyId(companyId);
       final roleLower = role.toLowerCase().trim();
-      final companyMods = await _getCompanyEnabled(companyId);
+      final companyMods = await _getCompanyEnabled(cid);
       final allMods = await _getAllModuleDefs();
       final result = <AppModule>[];
-      final isAdminCompany = companyId.toLowerCase() == 'admin';
+      final isAdminCompany = cid == 'admin';
 
       for (final m in defaultNativeModules) {
         // Admin-Firma: alle Module freigeschaltet; sonst: nur explizit enabled
@@ -112,10 +119,12 @@ class ModulesService {
         final def = allMods[m.id];
         final roles = def?['roles'] as List? ?? m.roles;
         if (roles.any((r) => r.toString().toLowerCase() == roleLower)) {
+          // Native Module: url immer leer, damit nie alte HTML-URLs aus Firestore geladen werden
+          final forceNative = ['admin', 'kundenverwaltung', 'modulverwaltung', 'menueverwaltung'].contains(m.id);
           result.add(AppModule(
             id: m.id,
             label: def?['label']?.toString() ?? m.label,
-            url: def?['url']?.toString() ?? m.url,
+            url: forceNative ? '' : (def?['url']?.toString() ?? m.url),
             icon: def?['icon']?.toString() ?? m.icon,
             roles: List<String>.from(roles.map((r) => r.toString())),
             order: (def?['order'] as num?)?.toInt() ?? m.order,
@@ -132,7 +141,8 @@ class ModulesService {
 
   Future<Map<String, bool>> _getCompanyEnabled(String companyId) async {
     try {
-      final snap = await _db.collection('kunden').doc(companyId).collection('modules').get();
+      final cid = _normalizeCompanyId(companyId);
+      final snap = await _db.collection('kunden').doc(cid).collection('modules').get();
       return {for (final d in snap.docs) d.id: d.data()['enabled'] == true};
     } catch (_) {
       return {};

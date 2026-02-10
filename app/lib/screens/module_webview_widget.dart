@@ -1,12 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:webview_flutter/webview_flutter.dart';
-import '../theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_config.dart';
 import '../models/app_module.dart';
+import '../theme/app_theme.dart';
+// Iframe nur auf Web (gleicher Kontext → Auth/Cookies), Stub sonst.
+import 'module_iframe_web.dart' if (dart.library.io) 'module_iframe_stub.dart' as module_iframe;
 
-/// Zeigt ein Modul in der Web-App (mit Auth-Bridge)
+/// Zeigt ein Web-Modul (z. B. Mitgliederverwaltung, Modul-/Menü-Verwaltung) in der App.
+/// - Native (Android/iOS): WebView mit optionaler Auth-Bridge.
+/// - Web: iframe-Einbettung (gleicher Kontext wie die App → Auth/Cookies, Zugriff auf richtige Datenbank).
+/// Alle Modul-URLs laufen über diese Komponente; Zugriff auf Firestore/Auth wie in der nativen App (rettbase-app).
 class ModuleWebViewWidget extends StatefulWidget {
   final AppModule module;
   final String companyId;
@@ -26,14 +32,15 @@ class ModuleWebViewWidget extends StatefulWidget {
 }
 
 class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
-  late final WebViewController _controller;
+  WebViewController? _controller;
   bool _isLoading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _initWebView();
+    if (!kIsWeb) _initWebView();
+    else _isLoading = false;
   }
 
   String _fullUrl(String path) {
@@ -50,7 +57,7 @@ class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
         widget.loginEmail!.isNotEmpty &&
         widget.loginPassword!.isNotEmpty;
 
-    _controller = WebViewController()
+    final ctrl = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
       ..enableZoom(true)
@@ -84,10 +91,11 @@ class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
     if (needsAuth) {
       final html = _authBridgeHtml(widget.loginEmail!, widget.loginPassword!, url);
       final baseUrl = 'https://${widget.companyId}.${AppConfig.rootDomain}/';
-      _controller.loadHtmlString(html, baseUrl: baseUrl);
+      ctrl.loadHtmlString(html, baseUrl: baseUrl);
     } else {
-      _controller.loadRequest(Uri.parse(url));
+      ctrl.loadRequest(Uri.parse(url));
     }
+    setState(() => _controller = ctrl);
   }
 
   String _authBridgeHtml(String email, String password, String redirectUrl) {
@@ -101,13 +109,20 @@ class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
 <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
 <script>
-firebase.initializeApp({apiKey:"AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA",authDomain:"rett-fe0fa.firebaseapp.com",projectId:"rett-fe0fa",storageBucket:"rett-fe0fa.firebasestorage.app",messagingSenderId:"740721219821",appId:"1:740721219821:web:a8e7f8070f875866ccd4e4"});
+firebase.initializeApp({apiKey:"AIzaSyCl67Qcs2Z655Y0507NG6o9WCL4twr65uc",authDomain:"rettbase-app.firebaseapp.com",projectId:"rettbase-app",storageBucket:"rettbase-app.firebasestorage.app",messagingSenderId:"339125193380",appId:"1:339125193380:web:350966b45a875fae8eb431"});
 firebase.auth().signInWithEmailAndPassword($e,$p).then(function(){window.location.replace($r);}).catch(function(err){document.getElementById("msg").innerHTML="<p style=color:red>Fehler: "+(err.message||err.code)+"</p>";});
 </script></body></html>''';
   }
 
   @override
   Widget build(BuildContext context) {
+    // Web-Plattform: Modul im iframe einbetten (gleicher Browser-Kontext → Auth/Cookies, Daten werden geladen)
+    if (kIsWeb) {
+      return SizedBox.expand(
+        child: module_iframe.buildModuleIframe(widget.companyId, widget.module.url),
+      );
+    }
+
     if (_error != null) {
       return Center(
         child: Padding(
@@ -136,9 +151,13 @@ firebase.auth().signInWithEmailAndPassword($e,$p).then(function(){window.locatio
       );
     }
 
+    if (_controller == null) {
+      return const Center(child: CircularProgressIndicator(color: Color(0xFFE63946)));
+    }
+
     return Stack(
       children: [
-        WebViewWidget(controller: _controller),
+        WebViewWidget(controller: _controller!),
         if (_isLoading)
           Container(
             color: Colors.white,

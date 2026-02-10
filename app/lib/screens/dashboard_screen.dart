@@ -29,6 +29,9 @@ import 'profile_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
 import 'kundenverwaltung_screen.dart';
+import 'mitarbeiterverwaltung_screen.dart';
+import 'modulverwaltung_screen.dart';
+import 'menueverwaltung_screen.dart';
 
 /// Natives Dashboard nach Login – HomeScreen mit Modul-Shortcuts.
 class DashboardScreen extends StatefulWidget {
@@ -295,25 +298,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
         break;
       case 'admin':
+        screen = MitarbeiterverwaltungScreen(
+          companyId: widget.companyId,
+          userRole: _userRole,
+          onBack: onBack,
+          hideAppBar: true,
+        );
+        break;
       case 'modulverwaltung':
+        screen = ModulverwaltungScreen(
+          companyId: widget.companyId,
+          userRole: _userRole,
+          onBack: onBack,
+          hideAppBar: true,
+        );
+        break;
       case 'menueverwaltung':
-        if (mod.url.isNotEmpty) {
-          screen = ModuleWebViewScreen(
-            module: mod,
+        screen = MenueverwaltungScreen(
+          companyId: widget.companyId,
+          userRole: _userRole,
+          onBack: onBack,
+          hideAppBar: true,
+        );
+        break;
+      default:
+        // Fallback: Alte HTML-URLs → native Screens (verhindert 404)
+        if (mod.url.contains('mitarbeiterverwaltung.html')) {
+          screen = MitarbeiterverwaltungScreen(
+            companyId: widget.companyId,
+            userRole: _userRole,
+            onBack: onBack,
+            hideAppBar: true,
+          );
+        } else if (mod.url.contains('kundenverwaltung.html')) {
+          screen = KundenverwaltungScreen(
             companyId: widget.companyId,
             onBack: onBack,
             hideAppBar: true,
           );
-        } else {
-          screen = PlaceholderModuleScreen(
-            moduleName: mod.label,
+        } else if (mod.url.contains('modulverwaltung.html')) {
+          screen = ModulverwaltungScreen(
+            companyId: widget.companyId,
+            userRole: _userRole,
             onBack: onBack,
             hideAppBar: true,
           );
-        }
-        break;
-      default:
-        if (mod.url.isNotEmpty) {
+        } else if (mod.url.contains('menue.html')) {
+          screen = MenueverwaltungScreen(
+            companyId: widget.companyId,
+            userRole: _userRole,
+            onBack: onBack,
+            hideAppBar: true,
+          );
+        } else if (mod.url.isNotEmpty) {
           screen = ModuleWebViewScreen(
             module: mod,
             companyId: widget.companyId,
@@ -489,12 +526,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         backgroundColor: AppTheme.headerBg,
         foregroundColor: Colors.white,
-        toolbarHeight: 70,
+        toolbarHeight: MediaQuery.of(context).size.width < 600 ? 56 : 70,
         title: GestureDetector(
           onTap: _goToHome,
           child: Image.asset(
             'img/rettbase.png',
-            height: 48,
+            height: MediaQuery.of(context).size.width < 600 ? 36 : 48,
             fit: BoxFit.contain,
           ),
         ),
@@ -506,32 +543,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 surfaceTintColor: Colors.transparent,
               ),
             ),
-            child: PopupMenuButton<String>(
+              child: PopupMenuButton<String>(
               offset: const Offset(0, 48),
               color: AppTheme.surfaceBg,
               surfaceTintColor: Colors.transparent,
-              child: Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceBg,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppTheme.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.person_outline, size: 20, color: AppTheme.textPrimary),
-                    const SizedBox(width: 8),
-                    Text(
-                      _userDisplayShort,
-                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w500),
-                      overflow: TextOverflow.ellipsis,
+              child: Builder(
+                builder: (context) {
+                  final showLabel = MediaQuery.sizeOf(context).width > 360;
+                  return Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: showLabel ? 12 : 8,
+                      vertical: 8,
                     ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.arrow_drop_down, color: AppTheme.textPrimary, size: 24),
-                  ],
-                ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceBg,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.border),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person_outline, size: 20, color: AppTheme.textPrimary),
+                        if (showLabel) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            _userDisplayShort,
+                            style: TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w500),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Icon(Icons.arrow_drop_down, color: AppTheme.textPrimary, size: 24),
+                      ],
+                    ),
+                  );
+                },
               ),
             onSelected: (v) {
               if (v == 'profil') {

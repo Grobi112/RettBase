@@ -1,5 +1,27 @@
 import 'package:flutter/material.dart';
 
+/// Responsive Breakpoints für Handy (Hochformat), Tablet, Desktop
+class Responsive {
+  static bool isCompact(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < 400;
+  static bool isNarrow(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < 600;
+  static bool isMedium(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < 900;
+
+  /// Horizontales Padding: 16 auf Handy, 20 tablet, 24 desktop
+  static double horizontalPadding(BuildContext context) =>
+      isCompact(context) ? 16 : (isNarrow(context) ? 18 : 24);
+
+  /// Gibt Wert für narrow/wide zurück
+  static T value<T>(BuildContext context, {required T narrow, required T wide}) =>
+      isNarrow(context) ? narrow : wide;
+
+  /// Spalten für Grid: 2 auf Handy, 3 auf Tablet+
+  static int shortcutColumns(BuildContext context) =>
+      isCompact(context) ? 2 : (isNarrow(context) ? 2 : 3);
+}
+
 /// Design wie Web-App (rettbase CSS): #1e1f26, #0ea5e9, #f4f5f7, Segoe-UI-Stil
 class AppTheme {
   static const Color primary = Color(0xFF0EA5E9);

@@ -16,6 +16,7 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    debugPrint('RettBase Firebase: project=${Firebase.app().options.projectId}');
   } catch (e) {
     debugPrint('Firebase Init Fehler: $e');
     // App trotzdem starten – läuft mit eingeschränkter Funktionalität
@@ -67,10 +68,11 @@ class _RettBaseHomeState extends State<RettBaseHome> {
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
+    // Kunden-ID nur einmal abfragen: nach dem ersten Eintrag direkt zum Login.
     final companyConfigured = prefs.getBool('rettbase_company_configured') ?? false;
     final companyId = prefs.getString('rettbase_company_id') ??
         prefs.getString('rettbase_subdomain') ??
-        AppConfig.defaultKundenId;
+        '';
 
     if (!mounted) return;
 

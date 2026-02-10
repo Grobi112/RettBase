@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../app_config.dart';
 import '../theme/app_theme.dart';
 import '../services/login_service.dart';
 import 'company_id_screen.dart';
 import 'dashboard_screen.dart';
 
-/// Login – RettBase-Design, Logo korrekt, klarer Aufbau.
+/// Kunden-ID für Firestore/Rollen konsistent kleinschreiben (z. B. "Admin" → "admin").
+String _normalizeCompanyId(String companyId) =>
+    companyId.trim().toLowerCase();
+
+/// Login – einziger Einstieg für Web-App und Native App.
+/// Nutzt [LoginService.resolveLoginEmail] (112+admin sowie alle anderen Kunden, gleiche Logik).
+/// RettBase-Design, Logo, E-Mail/Personalnummer + Passwort.
 class LoginScreen extends StatefulWidget {
   final String companyId;
 
@@ -37,7 +45,22 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String _translateAuthError(String? message) {
+  String _translateAuthError(String? message, {String? code, String? resolvedEmail}) {
+    if (code != null && code.isNotEmpty) {
+      switch (code) {
+        case 'user-not-found':
+        case 'invalid-credential':
+          return 'Passwort falsch oder Konto existiert nicht. Bei Personalnummer-Login wird das Konto beim ersten Login automatisch angelegt.';
+        case 'wrong-password':
+          return 'Falsches Passwort.';
+        case 'too-many-requests':
+          return 'Zu viele Versuche. Bitte später erneut versuchen.';
+        case 'network-request-failed':
+          return 'Keine Verbindung. Bitte prüfen Sie Ihr Netzwerk.';
+        case 'user-disabled':
+          return 'Dieses Konto wurde deaktiviert.';
+      }
+    }
     if (message == null || message.isEmpty) return 'Anmeldung fehlgeschlagen.';
     if (message.contains('malformed') || message.contains('invalid-credential')) {
       return 'Anmeldedaten ungültig. Bitte prüfen Sie E-Mail/Personalnummer und Passwort.';
@@ -70,24 +93,71 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
 
+    String resolvedEmail = '';
+    String? mitarbeiterDocPath;
     try {
-      final email = await _loginService.resolveLoginEmail(userInput, widget.companyId);
+      final info = await _loginService.resolveLoginInfo(userInput, widget.companyId);
+      resolvedEmail = info.email;
+      mitarbeiterDocPath = info.mitarbeiterDocPath;
+      debugPrint('RettBase Login: Anmeldung mit E-Mail=$resolvedEmail (Kunden-ID=${widget.companyId})');
       await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
+        email: resolvedEmail,
         password: password,
       );
       if (!mounted) return;
+      final companyId = _normalizeCompanyId(widget.companyId);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => DashboardScreen(companyId: widget.companyId),
+          builder: (_) => DashboardScreen(companyId: companyId),
         ),
       );
     } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = _translateAuthError(e.message);
-      });
+      if (e.code == 'invalid-credential' || e.code == 'user-not-found') {
+        try {
+          debugPrint('RettBase Login: Account nicht vorhanden – erstelle Firebase Auth Nutzer für $resolvedEmail');
+          final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: resolvedEmail,
+            password: password,
+          );
+          if (mitarbeiterDocPath != null) {
+            final updates = <String, dynamic>{
+              'uid': userCredential.user!.uid,
+              'updatedAt': FieldValue.serverTimestamp(),
+            };
+            if (resolvedEmail.endsWith('.${AppConfig.rootDomain}')) {
+              updates['pseudoEmail'] = resolvedEmail;
+              updates['email'] = resolvedEmail;
+            }
+            await FirebaseFirestore.instance.doc(mitarbeiterDocPath).set(updates, SetOptions(merge: true));
+          }
+          if (!mounted) return;
+          final companyId = _normalizeCompanyId(widget.companyId);
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => DashboardScreen(companyId: companyId),
+            ),
+          );
+        } on FirebaseAuthException catch (createE) {
+          if (!mounted) return;
+          if (createE.code == 'email-already-in-use') {
+            setState(() {
+              _loading = false;
+              _error = 'Passwort falsch. Bitte prüfen Sie Ihr Passwort.';
+            });
+          } else {
+            setState(() {
+              _loading = false;
+              _error = _translateAuthError(createE.message, code: createE.code, resolvedEmail: resolvedEmail);
+            });
+          }
+        }
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = _translateAuthError(e.message, code: e.code, resolvedEmail: resolvedEmail.isNotEmpty ? resolvedEmail : null);
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -183,7 +253,10 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.horizontalPadding(context),
+              vertical: 20,
+            ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
               child: Column(

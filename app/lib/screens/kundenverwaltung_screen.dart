@@ -146,14 +146,14 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
     final enabledModules = await _service.getCompanyModules(kunde.id);
     final allModuleDefs = await _service.getAllModuleDefs();
     if (!mounted) return;
-    final result = await showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (ctx) => _EditKundeSheet(
-        kunde: kunde,
-        enabledModules: enabledModules,
-        allModuleDefs: allModuleDefs,
+    final result = await Navigator.of(context, rootNavigator: true).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => _EditKundeScreen(
+          kunde: kunde,
+          enabledModules: enabledModules,
+          allModuleDefs: allModuleDefs,
+        ),
       ),
     );
     if (result != null && mounted) {
@@ -229,7 +229,7 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(Responsive.horizontalPadding(context)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -244,48 +244,27 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _statusFilter,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('Alle Status')),
-                          DropdownMenuItem(value: 'active', child: Text('Aktiv')),
-                          DropdownMenuItem(value: 'inactive', child: Text('Inaktiv')),
-                          DropdownMenuItem(value: 'suspended', child: Text('Gesperrt')),
-                        ],
-                        onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _sortBy,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'name-asc', child: Text('Name A–Z')),
-                          DropdownMenuItem(value: 'name-desc', child: Text('Name Z–A')),
-                          DropdownMenuItem(value: 'date-desc', child: Text('Neueste zuerst')),
-                          DropdownMenuItem(value: 'date-asc', child: Text('Älteste zuerst')),
-                          DropdownMenuItem(value: 'status', child: Text('Status')),
-                        ],
-                        onChanged: (v) => setState(() => _sortBy = v ?? 'name-asc'),
-                      ),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (_, bc) {
+                    final stackFilters = bc.maxWidth < 400;
+                    return stackFilters
+                        ? Column(
+                            children: [
+                              _buildStatusDropdown(),
+                              const SizedBox(height: 12),
+                              _buildSortDropdown(),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              Expanded(child: _buildStatusDropdown()),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildSortDropdown()),
+                            ],
+                          );
+                  },
                 ),
+                const SizedBox(height: 12),
               ],
             ),
           ),
@@ -306,6 +285,45 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
       );
     }
     return scaffold;
+  }
+
+  Widget _buildStatusDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _statusFilter,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      items: const [
+        DropdownMenuItem(value: 'all', child: Text('Alle Status')),
+        DropdownMenuItem(value: 'active', child: Text('Aktiv')),
+        DropdownMenuItem(value: 'inactive', child: Text('Inaktiv')),
+        DropdownMenuItem(value: 'suspended', child: Text('Gesperrt')),
+      ],
+      onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
+    );
+  }
+
+  Widget _buildSortDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _sortBy,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      items: const [
+        DropdownMenuItem(value: 'name-asc', child: Text('Name A–Z')),
+        DropdownMenuItem(value: 'name-desc', child: Text('Name Z–A')),
+        DropdownMenuItem(value: 'date-desc', child: Text('Neueste zuerst')),
+        DropdownMenuItem(value: 'date-asc', child: Text('Älteste zuerst')),
+        DropdownMenuItem(value: 'status', child: Text('Status')),
+      ],
+      onChanged: (v) => setState(() => _sortBy = v ?? 'name-asc'),
+    );
   }
 
   Widget _buildBody() {
@@ -353,7 +371,12 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
       onRefresh: _load,
       color: AppTheme.primary,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        padding: EdgeInsets.fromLTRB(
+          Responsive.horizontalPadding(context),
+          0,
+          Responsive.horizontalPadding(context),
+          24,
+        ),
         itemCount: list.length,
         itemBuilder: (_, i) {
           final k = list[i];
@@ -364,7 +387,10 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
               onTap: () => _openEdit(k),
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: EdgeInsets.symmetric(
+                  horizontal: Responsive.horizontalPadding(context),
+                  vertical: 12,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -444,22 +470,22 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
   }
 }
 
-class _EditKundeSheet extends StatefulWidget {
+class _EditKundeScreen extends StatefulWidget {
   final Kunde kunde;
   final Map<String, bool> enabledModules;
   final Map<String, Map<String, dynamic>> allModuleDefs;
 
-  const _EditKundeSheet({
+  const _EditKundeScreen({
     required this.kunde,
     required this.enabledModules,
     required this.allModuleDefs,
   });
 
   @override
-  State<_EditKundeSheet> createState() => _EditKundeSheetState();
+  State<_EditKundeScreen> createState() => _EditKundeScreenState();
 }
 
-class _EditKundeSheetState extends State<_EditKundeSheet> {
+class _EditKundeScreenState extends State<_EditKundeScreen> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _addressCtrl;
   late final TextEditingController _zipCityCtrl;
@@ -529,113 +555,88 @@ class _EditKundeSheetState extends State<_EditKundeSheet> {
         .toList()
       ..sort((a, b) => ((a.value['order'] as num?) ?? 999).compareTo((b.value['order'] as num?) ?? 999));
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.9,
-      maxChildSize: 1,
-      minChildSize: 0.5,
-      expand: false,
-      builder: (_, scrollCtrl) => Padding(
+    return Scaffold(
+      backgroundColor: AppTheme.surfaceBg,
+      appBar: AppBar(
+        title: const Text('Kunde bearbeiten'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        backgroundColor: AppTheme.headerBg,
+        foregroundColor: Colors.white,
+      ),
+      body: Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
           children: [
-            SafeArea(
-              bottom: false,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                color: AppTheme.headerBg,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Kunde bearbeiten',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
-                  ],
-                ),
+            TextField(
+              controller: _nameCtrl,
+              decoration: const InputDecoration(labelText: 'Firmenname'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _addressCtrl,
+              decoration: const InputDecoration(labelText: 'Anschrift'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _zipCityCtrl,
+              decoration: const InputDecoration(labelText: 'PLZ und Ort'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneCtrl,
+              decoration: const InputDecoration(labelText: 'Telefon'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _emailCtrl,
+              decoration: const InputDecoration(labelText: 'E-Mail'),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _kundenIdCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Kunden-ID',
+                hintText: 'z.B. feuerwehr-luenen',
               ),
             ),
-            Expanded(
-              child: ListView(
-                controller: scrollCtrl,
-                padding: const EdgeInsets.all(20),
-                children: [
-                  TextField(
-                    controller: _nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Firmenname'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _addressCtrl,
-                    decoration: const InputDecoration(labelText: 'Anschrift'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _zipCityCtrl,
-                    decoration: const InputDecoration(labelText: 'PLZ und Ort'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _phoneCtrl,
-                    decoration: const InputDecoration(labelText: 'Telefon'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _emailCtrl,
-                    decoration: const InputDecoration(labelText: 'E-Mail'),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _kundenIdCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Kunden-ID',
-                      hintText: 'z.B. feuerwehr-luenen',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _status,
-                    decoration: const InputDecoration(labelText: 'Status'),
-                    items: const [
-                      DropdownMenuItem(value: 'active', child: Text('Aktiv')),
-                      DropdownMenuItem(value: 'inactive', child: Text('Inaktiv')),
-                      DropdownMenuItem(value: 'suspended', child: Text('Gesperrt')),
-                    ],
-                    onChanged: (v) => setState(() => _status = v ?? 'active'),
-                  ),
-                  const SizedBox(height: 24),
-                  Text('Module freischalten', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  ...configurableModules.map((e) {
-                    final id = e.key;
-                    final label = (e.value['label'] ?? id).toString();
-                    return CheckboxListTile(
-                      title: Text(label),
-                      value: _modules[id] == true,
-                      onChanged: (v) => setState(() => _modules[id] = v ?? false),
-                    );
-                  }),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _save,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: const Text('Speichern'),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _status,
+              decoration: const InputDecoration(labelText: 'Status'),
+              items: const [
+                DropdownMenuItem(value: 'active', child: Text('Aktiv')),
+                DropdownMenuItem(value: 'inactive', child: Text('Inaktiv')),
+                DropdownMenuItem(value: 'suspended', child: Text('Gesperrt')),
+              ],
+              onChanged: (v) => setState(() => _status = v ?? 'active'),
             ),
+            const SizedBox(height: 24),
+            Text('Module freischalten', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            ...configurableModules.map((e) {
+              final id = e.key;
+              final label = (e.value['label'] ?? id).toString();
+              return CheckboxListTile(
+                title: Text(label),
+                value: _modules[id] == true,
+                onChanged: (v) => setState(() => _modules[id] = v ?? false),
+              );
+            }),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text('Speichern'),
+            ),
+            const SizedBox(height: 24),
           ],
         ),
       ),

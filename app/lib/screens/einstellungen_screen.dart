@@ -33,7 +33,7 @@ class _EinstellungenScreenState extends State<EinstellungenScreen> {
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(Responsive.horizontalPadding(context)),
         children: [
           Text(
             'Globale Einstellungen',

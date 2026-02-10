@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    // Fallback: Jeder eingeloggte Nutzer darf alles lesen/schreiben
+    match /{document=**} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Collection-Group-Queries (für getAuthData)
+    match /{path=**}/mitarbeiter/{mitarbeiterId} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+    match /{path=**}/users/{userId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    // Kunden-Collections
+    match /kunden/{kundenId} {
+      allow read, write: if isLoggedIn();
+
+      match /mitarbeiter/{mitarbeiterId} {
+        allow read: if true;
+        allow write: if isLoggedIn();
+      }
+
+      match /users/{userId} {
+        allow read, write: if isLoggedIn();
+        match /userTiles/{docId} {
+          allow read, write: if isLoggedIn();
+        }
+      }
+
+      match /modules/{moduleId} {
+        allow read, write: if isLoggedIn();
+      }
+
+      match /chats/{chatId} {
+        allow read, write: if isLoggedIn();
+        match /messages/{messageId} {
+          allow read, write: if isLoggedIn();
+        }
+      }
+
+      match /{document=**} {
+        allow read, write: if isLoggedIn();
+      }
+    }
+
+    match /settings/{document=**} {
+      allow read, write: if isLoggedIn();
+    }
+  }
+}

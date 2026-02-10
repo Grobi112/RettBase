@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,6 +9,8 @@ import '../services/auth_service.dart';
 import 'company_id_screen.dart';
 import 'login_screen.dart';
 
+/// Zeigt die RettBase-Webseite in einer WebView (Android/iOS).
+/// Auf der Web-Plattform wird die URL im Browser geöffnet (WebView wird dort nicht unterstützt).
 class WebViewScreen extends StatefulWidget {
   final String companyId;
   final String? loginEmail;
@@ -25,14 +28,15 @@ class WebViewScreen extends StatefulWidget {
 }
 
 class _WebViewScreenState extends State<WebViewScreen> {
-  late final WebViewController _controller;
+  WebViewController? _controller;
   bool _isLoading = true;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _initWebView();
+    if (!kIsWeb) _initWebView();
+    else _isLoading = false;
   }
 
   String _buildAuthBridgeHtml(String email, String password, String companyId) {
@@ -49,12 +53,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
 <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
 <script>
 var config = {
-  apiKey: "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA",
-  authDomain: "rett-fe0fa.firebaseapp.com",
-  projectId: "rett-fe0fa",
-  storageBucket: "rett-fe0fa.firebasestorage.app",
-  messagingSenderId: "740721219821",
-  appId: "1:740721219821:web:a8e7f8070f875866ccd4e4"
+  apiKey: "AIzaSyCl67Qcs2Z655Y0507NG6o9WCL4twr65uc",
+  authDomain: "rettbase-app.firebaseapp.com",
+  projectId: "rettbase-app",
+  storageBucket: "rettbase-app.firebasestorage.app",
+  messagingSenderId: "339125193380",
+  appId: "1:339125193380:web:350966b45a875fae8eb431"
 };
 firebase.initializeApp(config);
 var auth = firebase.auth();
@@ -71,7 +75,7 @@ auth.signInWithEmailAndPassword($escapedEmail, $escapedPassword)
   }
 
   void _initWebView() {
-    _controller = WebViewController()
+    final ctrl = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
       ..enableZoom(true)
@@ -121,21 +125,64 @@ auth.signInWithEmailAndPassword($escapedEmail, $escapedPassword)
         widget.companyId,
       );
       final baseUrl = 'https://${widget.companyId}.${AppConfig.rootDomain}/';
-      _controller.loadHtmlString(html, baseUrl: baseUrl);
+      ctrl.loadHtmlString(html, baseUrl: baseUrl);
     } else {
       final url = AppConfig.getBaseUrl(widget.companyId);
-      _controller.loadRequest(Uri.parse(url));
+      ctrl.loadRequest(Uri.parse(url));
     }
+    setState(() => _controller = ctrl);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Web-Plattform: WebView wird nicht unterstützt → RettBase im Browser öffnen
+    if (kIsWeb) {
+      final url = AppConfig.getBaseUrl(widget.companyId);
+      return Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFE63946),
+          foregroundColor: Colors.white,
+          title: Text('RettBase – ${widget.companyId}.${AppConfig.rootDomain}'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.open_in_browser, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'RettBase im Browser öffnen',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Die Webseite wird in einer neuen Registerkarte geöffnet.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault),
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Jetzt öffnen'),
+                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFFE63946)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (await _controller.canGoBack()) {
-          _controller.goBack();
+        if (_controller != null && await _controller!.canGoBack()) {
+          _controller!.goBack();
         } else {
           if (context.mounted) _showExitDialog();
         }
@@ -148,7 +195,7 @@ auth.signInWithEmailAndPassword($escapedEmail, $escapedPassword)
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: () => _controller.reload(),
+              onPressed: _controller != null ? () => _controller!.reload() : null,
               tooltip: 'Aktualisieren',
             ),
             PopupMenuButton<String>(
@@ -160,8 +207,8 @@ auth.signInWithEmailAndPassword($escapedEmail, $escapedPassword)
                       builder: (_) => const CompanyIdScreen(),
                     ),
                   );
-                } else if (value == 'reload') {
-                  _controller.reload();
+                } else if (value == 'reload' && _controller != null) {
+                  _controller!.reload();
                 } else if (value == 'logout') {
                   _showLogoutDialog();
                 }
@@ -195,61 +242,65 @@ auth.signInWithEmailAndPassword($escapedEmail, $escapedPassword)
             ),
           ],
         ),
-        body: Stack(
-          children: [
-            if (_errorMessage != null)
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Verbindungsfehler',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _errorMessage!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 24),
-                      FilledButton.icon(
-                        onPressed: () {
-                          setState(() => _errorMessage = null);
-                          _controller.reload();
-                        },
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Erneut versuchen'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFE63946),
+        body: _controller == null
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFE63946)),
+              )
+            : Stack(
+                children: [
+                  if (_errorMessage != null)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Verbindungsfehler',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _errorMessage!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                            const SizedBox(height: 24),
+                            FilledButton.icon(
+                              onPressed: () {
+                                setState(() => _errorMessage = null);
+                                _controller!.reload();
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Erneut versuchen'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFFE63946),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              WebViewWidget(controller: _controller),
-            if (_isLoading && _errorMessage == null)
-              Container(
-                color: Colors.white,
-                child: const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircularProgressIndicator(color: Color(0xFFE63946)),
-                      SizedBox(height: 16),
-                      Text('Lade RettBase…'),
-                    ],
-                  ),
-                ),
+                    )
+                  else
+                    WebViewWidget(controller: _controller!),
+                  if (_isLoading && _errorMessage == null)
+                    Container(
+                      color: Colors.white,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(color: Color(0xFFE63946)),
+                            SizedBox(height: 16),
+                            Text('Lade RettBase…'),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
-          ],
-        ),
       ),
     );
   }

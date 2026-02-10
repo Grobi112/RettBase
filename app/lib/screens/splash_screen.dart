@@ -33,31 +33,42 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 400;
     return Scaffold(
       backgroundColor: AppTheme.headerBg,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              'img/rettbase.png',
-              height: 80,
-              fit: BoxFit.contain,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: narrow ? 20 : 32,
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Rettungsdienst-Management',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.white.withOpacity(0.95),
-                letterSpacing: 0.5,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'img/rettbase.png',
+                  height: narrow ? 56 : 80,
+                  fit: BoxFit.contain,
+                ),
+                SizedBox(height: narrow ? 16 : 24),
+                Text(
+                  'Rettungsdienst-Management',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: narrow ? 20 : 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white.withOpacity(0.95),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                SizedBox(height: narrow ? 20 : 28),
+                _ModernLoadingBar(
+                  shimmerAnimation: _shimmerAnimation,
+                  narrow: narrow,
+                ),
+              ],
             ),
-            const SizedBox(height: 28),
-            _ModernLoadingBar(shimmerAnimation: _shimmerAnimation),
-          ],
+          ),
         ),
       ),
     );
@@ -66,13 +77,14 @@ class _SplashScreenState extends State<SplashScreen>
 
 class _ModernLoadingBar extends StatelessWidget {
   final Animation<double> shimmerAnimation;
+  final bool narrow;
 
-  const _ModernLoadingBar({required this.shimmerAnimation});
+  const _ModernLoadingBar({required this.shimmerAnimation, this.narrow = false});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 240,
+      width: narrow ? 180 : 240,
       height: 8,
       child: AnimatedBuilder(
         animation: shimmerAnimation,

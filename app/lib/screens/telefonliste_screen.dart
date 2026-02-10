@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -30,6 +31,7 @@ class TelefonlisteScreen extends StatefulWidget {
 
 class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
   final _service = MitarbeiterService();
+  final _functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
   final _searchController = TextEditingController();
 
   static const _editAllRoles = ['superadmin', 'admin', 'rettungsdienstleitung', 'leiterssd', 'geschaeftsfuehrung', 'wachleitung', 'koordinator'];
@@ -60,6 +62,19 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Konvertiert Updates für Cloud Function (Timestamp->millis, {__delete:true} bleibt)
+  Map<String, dynamic> _prepareForCloudFunction(Map<String, dynamic> updates) {
+    final out = <String, dynamic>{};
+    for (final e in updates.entries) {
+      if (e.value is Timestamp) {
+        out[e.key] = (e.value as Timestamp).millisecondsSinceEpoch;
+      } else {
+        out[e.key] = e.value;
+      }
+    }
+    return out;
   }
 
   List<Mitarbeiter> _filter(List<Mitarbeiter> list) {
@@ -109,7 +124,12 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
             qualifikationen: _qualifikationen,
         fuehrerscheinklassen: _fuehrerscheinklassen,
             onSave: (updates) async {
-              await _service.updateMitarbeiterFields(widget.companyId, m.id, updates);
+              final data = _prepareForCloudFunction(updates);
+              await _functions.httpsCallable('saveMitarbeiterDoc').call({
+                'companyId': widget.companyId,
+                'docId': m.id,
+                'data': data,
+              });
               if (ctx.mounted) Navigator.of(ctx).pop();
               if (mounted) ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Mitarbeiter aktualisiert.')),
@@ -137,7 +157,7 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(Responsive.horizontalPadding(context)),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
@@ -377,8 +397,8 @@ class _EditSheetState extends State<_EditSheet> {
       final telefon = _telefonCtrl.text.trim();
       updates['telefon'] = telefon.isNotEmpty ? telefon : null;
       updates['telefonnummer'] = telefon.isNotEmpty ? telefon : null;
-      updates['handynummer'] = FieldValue.delete();
-      updates['handy'] = FieldValue.delete();
+      updates['handynummer'] = {'__delete': true};
+      updates['handy'] = {'__delete': true};
 
       await widget.onSave(updates);
     } finally {

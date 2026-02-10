@@ -14,7 +14,7 @@ class CompanyIdScreen extends StatefulWidget {
 }
 
 class _CompanyIdScreenState extends State<CompanyIdScreen> {
-  final _controller = TextEditingController(text: AppConfig.defaultKundenId);
+  final _controller = TextEditingController();
   final _focusNode = FocusNode();
   bool _loading = false;
   String? _error;
@@ -70,95 +70,92 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.surfaceBg,
+      backgroundColor: AppTheme.headerBg,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 48),
-              Center(
-                child: Image.asset(
-                  'img/rettbase.png',
-                  height: 72,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Unternehmen auswählen',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Gib die Kunden-ID deines RettBase-Kontos ein.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 15,
-                ),
-              ),
-              const SizedBox(height: 32),
-              TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                textInputAction: TextInputAction.done,
-                keyboardType: TextInputType.text,
-                autocorrect: false,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_\.]')),
-                ],
-                decoration: InputDecoration(
-                  labelText: 'Kunden-ID',
-                  hintText: 'z.B. admin',
-                  suffixText: '.${AppConfig.rootDomain}',
-                  errorText: _error,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.horizontalPadding(context),
+              vertical: 20,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Image.asset(
+                    'img/rettbase.png',
+                    height: 64,
+                    fit: BoxFit.contain,
                   ),
-                ),
-                onSubmitted: (_) => _saveAndContinue(),
-              ),
-              const SizedBox(height: 16),
-              ...AppConfig.knownKundenIds.map((s) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: OutlinedButton(
-                      onPressed: _loading
-                          ? null
-                          : () {
-                              _controller.text = s;
-                              setState(() => _error = null);
-                            },
-                      child: Text('$s.${AppConfig.rootDomain}'),
+                  const SizedBox(height: 48),
+                  Text(
+                    'Kunden-ID',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
-                  )),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _loading ? null : _saveAndContinue,
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
                   ),
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    textInputAction: TextInputAction.done,
+                    keyboardType: TextInputType.text,
+                    autocorrect: false,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
+                    ],
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    decoration: InputDecoration(
+                      hintText: 'z.B. admin',
+                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                      errorText: _error,
+                      errorStyle: TextStyle(color: Colors.red.shade300, fontSize: 13),
+                      errorMaxLines: 2,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: _error != null ? Colors.red.shade400 : Colors.transparent,
                         ),
-                      )
-                    : const Text('Weiter'),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: _error != null ? Colors.red.shade400 : AppTheme.primary,
+                          width: 1.5,
+                        ),
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFF2D3139),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                    ),
+                    onSubmitted: (_) => _saveAndContinue(),
+                  ),
+                  const SizedBox(height: 32),
+                  FilledButton(
+                    onPressed: _loading ? null : _saveAndContinue,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: _loading
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text('Weiter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

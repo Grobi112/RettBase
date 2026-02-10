@@ -227,70 +227,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(Responsive.horizontalPadding(context)),
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildPhotoSection(),
-                          const SizedBox(height: 12),
-                          _buildWeitereDetailsDropdown(),
-                        ],
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _buildReadOnlyField('Personalnummer', _personalnummer ?? '—'),
-                            const SizedBox(height: 8),
-                            Row(
+                  Builder(
+                    builder: (context) {
+                      final stack = MediaQuery.sizeOf(context).width < 600;
+                      return stack
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(child: _buildField('Vorname', _vornameCtrl, TextInputType.name)),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildField('Name', _nameCtrl, TextInputType.name)),
+                                _buildPhotoSection(),
+                                const SizedBox(height: 16),
+                                _buildProfilesFormFields(),
                               ],
-                            ),
-                            const SizedBox(height: 8),
-                            _buildDateField(),
-                            const SizedBox(height: 8),
-                            Row(
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(child: _buildField('Straße', _strasseCtrl, TextInputType.streetAddress)),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildField('Haus-Nr.', _hausnrCtrl, TextInputType.text)),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildPhotoSection(),
+                                    const SizedBox(height: 12),
+                                    _buildWeitereDetailsDropdown(),
+                                  ],
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(child: _buildProfilesFormFields()),
                               ],
-                            ),
-                            Row(
-                              children: [
-                                Expanded(child: _buildField('PLZ', _plzCtrl, TextInputType.number)),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildField('Ort', _ortCtrl, TextInputType.streetAddress)),
-                              ],
-                            ),
-                            Row(
-                              children: [
-                                Expanded(child: _buildField('Telefonnummer', _telefonCtrl, TextInputType.phone)),
-                                const SizedBox(width: 12),
-                                Expanded(child: _buildField('E-Mail', _emailCtrl, TextInputType.emailAddress)),
-                              ],
-                            ),
-                            const SizedBox(height: 24),
-                            FilledButton(
-                              onPressed: _saving ? null : _save,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppTheme.primary,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                              ),
-                              child: _saving ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Speichern'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                            );
+                    },
                   ),
                 ],
               ),
@@ -306,6 +272,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
     return scaffold;
+  }
+
+  Widget _buildProfilesFormFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (MediaQuery.sizeOf(context).width >= 600) _buildWeitereDetailsDropdown(),
+        if (MediaQuery.sizeOf(context).width >= 600) const SizedBox(height: 8),
+        _buildReadOnlyField('Personalnummer', _personalnummer ?? '—'),
+        const SizedBox(height: 8),
+        Builder(
+          builder: (context) {
+            final narrow = MediaQuery.sizeOf(context).width < 400;
+            return narrow
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildField('Vorname', _vornameCtrl, TextInputType.name),
+                      const SizedBox(height: 8),
+                      _buildField('Name', _nameCtrl, TextInputType.name),
+                      const SizedBox(height: 8),
+                      _buildDateField(),
+                      const SizedBox(height: 8),
+                      _buildField('Straße', _strasseCtrl, TextInputType.streetAddress),
+                      const SizedBox(height: 8),
+                      _buildField('Haus-Nr.', _hausnrCtrl, TextInputType.text),
+                      const SizedBox(height: 8),
+                      _buildField('PLZ', _plzCtrl, TextInputType.number),
+                      const SizedBox(height: 8),
+                      _buildField('Ort', _ortCtrl, TextInputType.streetAddress),
+                      const SizedBox(height: 8),
+                      _buildField('Telefonnummer', _telefonCtrl, TextInputType.phone),
+                      const SizedBox(height: 8),
+                      _buildField('E-Mail', _emailCtrl, TextInputType.emailAddress),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _buildField('Vorname', _vornameCtrl, TextInputType.name)),
+                          const SizedBox(width: 12),
+                          Expanded(child: _buildField('Name', _nameCtrl, TextInputType.name)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _buildDateField(),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(child: _buildField('Straße', _strasseCtrl, TextInputType.streetAddress)),
+                          const SizedBox(width: 12),
+                          Expanded(child: _buildField('Haus-Nr.', _hausnrCtrl, TextInputType.text)),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Expanded(child: _buildField('PLZ', _plzCtrl, TextInputType.number)),
+                          const SizedBox(width: 12),
+                          Expanded(child: _buildField('Ort', _ortCtrl, TextInputType.streetAddress)),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Expanded(child: _buildField('Telefonnummer', _telefonCtrl, TextInputType.phone)),
+                          const SizedBox(width: 12),
+                          Expanded(child: _buildField('E-Mail', _emailCtrl, TextInputType.emailAddress)),
+                        ],
+                      ),
+                    ],
+                  );
+          },
+        ),
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppTheme.primary,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
+          child: _saving ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Speichern'),
+        ),
+      ],
+    );
   }
 
   Widget _buildPhotoSection() {

@@ -108,7 +108,10 @@ class _HomeScreenState extends State<HomeScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
+          padding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.sizeOf(context).width < 600 ? 16 : 25,
+            vertical: MediaQuery.sizeOf(context).width < 600 ? 12 : 15,
+          ),
           decoration: BoxDecoration(
             color: Colors.white,
             boxShadow: [
@@ -122,35 +125,56 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Dashboard',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Dashboard',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                              fontSize: MediaQuery.sizeOf(context).width < 400 ? 18 : null,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _getGreetingName() != null
+                            ? '${_getGreeting()} ${_getGreetingName()}'
+                            : _getGreeting(),
+                        style: TextStyle(
+                          fontSize: MediaQuery.sizeOf(context).width < 400 ? 13 : 15,
+                          color: AppTheme.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (MediaQuery.sizeOf(context).width < 500) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatTime(),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textPrimary,
+                            fontFeatures: [const FontFeature.tabularFigures()],
                           ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _getGreetingName() != null
-                          ? '${_getGreeting()} ${_getGreetingName()}'
-                          : _getGreeting(),
-                      style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
-                    ),
-                  ],
-                ),
-                Text(
-                  _formatTime(),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
-                    fontFeatures: [const FontFeature.tabularFigures()],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
+                if (MediaQuery.sizeOf(context).width >= 500)
+                  Text(
+                    _formatTime(),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textPrimary,
+                      fontFeatures: [const FontFeature.tabularFigures()],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -159,18 +183,18 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: Container(
             color: AppTheme.surfaceBg,
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(MediaQuery.sizeOf(context).width < 500 ? 12 : 20),
             child: ValueListenableBuilder<List<String?>>(
               valueListenable: widget.containerSlotsListenable ?? _emptyContainerSlotsNotifier,
               builder: (context, slots, _) {
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                const crossAxisCount = 3;
+                final crossAxisCount = MediaQuery.sizeOf(context).width < 500 ? 2 : 3;
                 const rowCount = 2;
-                const spacing = 12.0;
+                final spacing = MediaQuery.sizeOf(context).width < 500 ? 10.0 : 12.0;
                 final availableWidth = constraints.maxWidth - (spacing * (crossAxisCount - 1));
                 final buttonWidth = availableWidth / crossAxisCount;
-                final buttonHeight = 35.0;
+                final buttonHeight = MediaQuery.sizeOf(context).width < 500 ? 44.0 : 35.0;
 
                 final containerTypes = slots.whereType<String>().toList();
                 final showContainers = containerTypes.isNotEmpty;
