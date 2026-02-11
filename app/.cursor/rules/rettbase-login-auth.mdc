@@ -1,0 +1,20 @@
+---
+description: RettBase Login- und Auth-Kontext (kkg/keg-luenen, Menü, Begrüßung)
+globs: lib/**/*.dart,functions/**/*.js
+alwaysApply: false
+---
+
+# RettBase Login & Auth
+
+## Kunden-ID vs. Firestore docId
+- Kunden-ID kann umbenannt sein (z.B. kkg-luenen); Firestore docId bleibt oft alt (keg-luenen)
+- Mitarbeiter liegen unter `kunden/{docId}/mitarbeiter` – immer docId nutzen, nicht kundenId
+- `kundeExists` Cloud Function löst kundenId → docId auf (sucht kundenId + subdomain, bevorzugt Doc mit anderer ID)
+
+## Kritische Patterns
+- **Shortcuts**: `List<AppModule?>.from(filtered)` verwenden, NICHT `.cast<AppModule?>()` – sonst schlägt `add(null)` fehl
+- **getCompanyBereich**: Fallback per kundenId/subdomain auch wenn Doc existiert (bereich kann fehlen)
+- **AuthDataService**: Suche per personalnummer, altEmail (domain aus Kunden-doc), pseudoEmail
+
+## Kontext-Dokument
+Vollständiger Fortschritt: `docs/KONTEXT_LOGIN_DASHBOARD.md`
