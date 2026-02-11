@@ -32,6 +32,8 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
 
   List<String?> _slots = [null, null];
   List<String> _kategorien = [];
+  List<String> _containerTypeIds = InformationssystemService.defaultContainerTypeIds;
+  Map<String, String> _containerLabels = InformationssystemService.defaultContainerLabels;
   final _neueKategorieCtrl = TextEditingController();
   bool _loading = true;
   bool _saving = false;
@@ -41,7 +43,7 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
   final _textCtrl = TextEditingController();
   DateTime _formDatum = DateTime.now();
   TimeOfDay _formUhrzeit = TimeOfDay.now();
-  String _formTyp = InformationssystemService.containerTypes.first;
+  String _formTyp = InformationssystemService.defaultContainerTypeIds.first;
   String _formKategorie = '';
   String _formLaufzeit = '1_monat';
 
@@ -92,12 +94,17 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
       final results = await Future.wait([
         _service.loadContainerOrder(widget.companyId),
         _service.loadKategorien(widget.companyId),
+        _service.loadContainerTypeOrder(widget.companyId),
+        _service.loadContainerTypeLabels(widget.companyId),
       ]);
       if (mounted) {
         setState(() {
           _slots = results[0] as List<String?>;
           _kategorien = results[1] as List<String>;
+          _containerTypeIds = (results[2] as List<String>).isNotEmpty ? results[2] as List<String> : InformationssystemService.defaultContainerTypeIds;
+          _containerLabels = (results[3] as Map<String, String>).isNotEmpty ? results[3] as Map<String, String> : InformationssystemService.defaultContainerLabels;
           if (_kategorien.isNotEmpty && _formKategorie.isEmpty) _formKategorie = _kategorien.first;
+          if (_containerTypeIds.isNotEmpty && !_containerTypeIds.contains(_formTyp)) _formTyp = _containerTypeIds.first;
           _loading = false;
         });
       }
@@ -183,7 +190,7 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
     if (t.isEmpty) return;
     if (_kategorien.contains(t)) return;
     setState(() {
-      _kategorien = [..._kategorien, t]..sort();
+      _kategorien = [..._kategorien, t];
       _neueKategorieCtrl.clear();
     });
   }
@@ -249,6 +256,8 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
                       _SlotDropdown(
                         label: 'Position 1 (links)',
                         value: _slots[0],
+                        containerTypeIds: _containerTypeIds,
+                        containerLabels: _containerLabels,
                         onChanged: (v) => setState(() {
                           _slots = [_slots[0], _slots[1]];
                           _slots[0] = v;
@@ -259,6 +268,8 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
                       _SlotDropdown(
                         label: 'Position 2 (rechts)',
                         value: _slots[1],
+                        containerTypeIds: _containerTypeIds,
+                        containerLabels: _containerLabels,
                         onChanged: (v) => setState(() {
                           _slots = [_slots[0], _slots[1]];
                           _slots[1] = v;
@@ -377,14 +388,14 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: _formTyp,
+                        value: _containerTypeIds.contains(_formTyp) ? _formTyp : (_containerTypeIds.isNotEmpty ? _containerTypeIds.first : null),
                         decoration: InputDecoration(
                           labelText: 'Typ (Container)',
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        items: InformationssystemService.containerTypes.map((id) => DropdownMenuItem(
+                        items: _containerTypeIds.map((id) => DropdownMenuItem(
                           value: id,
-                          child: Text(InformationssystemService.containerLabels[id] ?? id),
+                          child: Text(_containerLabels[id] ?? id),
                         )).toList(),
                         onChanged: (v) => setState(() => _formTyp = v ?? _formTyp),
                       ),
@@ -491,11 +502,15 @@ class _ExpandableSectionCard extends StatelessWidget {
 class _SlotDropdown extends StatelessWidget {
   final String label;
   final String? value;
+  final List<String> containerTypeIds;
+  final Map<String, String> containerLabels;
   final void Function(String?) onChanged;
 
   const _SlotDropdown({
     required this.label,
     required this.value,
+    required this.containerTypeIds,
+    required this.containerLabels,
     required this.onChanged,
   });
 
@@ -503,9 +518,9 @@ class _SlotDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final options = [
       const DropdownMenuItem(value: null, child: Text('— Kein Container —')),
-      ...InformationssystemService.containerTypes.map((id) => DropdownMenuItem(
+      ...containerTypeIds.map((id) => DropdownMenuItem(
             value: id,
-            child: Text(InformationssystemService.containerLabels[id] ?? id),
+            child: Text(containerLabels[id] ?? id),
           )),
     ];
     return Column(

@@ -176,6 +176,12 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
   }
 
   Future<void> _confirmDelete(Kunde kunde) async {
+    if (kunde.id == 'admin' || kunde.kundenId.toLowerCase() == 'admin') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Die Firma „admin" kann nicht gelöscht werden.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -414,11 +420,12 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
                           icon: const Icon(Icons.edit, size: 18),
                           label: const Text('Bearbeiten'),
                         ),
-                        TextButton.icon(
-                          onPressed: () => _confirmDelete(k),
-                          icon: Icon(Icons.delete, size: 18, color: Colors.red[700]),
-                          label: Text('Löschen', style: TextStyle(color: Colors.red[700])),
-                        ),
+                        if (k.id != 'admin' && k.kundenId.toLowerCase() != 'admin')
+                          TextButton.icon(
+                            onPressed: () => _confirmDelete(k),
+                            icon: Icon(Icons.delete, size: 18, color: Colors.red[700]),
+                            label: Text('Löschen', style: TextStyle(color: Colors.red[700])),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 6),
@@ -427,6 +434,8 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
                       runSpacing: 4,
                       children: [
                         _infoChip(Icons.badge, 'Kunden-ID: ${k.kundenId}', () => _openKundenUrl(k.kundenId)),
+                        if (k.bereich != null && k.bereich!.isNotEmpty)
+                          _infoChip(Icons.category, KundenBereich.labels[k.bereich!] ?? k.bereich!, null),
                         _infoChip(Icons.person, '$userCount Benutzer', null),
                         if (k.email != null && k.email!.isNotEmpty)
                           _infoChip(Icons.email, k.email!, null),
@@ -493,6 +502,7 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
   late final TextEditingController _emailCtrl;
   late final TextEditingController _kundenIdCtrl;
   late String _status;
+  late String? _bereich;
   late Map<String, bool> _modules;
 
   @override
@@ -505,6 +515,8 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
     _emailCtrl = TextEditingController(text: widget.kunde.email ?? '');
     _kundenIdCtrl = TextEditingController(text: widget.kunde.kundenId);
     _status = widget.kunde.status;
+    _bereich = widget.kunde.bereich;
+    if (_bereich != null && !KundenBereich.ids.contains(_bereich)) _bereich = null;
     _modules = Map<String, bool>.from(widget.enabledModules);
   }
 
@@ -542,6 +554,7 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
       'phone': _phoneCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
       'subdomain': kundenId,
+      'bereich': _bereich,
       'status': _status,
       '_modules': modulesToSave,
     });
@@ -603,6 +616,22 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
                 labelText: 'Kunden-ID',
                 hintText: 'z.B. feuerwehr-luenen',
               ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String?>(
+              value: _bereich,
+              decoration: const InputDecoration(
+                labelText: 'Bereich',
+                hintText: 'Definiert das Menü (Rettungsdienst, Notfallseelsorge, …)',
+              ),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('— Kein Bereich —')),
+                ...KundenBereich.ids.map((id) => DropdownMenuItem(
+                  value: id,
+                  child: Text(KundenBereich.labels[id] ?? id),
+                )),
+              ],
+              onChanged: (v) => setState(() => _bereich = v),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(

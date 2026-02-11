@@ -3,6 +3,8 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
+const db = admin.firestore();
+
 /** Tauscht ID-Token gegen Custom-Token für iframe-Auth-Bridge.
  *  Ermöglicht WebView-Module (Mitgliederverwaltung etc.) zentral gehostete Flutter-WebApp.
  */
@@ -83,7 +85,58 @@ exports.updateMitarbeiterPassword = functions.region("europe-west1").https.onCal
   }
 });
 
-const db = admin.firestore();
+function toPlainObject(obj) {
+  if (obj == null) return obj;
+  if (obj instanceof admin.firestore.Timestamp) {
+    return obj.toDate().toISOString();
+  }
+  if (Array.isArray(obj)) return obj.map(toPlainObject);
+  if (typeof obj === "object" && obj.constructor === Object) {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = toPlainObject(v);
+    return out;
+  }
+  return obj;
+}
+
+/** Prüft ob eine Kunden-ID existiert (ohne Auth, für Eingabe beim Start). */
+exports.kundeExists = functions.region("europe-west1").https.onCall(async (data) => {
+  const companyId = data?.companyId;
+  if (!companyId || typeof companyId !== "string") {
+    return { exists: false };
+  }
+  const id = companyId.trim().toLowerCase();
+  if (!id) return { exists: false };
+  try {
+    const doc = await db.collection("kunden").doc(id).get();
+    return { exists: doc.exists };
+  } catch (e) {
+    console.warn("kundeExists Fehler:", e.message);
+    return { exists: false };
+  }
+});
+
+/** Lädt alle Kunden (Firmen) – umgeht Firestore-Regeln für Web-App.
+ *  Projekt: rett-fe0fa, Collection: kunden. */
+exports.loadKunden = functions.region("europe-west1").https.onCall(async (data, context) => {
+  const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "(unknown)";
+  console.log("loadKunden: Projekt=", projectId, "Collection=kunden");
+  try {
+    if (!context?.auth) {
+      console.warn("loadKunden: Nicht authentifiziert (uid fehlt)");
+      throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
+    }
+    const snap = await db.collection("kunden").get();
+    const list = snap.docs.map((d) => toPlainObject({ id: d.id, ...d.data() }));
+    list.sort((a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
+    console.log("loadKunden: ", list.length, " Kunden in kunden-Collection gefunden");
+    return { kunden: list };
+  } catch (e) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    console.error("loadKunden Fehler:", e);
+    throw new functions.https.HttpsError("internal", e.message || String(e));
+  }
+});
 
 function toFirestoreValue(v) {
   if (v == null) return v;

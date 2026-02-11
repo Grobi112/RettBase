@@ -1,11 +1,11 @@
 {
-    "name": "app",
-    "short_name": "app",
+    "name": "RettBase – Schulsanitätsdienst",
+    "short_name": "RettBase",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "WebApp für den Schulsanitätsdienst: Einsätze, Wachbuch, Checklisten, Fahrtenbuch und mehr.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

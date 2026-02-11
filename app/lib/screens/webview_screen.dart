@@ -53,12 +53,12 @@ class _WebViewScreenState extends State<WebViewScreen> {
 <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
 <script>
 var config = {
-  apiKey: "AIzaSyCl67Qcs2Z655Y0507NG6o9WCL4twr65uc",
-  authDomain: "rettbase-app.firebaseapp.com",
-  projectId: "rettbase-app",
-  storageBucket: "rettbase-app.firebasestorage.app",
-  messagingSenderId: "339125193380",
-  appId: "1:339125193380:web:350966b45a875fae8eb431"
+  apiKey: "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA",
+  authDomain: "rett-fe0fa.firebaseapp.com",
+  projectId: "rett-fe0fa",
+  storageBucket: "rett-fe0fa.firebasestorage.app",
+  messagingSenderId: "740721219821",
+  appId: "1:740721219821:web:a8e7f8070f875866ccd4e4"
 };
 firebase.initializeApp(config);
 var auth = firebase.auth();

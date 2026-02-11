@@ -1,5 +1,5 @@
 /// RettBase Native App - Konfiguration
-/// Lädt die Web-App von rettbase.de (Firebase-Projekt: rettbase-app)
+/// Lädt die Web-App von rettbase.de (Firebase-Projekt: rett-fe0fa)
 /// Arbeitet mit Kunden-ID (nicht Subdomain) – URL: kundenId.rettbase.de
 
 class AppConfig {

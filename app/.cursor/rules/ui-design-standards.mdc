@@ -25,6 +25,7 @@ appBar: AppTheme.buildModuleAppBar(
 - **Zurück-Button**: `Icons.arrow_back` für Navigation, `Icons.close` für modale Dialoge
 - **Aktionen rechts**: z.B. `AppTheme.headerPrimaryButton()` (hellblau) und `AppTheme.headerSecondaryButton()` (grau)
 - **Dashboard** behält seinen eigenen dunklen Header (Logo + User-Menü)
+- **„Neue X“-Buttons** (z.B. „Neue Information“): Immer rechts neben dem Titel, ganz rechts in der AppBar – **nicht** als FAB. Gilt für alle Container-Übersichten (Informationssystem, künftige Container).
 
 ---
 

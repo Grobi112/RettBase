@@ -12,7 +12,7 @@ import 'module_iframe_web.dart' if (dart.library.io) 'module_iframe_stub.dart' a
 /// Zeigt ein Web-Modul (z. B. Mitgliederverwaltung, Modul-/Menü-Verwaltung) in der App.
 /// - Native (Android/iOS): WebView mit optionaler Auth-Bridge.
 /// - Web: iframe-Einbettung (gleicher Kontext wie die App → Auth/Cookies, Zugriff auf richtige Datenbank).
-/// Alle Modul-URLs laufen über diese Komponente; Zugriff auf Firestore/Auth wie in der nativen App (rettbase-app).
+/// Alle Modul-URLs laufen über diese Komponente; Zugriff auf Firestore/Auth wie in der nativen App (rett-fe0fa).
 class ModuleWebViewWidget extends StatefulWidget {
   final AppModule module;
   final String companyId;
@@ -109,7 +109,7 @@ class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
 <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
 <script>
-firebase.initializeApp({apiKey:"AIzaSyCl67Qcs2Z655Y0507NG6o9WCL4twr65uc",authDomain:"rettbase-app.firebaseapp.com",projectId:"rettbase-app",storageBucket:"rettbase-app.firebasestorage.app",messagingSenderId:"339125193380",appId:"1:339125193380:web:350966b45a875fae8eb431"});
+firebase.initializeApp({apiKey:"AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA",authDomain:"rett-fe0fa.firebaseapp.com",projectId:"rett-fe0fa",storageBucket:"rett-fe0fa.firebasestorage.app",messagingSenderId:"740721219821",appId:"1:740721219821:web:a8e7f8070f875866ccd4e4"});
 firebase.auth().signInWithEmailAndPassword($e,$p).then(function(){window.location.replace($r);}).catch(function(err){document.getElementById("msg").innerHTML="<p style=color:red>Fehler: "+(err.message||err.code)+"</p>";});
 </script></body></html>''';
   }

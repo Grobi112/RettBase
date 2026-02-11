@@ -7,6 +7,8 @@ import '../services/auth_service.dart';
 import '../services/auth_data_service.dart';
 import '../services/modules_service.dart';
 import '../services/informationen_service.dart';
+import '../services/kundenverwaltung_service.dart';
+import '../services/menueverwaltung_service.dart';
 import 'home_screen.dart';
 import 'schichtanmeldung_screen.dart';
 import 'schichtuebersicht_screen.dart';
@@ -48,6 +50,8 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final _authService = AuthService();
+  final _kundenService = KundenverwaltungService();
+  final _menuService = MenueverwaltungService();
   final _authDataService = AuthDataService();
   final _modulesService = ModulesService();
   final _infoService = InformationenService();
@@ -55,6 +59,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   List<AppModule?> _shortcuts = [];
   List<AppModule> _allModules = [];
+  /// Menüstruktur aus Menüverwaltung (Oberbegriffe + Kinder) für Drawer
+  List<Map<String, dynamic>> _menuStructure = [];
   String? _displayName;
   String? _vorname;
   String? _userRole;
@@ -89,8 +95,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
         user.email ?? '',
         widget.companyId,
       );
-      final allMods = await _modulesService.getModulesForCompany(widget.companyId, authData.role);
-      final shortcuts = await _modulesService.getShortcuts(widget.companyId, authData.role);
+      var allMods = await _modulesService.getModulesForCompany(widget.companyId, authData.role);
+      var shortcuts = await _modulesService.getShortcuts(widget.companyId, authData.role);
+
+      var menuStructure = <Map<String, dynamic>>[];
+      final bereich = await _kundenService.getCompanyBereich(widget.companyId);
+      if (bereich != null && bereich.isNotEmpty) {
+        menuStructure = await _menuService.loadMenuStructure(bereich);
+        if (menuStructure.isNotEmpty) {
+          final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
+          if (menuModuleIds.isNotEmpty) {
+            final modById = {for (final m in allMods) m.id: m};
+            allMods = menuModuleIds
+                .map((id) => modById[id])
+                .whereType<AppModule>()
+                .toList();
+            final shortcutList = shortcuts.whereType<AppModule>().toList();
+            shortcuts = shortcutList
+                .where((m) => menuModuleIds.contains(m.id))
+                .toList()
+                .cast<AppModule?>();
+            while (shortcuts.length < 6) shortcuts.add(null);
+            shortcuts = shortcuts.take(6).toList();
+          }
+        }
+      }
+
       final slots = await _loadContainerSlots();
       final infos = await _infoService.loadInformationen(widget.companyId);
 
@@ -101,6 +131,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _userRole = authData.role;
         _allModules = allMods;
         _shortcuts = shortcuts;
+        _menuStructure = menuStructure;
         _loading = false;
       });
       _containerSlotsNotifier.value = slots;
@@ -222,7 +253,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'informationssystem':
         screen = InformationssystemScreen(
           companyId: widget.companyId,
+          userRole: _userRole,
           onBack: onBack,
+          onInfoChanged: () async {
+            final infos = await _infoService.loadInformationen(widget.companyId);
+            if (mounted) _infoItemsNotifier.value = infos;
+          },
         );
         break;
       case 'einstellungen':
@@ -416,6 +452,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  List<Widget> _buildDrawerMenuContent() {
+    final modById = {for (final m in _allModules) m.id: m};
+    final children = <Widget>[];
+    for (final item in _menuStructure) {
+      final type = (item['type'] ?? 'module').toString();
+      if (type == 'heading') {
+        final label = (item['label'] ?? '').toString();
+        final rawChildren = item['children'];
+        final childItems = rawChildren is List ? rawChildren : <dynamic>[];
+        final childTiles = <Widget>[];
+        for (final c in childItems) {
+          if (c is! Map) continue;
+          final cType = (c['type'] ?? '').toString();
+          if (cType == 'module') {
+            final mod = modById[(c['id'] ?? '').toString()];
+            if (mod != null) {
+              childTiles.add(ListTile(
+                dense: true,
+                leading: Icon(_drawerIconForModule(mod.id), size: 22),
+                title: Text(mod.label, style: const TextStyle(fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openModule(mod);
+                },
+              ));
+            }
+          }
+        }
+        children.add(Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: false,
+            leading: const Icon(Icons.folder_outlined, size: 22),
+            title: Text(label.isNotEmpty ? label : 'Oberbegriff', style: const TextStyle(fontWeight: FontWeight.w500)),
+            children: childTiles.isEmpty
+                ? [Padding(padding: const EdgeInsets.all(12), child: Text('Keine Unterpunkte', style: TextStyle(fontSize: 13, color: Colors.grey[600])))]
+                : childTiles,
+          ),
+        ));
+      } else if (type == 'module') {
+        final mod = modById[(item['id'] ?? '').toString()];
+        if (mod != null) {
+          children.add(ListTile(
+            leading: Icon(_drawerIconForModule(mod.id)),
+            title: Text(mod.label),
+            onTap: () {
+              Navigator.pop(context);
+              _openModule(mod);
+            },
+          ));
+        }
+      }
+    }
+    return children;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -458,22 +550,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.home),
-              title: const Text('Dashboard'),
-              onTap: () {
-                Navigator.pop(context);
-                _goToHome();
-              },
-            ),
-            ..._allModules.map((mod) => ListTile(
-              leading: Icon(_drawerIconForModule(mod.id)),
-              title: Text(mod.label),
-              onTap: () {
-                Navigator.pop(context);
-                _openModule(mod);
-              },
-            )),
+            ..._buildDrawerMenuContent(),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.person_outline),

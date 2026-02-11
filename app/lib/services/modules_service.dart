@@ -30,7 +30,7 @@ class ModulesService {
     AppModule(id: 'wachbuch', label: 'Wachbuch', url: '', order: 18, roles: _defaultRoles),
     AppModule(id: 'wachbuchuebersicht', label: 'Wachbuch-Übersicht', url: '', order: 19, roles: _defaultRoles),
     AppModule(id: 'checklisten', label: 'Checklisten', url: '', order: 20, roles: _defaultRoles),
-    AppModule(id: 'informationssystem', label: 'Informationssystem', url: '', order: 21, roles: _defaultRoles),
+    AppModule(id: 'informationssystem', label: 'Informationssystem', url: '', order: 21, roles: ['superadmin', 'admin', 'leiterssd', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'wachleitung', 'koordinator']),
     AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9, roles: ['superadmin', 'admin', 'leiterssd']),
     AppModule(id: 'maengelmelder', label: 'Mängelmelder', url: '', order: 22, roles: _defaultRoles),
     AppModule(id: 'fahrzeugmanagement', label: 'Fahrzeugmanagement', url: '', order: 23, roles: _defaultRoles),
@@ -39,6 +39,8 @@ class ModulesService {
     AppModule(id: 'schnittstellenmeldung', label: 'Schnittstellenmeldung', url: '', order: 26, roles: _defaultRoles),
     AppModule(id: 'uebergriffsmeldung', label: 'Übergriffsmeldung', url: '', order: 27, roles: _defaultRoles),
     AppModule(id: 'telefonliste', label: 'Telefonliste', url: '', order: 28, roles: _defaultRoles),
+    AppModule(id: 'chat', label: 'Chat', url: '', order: 30, roles: _defaultRoles),
+    AppModule(id: 'email', label: 'E-Mail', url: '', order: 31, roles: _defaultRoles),
     AppModule(id: 'ssd', label: 'Notfallprotokoll SSD', url: '', order: 29, roles: _defaultRoles),
   ];
 

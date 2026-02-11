@@ -1,0 +1,54 @@
+---
+description: Standard-Größen und Positionierung für PopUp-Fenster nach aktuellem Webdesign
+globs: lib/**/*.dart
+alwaysApply: false
+---
+
+# PopUp-Fenster: Standard-Größe und Position
+
+PopUp-Fenster (Dialoge, Modals, Bottom Sheets) sollen die **Standard-Größe** und **Position** des aktuellen Webdesign-Standards einhalten.
+
+## Größen-Richtlinien
+
+### Responsive Anpassung
+
+- **Mobile** (< 600px): Nahezu Vollbild – ca. 90 % Breite, 70–90 % Höhe (abhängig vom Inhalt)
+- **Tablet** (600–900px): ca. 85 % Breite oder max. 480px, Höhe nach Inhalt (scrollbar bei Überlauf)
+- **Desktop** (> 900px): max. 480–560px Breite für einfache Dialoge; größere Modals max. 40 % Viewport
+
+### Konkrete Umsetzung in Flutter
+
+```dart
+// AlertDialog – nutzt ConstrainedBox für max. Breite
+AlertDialog(
+  content: ConstrainedBox(
+    constraints: BoxConstraints(
+      maxWidth: MediaQuery.of(context).size.width < 600 ? double.infinity : 480,
+      maxHeight: MediaQuery.of(context).size.height * 0.85,
+    ),
+    child: SingleChildScrollView(child: /* Inhalt */),
+  ),
+)
+
+// showGeneralDialog / Modal – responsive Breite
+final w = MediaQuery.of(context).size.width;
+final maxW = w < 600 ? w * 0.9 : (w * 0.4).clamp(360.0, 560.0);
+SizedBox(
+  width: maxW,
+  height: MediaQuery.of(context).size.height * 0.7,
+  child: /* Inhalt */,
+)
+```
+
+## Positionierung
+
+- **Bestätigungs-Dialoge** (Alert, Confirm): zentriert (`Alignment.center`)
+- **Auswahl-/Such-Dialoge**: oben ausgerichtet (`Alignment.topCenter`) – siehe bestehende UI-Design-Standards
+- **Bottom Sheets**: von unten einblenden, Höhe nach Inhalt (z. B. `initialChildSize: 0.5`, `maxChildSize: 0.9`)
+
+## Webdesign-Standards 2024/2025
+
+- Inhalt bestimmt die Größe – Dialoge nicht größer als nötig
+- Scrollbarer Inhalt bei Überlauf, kein Überlaufen des Viewports
+- Touch-freundliche Abstände auf Mobile (min. 44pt Ziele)
+- Klare Schließen-Möglichkeit (Button oder Tap außerhalb)

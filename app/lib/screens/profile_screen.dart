@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
@@ -44,7 +44,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   DateTime? _geburtsdatum;
   String? _fotoUrl;
   String? _personalnummer;
-  File? _fotoFile;
+  Uint8List? _fotoBytes;
+  String? _fotoFilename;
   bool _fotoRemoved = false;
   String? _profileDocId;
   bool _fromUsers = false;
@@ -123,23 +124,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
       imageQuality: 85,
     );
     if (x != null) {
-      setState(() {
-        _fotoFile = File(x.path);
-        _fotoUrl = null;
-      });
+      try {
+        final bytes = await x.readAsBytes();
+        if (mounted && bytes.isNotEmpty) {
+          final name = x.name;
+          final parts = name.split('.');
+          final ext = parts.length > 1 ? parts.last.toLowerCase() : '';
+          final filename = ProfileService.allowedExtensions.contains(ext)
+              ? name
+              : 'photo.jpg';
+          setState(() {
+            _fotoBytes = bytes;
+            _fotoFilename = filename;
+            _fotoUrl = null;
+            _fotoRemoved = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Fehler beim Laden: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
     }
   }
 
   Future<void> _pickImageFromFile() async {
+    const extensions = [
+      'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic', 'ico',
+    ];
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
+      type: FileType.custom,
+      allowedExtensions: extensions,
       allowMultiple: false,
+      withData: true,
     );
-    if (result != null && result.files.single.path != null) {
-      setState(() {
-        _fotoFile = File(result.files.single.path!);
-        _fotoUrl = null;
-      });
+    if (result != null && result.files.single.size > 0) {
+      final f = result.files.single;
+      final bytes = f.bytes;
+      if (bytes != null && bytes.isNotEmpty && mounted) {
+        final name = f.name;
+        final parts = name.split('.');
+        final ext = parts.length > 1 ? parts.last.toLowerCase() : '';
+        final filename = ProfileService.allowedExtensions.contains(ext)
+            ? name
+            : 'photo.jpg';
+        setState(() {
+          _fotoBytes = bytes;
+          _fotoFilename = filename;
+          _fotoUrl = null;
+          _fotoRemoved = false;
+        });
+      } else if (mounted && (bytes == null || bytes.isEmpty)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Datei konnte nicht gelesen werden.'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -156,11 +197,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _saving = true);
     try {
       String? fotoUrl = _fotoRemoved ? null : _fotoUrl;
-      if (_fotoFile != null) {
+      if (_fotoBytes != null && _fotoBytes!.isNotEmpty) {
         fotoUrl = await _profileService.uploadProfilePhoto(
           widget.companyId,
           user.uid,
-          _fotoFile!,
+          _fotoBytes!,
+          _fotoFilename ?? 'photo.jpg',
         );
       }
       final updates = <String, dynamic>{
@@ -374,7 +416,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   ListTile(leading: const Icon(Icons.photo_library), title: const Text('Aus Galerie wählen'), onTap: () => Navigator.pop(ctx, 'gallery')),
                   ListTile(leading: const Icon(Icons.folder_open), title: const Text('Aus Datei wählen'), onTap: () => Navigator.pop(ctx, 'file')),
-                  if (_fotoFile != null || _fotoUrl != null)
+                  if (_fotoBytes != null || _fotoUrl != null)
                     ListTile(leading: const Icon(Icons.delete), title: const Text('Foto entfernen'), onTap: () => Navigator.pop(ctx, 'remove')),
                 ],
               ),
@@ -383,7 +425,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (choice == 'gallery') await _pickImageFromGallery();
           if (choice == 'file') await _pickImageFromFile();
           if (choice == 'remove') setState(() {
-            _fotoFile = null;
+            _fotoBytes = null;
+            _fotoFilename = null;
             _fotoUrl = null;
             _fotoRemoved = true;
           });
@@ -399,8 +442,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: _fotoFile != null
-                ? Image.file(_fotoFile!, fit: BoxFit.cover)
+            child: _fotoBytes != null && _fotoBytes!.isNotEmpty
+                ? Image.memory(_fotoBytes!, fit: BoxFit.cover)
                 : _fotoUrl != null && _fotoUrl!.isNotEmpty
                     ? Image.network(_fotoUrl!, fit: BoxFit.cover)
                     : Column(

@@ -1,21 +1,57 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import '../models/kunde_model.dart';
 
 /// Service für Kundenverwaltung – lädt und verwaltet Kunden (Firmen) aus Firestore.
 /// Nur für Superadmin-Rolle.
+/// Auf Web: Cloud Function loadKunden (umgeht Auth/Regel-Probleme).
 class KundenverwaltungService {
   final _db = FirebaseFirestore.instance;
+  final _functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
 
-  /// Lädt alle Kunden (Firmen) aus kunden-Collection, sortiert nach Name.
+  /// Lädt alle Kunden (Firmen) aus kunden-Collection.
+  /// Web: Cloud Function (umgeht permission-denied). Mobile: direkter Firestore-Zugriff.
+  /// Projekt: rett-fe0fa, Collection: kunden.
   Future<List<Kunde>> loadKunden() async {
-    final snap = await _db
-        .collection('kunden')
-        .orderBy('name')
-        .get();
+    if (kIsWeb) {
+      try {
+        debugPrint('Kundenverwaltung: Lade über Cloud Function (Projekt: rett-fe0fa, Collection: kunden)');
+        final res = await _functions.httpsCallable('loadKunden').call<Map<String, dynamic>>();
+        final data = res.data;
+        if (data == null) {
+          debugPrint('Kundenverwaltung: Cloud Function lieferte kein data');
+          return _loadKundenDirect();
+        }
+        final kundenList = data['kunden'] as List<dynamic>? ?? [];
+        debugPrint('Kundenverwaltung: Cloud Function lieferte ${kundenList.length} Kunden');
+        final result = kundenList.map((m) {
+          final map = Map<String, dynamic>.from(m as Map);
+          final id = map.remove('id') as String? ?? '';
+          return Kunde.fromFirestore(id, map);
+        }).toList();
+        return result;
+      } catch (e, st) {
+        debugPrint('Kundenverwaltung: Cloud Function Fehler: $e');
+        debugPrint('Kundenverwaltung: Stack: $st');
+        try {
+          return await _loadKundenDirect();
+        } catch (e2) {
+          debugPrint('Kundenverwaltung: Fallback Firestore ebenfalls fehlgeschlagen: $e2');
+          rethrow;
+        }
+      }
+    }
+    return _loadKundenDirect();
+  }
 
-    return snap.docs
+  Future<List<Kunde>> _loadKundenDirect() async {
+    final snap = await _db.collection('kunden').get();
+    final list = snap.docs
         .map((d) => Kunde.fromFirestore(d.id, d.data()))
         .toList();
+    list.sort((a, b) => (a.name).toLowerCase().compareTo((b.name).toLowerCase()));
+    return list;
   }
 
   /// Ermittelt die Anzahl der Benutzer einer Firma.
@@ -64,6 +100,15 @@ class KundenverwaltungService {
       batch.set(ref, {'enabled': entry.value});
     }
     await batch.commit();
+  }
+
+  /// Lädt den Bereich eines Kunden (für Menü-Zuordnung).
+  Future<String?> getCompanyBereich(String companyId) async {
+    try {
+      final doc = await _db.collection('kunden').doc(companyId.trim().toLowerCase()).get();
+      return doc.data()?['bereich']?.toString();
+    } catch (_) {}
+    return null;
   }
 
   /// Lädt alle Modul-Definitionen aus settings/modules/items.

@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -46,6 +47,21 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
     });
 
     try {
+      final res = await FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('kundeExists')
+          .call<Map<String, dynamic>>({'companyId': kundenId});
+      final exists = res.data['exists'] == true;
+
+      if (!exists) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = 'Diese Kunden-ID existiert nicht. Bitte prüfen Sie die Eingabe.';
+          });
+        }
+        return;
+      }
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('rettbase_company_configured', true);
       await prefs.setString('rettbase_company_id', kundenId);
@@ -61,7 +77,7 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Fehler beim Speichern: $e';
+          _error = 'Kunde konnte nicht überprüft werden. Bitte prüfen Sie Ihre Verbindung.';
         });
       }
     }

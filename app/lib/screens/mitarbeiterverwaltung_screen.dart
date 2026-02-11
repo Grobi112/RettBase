@@ -38,6 +38,9 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
   String? _error;
 
   static const _roles = ['user', 'ovd', 'wachleitung', 'leiterssd', 'supervisor', 'admin'];
+  static const _qualifikationen = ['RH', 'RS', 'RA', 'NFS'];
+  static const _vertraege = ['Vollzeit', 'Teilzeit', 'GfB', 'Ausbildung', 'Ehrenamt'];
+  static const _fuehrerscheinklassen = ['', 'A', 'A1', 'A2', 'AM', 'B', 'BE', 'C', 'CE', 'C1', 'C1E', 'D', 'DE', 'D1', 'D1E', 'L', 'T'];
   static const _roleLabels = {
     'user': 'User',
     'ovd': 'OVD',
@@ -150,6 +153,9 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
           companyId: widget.companyId,
           roles: _rolesForCompany,
           roleLabels: _roleLabels,
+          qualifikationen: _qualifikationen,
+          vertraege: _vertraege,
+          fuehrerscheinklassen: _fuehrerscheinklassen,
           existingPersonalnummern: _allMitarbeiter
               .map((e) => e.personalnummer)
               .whereType<String>()
@@ -178,6 +184,9 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
           mitarbeiter: m,
           roles: _rolesForCompany,
           roleLabels: _roleLabels,
+          qualifikationen: _qualifikationen,
+          vertraege: _vertraege,
+          fuehrerscheinklassen: _fuehrerscheinklassen,
           existingPersonalnummern: _allMitarbeiter
               .where((e) => e.id != m.id)
               .map((e) => e.personalnummer)
@@ -200,6 +209,12 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
   }
 
   Future<void> _confirmDelete(Mitarbeiter m) async {
+    if (widget.companyId == 'admin' && m.role == 'superadmin') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Superadmin darf nicht gelöscht werden.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -423,7 +438,9 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
         itemCount: list.length,
         itemBuilder: (_, i) {
           final m = list[i];
-          final canDelete = widget.userRole != null && ['admin', 'superadmin'].contains(widget.userRole!);
+          final canDelete = widget.userRole != null &&
+              ['admin', 'superadmin'].contains(widget.userRole!) &&
+              !(widget.companyId == 'admin' && m.role == 'superadmin');
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: InkWell(
@@ -515,6 +532,9 @@ class _MitarbeiterFormScreen extends StatefulWidget {
   final Mitarbeiter? mitarbeiter;
   final List<String> roles;
   final Map<String, String> roleLabels;
+  final List<String> qualifikationen;
+  final List<String> vertraege;
+  final List<String> fuehrerscheinklassen;
   final Set<String> existingPersonalnummern;
   final Set<String> existingEmails;
 
@@ -523,6 +543,9 @@ class _MitarbeiterFormScreen extends StatefulWidget {
     this.mitarbeiter,
     required this.roles,
     required this.roleLabels,
+    required this.qualifikationen,
+    required this.vertraege,
+    required this.fuehrerscheinklassen,
     required this.existingPersonalnummern,
     required this.existingEmails,
   });
@@ -541,13 +564,14 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
   late final TextEditingController _plzCtrl;
   late final TextEditingController _ortCtrl;
   late final TextEditingController _telefonCtrl;
-  late final TextEditingController _handyCtrl;
-  late final TextEditingController _fuehrerscheinCtrl;
   late final TextEditingController _passwordCtrl;
 
+  late String _fuehrerschein;
   late String _role;
   late bool _active;
   DateTime? _geburtsdatum;
+  late List<String> _qualifikation;
+  late List<String> _angestelltenverhaeltnis;
   bool _saving = false;
 
   @override
@@ -563,12 +587,16 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
     _plzCtrl = TextEditingController(text: m?.plz ?? '');
     _ortCtrl = TextEditingController(text: m?.ort ?? '');
     _telefonCtrl = TextEditingController(text: m?.telefon ?? '');
-    _handyCtrl = TextEditingController(text: m?.handynummer ?? '');
-    _fuehrerscheinCtrl = TextEditingController(text: m?.fuehrerschein ?? '');
     _passwordCtrl = TextEditingController();
+    final fs = m?.fuehrerschein ?? '';
+    _fuehrerschein = widget.fuehrerscheinklassen.contains(fs) ? fs : '';
     _role = m?.role ?? 'user';
     _active = m?.active ?? true;
     _geburtsdatum = m?.geburtsdatum;
+    _qualifikation = List<String>.from(m?.qualifikation ?? []);
+    _angestelltenverhaeltnis = (m?.angestelltenverhaeltnis ?? [])
+        .where((v) => widget.vertraege.contains(v))
+        .toList();
   }
 
   @override
@@ -582,8 +610,6 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
     _plzCtrl.dispose();
     _ortCtrl.dispose();
     _telefonCtrl.dispose();
-    _handyCtrl.dispose();
-    _fuehrerscheinCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
   }
@@ -673,14 +699,14 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
         personalnummer: personalnummer.isEmpty ? null : personalnummer,
         role: _role,
         telefon: _telefonCtrl.text.trim().isEmpty ? null : _telefonCtrl.text.trim(),
-        handynummer: _handyCtrl.text.trim().isEmpty ? null : _handyCtrl.text.trim(),
+        handynummer: null,
         strasse: _strasseCtrl.text.trim().isEmpty ? null : _strasseCtrl.text.trim(),
         hausnummer: _hausnummerCtrl.text.trim().isEmpty ? null : _hausnummerCtrl.text.trim(),
         plz: _plzCtrl.text.trim().isEmpty ? null : _plzCtrl.text.trim(),
         ort: _ortCtrl.text.trim().isEmpty ? null : _ortCtrl.text.trim(),
-        fuehrerschein: _fuehrerscheinCtrl.text.trim().isEmpty ? null : _fuehrerscheinCtrl.text.trim(),
-        qualifikation: null,
-        angestelltenverhaeltnis: null,
+        fuehrerschein: _fuehrerschein.isEmpty ? null : _fuehrerschein,
+        qualifikation: _qualifikation.isEmpty ? null : _qualifikation,
+        angestelltenverhaeltnis: _angestelltenverhaeltnis.isEmpty ? null : _angestelltenverhaeltnis,
         geburtsdatum: _geburtsdatum,
         active: _active,
       );
@@ -720,12 +746,14 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
           'email': mitarbeiter.email,
           'pseudoEmail': mitarbeiter.pseudoEmail,
           'telefon': mitarbeiter.telefon,
-          'handynummer': mitarbeiter.handynummer,
+          'handynummer': null,
           'strasse': mitarbeiter.strasse,
           'hausnummer': mitarbeiter.hausnummer,
           'plz': mitarbeiter.plz,
           'ort': mitarbeiter.ort,
           'fuehrerschein': mitarbeiter.fuehrerschein,
+          'qualifikation': _qualifikation.isEmpty ? null : _qualifikation,
+          'angestelltenverhaeltnis': _angestelltenverhaeltnis.isEmpty ? null : _angestelltenverhaeltnis,
           'active': mitarbeiter.active,
         };
         if (_geburtsdatum != null) updates['geburtsdatum'] = _geburtsdatum!.millisecondsSinceEpoch;
@@ -774,35 +802,54 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
         children: [
           Padding(
             padding: EdgeInsets.all(Responsive.horizontalPadding(context)),
-            child: Column(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 500),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextField(
-                  controller: _personalnummerCtrl,
-                  decoration: const InputDecoration(labelText: 'Personalnummer'),
+                // 1. Personalnummer und E-Mail auf einer Ebene
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _personalnummerCtrl,
+                        decoration: const InputDecoration(labelText: 'Personalnummer'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _emailCtrl,
+                        decoration: const InputDecoration(labelText: 'E-Mail'),
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _emailCtrl,
-                  decoration: const InputDecoration(labelText: 'E-Mail'),
-                  keyboardType: TextInputType.emailAddress,
+                // 2. Vorname und Nachname auf einer Ebene
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _vornameCtrl,
+                        decoration: const InputDecoration(labelText: 'Vorname'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _nachnameCtrl,
+                        decoration: const InputDecoration(labelText: 'Nachname *'),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _vornameCtrl,
-                  decoration: const InputDecoration(labelText: 'Vorname'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _nachnameCtrl,
-                  decoration: const InputDecoration(labelText: 'Nachname *'),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  title: const Text('Geburtsdatum'),
-                  subtitle: Text(_geburtsdatum != null
-                      ? '${_geburtsdatum!.day.toString().padLeft(2, '0')}.${_geburtsdatum!.month.toString().padLeft(2, '0')}.${_geburtsdatum!.year}'
-                      : '–'),
+                // 3. Geburtsdatum mit Label (wie die anderen)
+                InkWell(
                   onTap: () async {
                     final d = await showDatePicker(
                       context: context,
@@ -812,57 +859,170 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
                     );
                     if (d != null) setState(() => _geburtsdatum = d);
                   },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Geburtsdatum',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Text(
+                      _geburtsdatum != null
+                          ? '${_geburtsdatum!.day.toString().padLeft(2, '0')}.${_geburtsdatum!.month.toString().padLeft(2, '0')}.${_geburtsdatum!.year}'
+                          : '–',
+                      style: TextStyle(color: _geburtsdatum != null ? null : Colors.grey[600]),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _strasseCtrl,
-                  decoration: const InputDecoration(labelText: 'Straße'),
+                // 4. Straße und Hausnummer auf einer Ebene
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: _strasseCtrl,
+                        decoration: const InputDecoration(labelText: 'Straße'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _hausnummerCtrl,
+                        decoration: const InputDecoration(labelText: 'Hausnummer'),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _hausnummerCtrl,
-                  decoration: const InputDecoration(labelText: 'Hausnummer'),
+                // 5. PLZ und Ort auf einer Ebene
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _plzCtrl,
+                        decoration: const InputDecoration(labelText: 'PLZ'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: _ortCtrl,
+                        decoration: const InputDecoration(labelText: 'Ort'),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _plzCtrl,
-                  decoration: const InputDecoration(labelText: 'PLZ'),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _ortCtrl,
-                  decoration: const InputDecoration(labelText: 'Ort'),
-                ),
-                const SizedBox(height: 12),
+                // 6. Telefon (bleibt so)
                 TextField(
                   controller: _telefonCtrl,
                   decoration: const InputDecoration(labelText: 'Telefon'),
                   keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _handyCtrl,
-                  decoration: const InputDecoration(labelText: 'Handynummer'),
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _fuehrerscheinCtrl,
-                  decoration: const InputDecoration(labelText: 'Führerscheinklasse'),
-                ),
-                const SizedBox(height: 12),
+                // 8. Führerscheinklasse (Dropdown)
                 DropdownButtonFormField<String>(
-                  value: _role,
-                  decoration: const InputDecoration(labelText: 'Rolle'),
-                  items: widget.roles.map((r) => DropdownMenuItem(value: r, child: Text(widget.roleLabels[r] ?? r))).toList(),
-                  onChanged: (v) => setState(() => _role = v ?? 'user'),
+                  value: _fuehrerschein,
+                  decoration: const InputDecoration(labelText: 'Führerscheinklasse'),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('–')),
+                    ...widget.fuehrerscheinklassen.where((c) => c.isNotEmpty).map((c) => DropdownMenuItem(value: c, child: Text(c))),
+                  ],
+                  onChanged: (v) => setState(() => _fuehrerschein = v ?? ''),
                 ),
                 const SizedBox(height: 12),
-                SwitchListTile(
-                  title: const Text('Aktiv'),
-                  value: _active,
-                  onChanged: (v) => setState(() => _active = v),
+                // 9. Qualifikation und Vertrag auf einer Ebene
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Qualifikation',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: widget.qualifikationen.map((q) {
+                            final selected = _qualifikation.contains(q);
+                            return FilterChip(
+                              label: Text(q),
+                              selected: selected,
+                              onSelected: (v) {
+                                setState(() {
+                                  if (v) _qualifikation.add(q);
+                                  else _qualifikation.remove(q);
+                                  _qualifikation = List.from(_qualifikation);
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Vertrag',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: widget.vertraege.map((a) {
+                            final selected = _angestelltenverhaeltnis.contains(a);
+                            return FilterChip(
+                              label: Text(a),
+                              selected: selected,
+                              onSelected: (v) {
+                                setState(() {
+                                  if (v) _angestelltenverhaeltnis.add(a);
+                                  else _angestelltenverhaeltnis.remove(a);
+                                  _angestelltenverhaeltnis = List.from(_angestelltenverhaeltnis);
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // 10. Rolle und Status (Aktiv) auf einer Ebene
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _role,
+                        decoration: const InputDecoration(labelText: 'Rolle'),
+                        items: widget.roles.map((r) => DropdownMenuItem(value: r, child: Text(widget.roleLabels[r] ?? r))).toList(),
+                        onChanged: (v) => setState(() => _role = v ?? 'user'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Aktiv', style: TextStyle(fontSize: 14)),
+                          const SizedBox(width: 8),
+                          Switch(
+                            value: _active,
+                            onChanged: (v) => setState(() => _active = v),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 if (isCreate) ...[
                   const SizedBox(height: 12),
@@ -885,6 +1045,7 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
                   child: _saving ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Speichern'),
                 ),
               ],
+            ),
             ),
           ),
         ],

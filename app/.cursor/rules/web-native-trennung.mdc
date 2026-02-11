@@ -1,0 +1,28 @@
+---
+description: Web-App und Native App getrennt behandeln – nur die angeforderte Plattform anpassen
+globs: lib/**/*.dart, lib/**/*.html, bin/**/*
+alwaysApply: true
+---
+
+# Web-App vs. Native App – getrennt behandeln
+
+**Web-App** und **Native App** sind getrennt voneinander zu behandeln.
+
+- **Nur anpassen, wenn ausdrücklich dazu aufgefordert:**
+  - Änderungen an der **Web-App**: nur wenn der Nutzer die Web-App anpassen/ändern will (z. B. Web-Firebase-Config, Web-spezifische Screens, Auth-Bridge für Web, iframe/Web-Module).
+  - Änderungen an der **Native App** (Android/iOS/macOS): nur wenn der Nutzer die Native App anpassen/ändern will (z. B. native Firebase-Config, native-spezifischer Code).
+
+- **Nicht** beide Plattformen gleichzeitig ändern, es sei denn, der Nutzer verlangt ausdrücklich Anpassungen an **beiden** (Web + Native).
+
+## Relevante Stellen
+
+- **Nur Web:** `lib/firebase_options.dart` → `web`; `lib/screens/module_webview_widget.dart` (Auth-Bridge HTML); `lib/screens/webview_screen.dart` (Auth-Bridge); `lib/screens/module_iframe_web.dart` / `module_iframe_stub.dart`.
+- **Nur Native:** `lib/firebase_options.dart` → `android`, `ios`, `macos`.
+- **Gemeinsam (beide nutzen):** z. B. `lib/services/login_service.dart`, `lib/services/modules_service.dart`, allgemeine Screens – hier nur ändern, wenn der Auftrag ausdrücklich beide betrifft oder die Logik für eine Plattform spezifisch ist.
+
+## Login (Web und Native gleich)
+
+- **Einzige Login-Logik:** `LoginScreen` + `LoginService.resolveLoginEmail` – für Web-App und Native App identisch. Es gibt keine andere Vorgehensweise: gleiche Pseudo-E-Mail, gleiches Firebase-Projekt (rett-fe0fa).
+- **112 + admin:** Superadmin-Login mit `112@admin.rettbase.de`. Wenn 112 im Simulator/Native-App funktioniert, existiert dieser Auth-Nutzer bereits in rett-fe0fa – die Web-App nutzt exakt dieselbe Auth und denselben Nutzer.
+- **Alle anderen Kunden:** E-Mail oder Personalnummer → Suche in `kunden/{companyId}/mitarbeiter`, Anmeldung mit echter E-Mail oder Pseudo-E-Mail `{personalnummer}@{companyId}.rettbase.de`. Keine plattformspezifische Abweichung.
+- Wenn 112 auf der Web-App trotzdem fehlschlägt, Ursache eher Web-spezifisch prüfen (Authorized Domains, API-Key-Einschränkungen), nicht „Nutzer anlegen“.

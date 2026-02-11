@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -109,19 +109,44 @@ class ProfileService {
     }
   }
 
+  /// Unterstützte Bildformate (alle gängigen)
+  static const allowedExtensions = {
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic', 'ico',
+  };
+
+  static const _mimeTypes = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'bmp': 'image/bmp',
+    'tiff': 'image/tiff',
+    'tif': 'image/tiff',
+    'heic': 'image/heic',
+    'ico': 'image/x-icon',
+  };
+
   /// Lädt Foto in Firebase Storage, gibt Download-URL zurück.
+  /// Akzeptiert bytes + Dateiname (funktioniert auf Web und Mobile).
   Future<String> uploadProfilePhoto(
     String companyId,
     String uid,
-    File file,
+    Uint8List bytes,
+    String filename,
   ) async {
-    final ext = file.path.split('.').last.toLowerCase();
-    if (ext.isEmpty || !['jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
-      throw Exception('Ungültiges Bildformat');
+    var ext = filename.split('.').last.toLowerCase();
+    if (ext.isEmpty || !allowedExtensions.contains(ext)) {
+      ext = 'jpg';
     }
-    final path = 'kunden/$companyId/profile-images/$uid.${ext == 'jpg' ? 'jpeg' : ext}';
+    if (ext == 'jpg') ext = 'jpeg';
+    final path = 'kunden/$companyId/profile-images/$uid.$ext';
     final ref = _storage.ref().child(path);
-    await ref.putFile(file);
+    final contentType = _mimeTypes[ext] ?? 'image/jpeg';
+    await ref.putData(
+      bytes,
+      SettableMetadata(contentType: contentType),
+    );
     return ref.getDownloadURL();
   }
 
