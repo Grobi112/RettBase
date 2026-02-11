@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/app_module.dart';
 import '../models/information_model.dart';
+import '../models/kunde_model.dart';
 import '../services/auth_service.dart';
 import '../services/auth_data_service.dart';
 import '../services/modules_service.dart';
@@ -99,24 +100,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       var shortcuts = await _modulesService.getShortcuts(widget.companyId, authData.role);
 
       var menuStructure = <Map<String, dynamic>>[];
-      final bereich = await _kundenService.getCompanyBereich(widget.companyId);
+      final isAdminCompany = (widget.companyId.trim().toLowerCase()) == 'admin';
+      var bereich = await _kundenService.getCompanyBereich(widget.companyId);
+      if (bereich == null || bereich.isEmpty) {
+        bereich = isAdminCompany ? KundenBereich.admin : KundenBereich.rettungsdienst;
+      }
       if (bereich != null && bereich.isNotEmpty) {
         menuStructure = await _menuService.loadMenuStructure(bereich);
-        if (menuStructure.isNotEmpty) {
+        if (menuStructure.isNotEmpty && !isAdminCompany) {
+          // Shortcuts auf Menü-Module beschränken (Hamburger-Menü bleibt 1:1)
           final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
           if (menuModuleIds.isNotEmpty) {
             final modById = {for (final m in allMods) m.id: m};
-            allMods = menuModuleIds
-                .map((id) => modById[id])
-                .whereType<AppModule>()
-                .toList();
             final shortcutList = shortcuts.whereType<AppModule>().toList();
-            shortcuts = shortcutList
-                .where((m) => menuModuleIds.contains(m.id))
-                .toList()
-                .cast<AppModule?>();
-            while (shortcuts.length < 6) shortcuts.add(null);
-            shortcuts = shortcuts.take(6).toList();
+            final filtered = shortcutList.where((m) => menuModuleIds.contains(m.id)).toList();
+            if (filtered.isNotEmpty) {
+              shortcuts = filtered.cast<AppModule?>();
+              while (shortcuts.length < 6) shortcuts.add(null);
+              shortcuts = shortcuts.take(6).toList();
+            }
           }
         }
       }
@@ -354,6 +356,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           companyId: widget.companyId,
           userRole: _userRole,
           onBack: onBack,
+          onMenuSaved: _load,
           hideAppBar: true,
         );
         break;
@@ -384,6 +387,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             companyId: widget.companyId,
             userRole: _userRole,
             onBack: onBack,
+            onMenuSaved: _load,
             hideAppBar: true,
           );
         } else if (mod.url.isNotEmpty) {
@@ -452,8 +456,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  List<Widget> _buildDrawerMenuContent() {
+  void _openCustomLink(String label, String? url) {
+    final u = (url ?? '').trim();
+    if (u.isEmpty || u == '#') {
+      _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => PlaceholderModuleScreen(moduleName: label, onBack: _goToHome, hideAppBar: true)),
+        (_) => false,
+      );
+    } else {
+      _openModule(AppModule(id: 'custom', label: label, url: u, order: 0));
+    }
+  }
+
+  /// Erstellt AppModule aus Menü-Item (für 1:1-Anzeige auch ohne Firmen-Freischaltung)
+  AppModule _moduleFromMenuItem(Map<String, dynamic> item) {
+    final id = (item['id'] ?? '').toString();
+    final label = (item['label'] ?? id).toString();
+    final url = (item['url'] ?? '').toString();
     final modById = {for (final m in _allModules) m.id: m};
+    return modById[id] ?? AppModule(id: id, label: label, url: url, order: 0);
+  }
+
+  List<Widget> _buildDrawerMenuContent() {
     final children = <Widget>[];
     for (final item in _menuStructure) {
       final type = (item['type'] ?? 'module').toString();
@@ -466,18 +490,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (c is! Map) continue;
           final cType = (c['type'] ?? '').toString();
           if (cType == 'module') {
-            final mod = modById[(c['id'] ?? '').toString()];
-            if (mod != null) {
-              childTiles.add(ListTile(
-                dense: true,
-                leading: Icon(_drawerIconForModule(mod.id), size: 22),
-                title: Text(mod.label, style: const TextStyle(fontSize: 14)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _openModule(mod);
-                },
-              ));
-            }
+            final mod = _moduleFromMenuItem(Map<String, dynamic>.from(c));
+            childTiles.add(ListTile(
+              dense: true,
+              leading: Icon(_drawerIconForModule(mod.id), size: 22),
+              title: Text(mod.label, style: const TextStyle(fontSize: 14)),
+              onTap: () {
+                Navigator.pop(context);
+                _openModule(mod);
+              },
+            ));
+          } else if (cType == 'custom') {
+            final cLabel = (c['label'] ?? '').toString();
+            final cUrl = c['url']?.toString();
+            childTiles.add(ListTile(
+              dense: true,
+              leading: const Icon(Icons.link, size: 22),
+              title: Text(cLabel.isNotEmpty ? cLabel : 'Link', style: const TextStyle(fontSize: 14)),
+              onTap: () {
+                Navigator.pop(context);
+                _openCustomLink(cLabel, cUrl);
+              },
+            ));
           }
         }
         children.add(Theme(
@@ -492,17 +526,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ));
       } else if (type == 'module') {
-        final mod = modById[(item['id'] ?? '').toString()];
-        if (mod != null) {
-          children.add(ListTile(
-            leading: Icon(_drawerIconForModule(mod.id)),
-            title: Text(mod.label),
-            onTap: () {
-              Navigator.pop(context);
-              _openModule(mod);
-            },
-          ));
-        }
+        final mod = _moduleFromMenuItem(item);
+        children.add(ListTile(
+          leading: Icon(_drawerIconForModule(mod.id)),
+          title: Text(mod.label),
+          onTap: () {
+            Navigator.pop(context);
+            _openModule(mod);
+          },
+        ));
+      } else if (type == 'custom') {
+        final label = (item['label'] ?? '').toString();
+        final url = item['url']?.toString();
+        children.add(ListTile(
+          leading: const Icon(Icons.link),
+          title: Text(label.isNotEmpty ? label : 'Link'),
+          onTap: () {
+            Navigator.pop(context);
+            _openCustomLink(label, url);
+          },
+        ));
       }
     }
     return children;

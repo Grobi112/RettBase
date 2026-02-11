@@ -12,6 +12,7 @@ class MenueverwaltungScreen extends StatefulWidget {
   final String companyId;
   final String? userRole;
   final VoidCallback? onBack;
+  final VoidCallback? onMenuSaved;
   final bool hideAppBar;
 
   const MenueverwaltungScreen({
@@ -19,6 +20,7 @@ class MenueverwaltungScreen extends StatefulWidget {
     required this.companyId,
     this.userRole,
     this.onBack,
+    this.onMenuSaved,
     this.hideAppBar = false,
   });
 
@@ -100,6 +102,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
           _items = [];
           _saving = false;
         });
+        widget.onMenuSaved?.call();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menü geleert. Sie können jetzt neu anfangen.')));
       }
     } catch (e) {
@@ -119,6 +122,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       }
       await _menuService.saveMenuStructure(_selectedBereich, _items);
       if (mounted) {
+        widget.onMenuSaved?.call();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menü gespeichert.')));
         setState(() => _saving = false);
       }

@@ -64,7 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (dn == null || dn.isEmpty) return null;
     final commaIdx = dn.indexOf(', ');
     if (commaIdx >= 0) return dn.substring(commaIdx + 2).trim();
-    return null;
+    return dn.isNotEmpty ? dn : null;
   }
 
   String _getGreeting() {

@@ -6,12 +6,14 @@ abstract class KundenBereich {
   static const notfallseelsorge = 'notfallseelsorge';
   static const schulsanitaetsdienst = 'schulsanitaetsdienst';
   static const sanitaetsdienst = 'sanitaetsdienst';
-  static const List<String> ids = [rettungsdienst, notfallseelsorge, schulsanitaetsdienst, sanitaetsdienst];
+  static const admin = 'admin';
+  static const List<String> ids = [rettungsdienst, notfallseelsorge, schulsanitaetsdienst, sanitaetsdienst, admin];
   static const Map<String, String> labels = {
     rettungsdienst: 'Rettungsdienst',
     notfallseelsorge: 'Notfallseelsorge',
     schulsanitaetsdienst: 'Schulsanitätsdienst',
     sanitaetsdienst: 'Sanitätsdienst',
+    admin: 'Admin',
   };
 }
 
