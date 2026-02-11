@@ -28,6 +28,7 @@ import 'uebergriffsmeldung_screen.dart';
 import 'telefonliste_screen.dart';
 import 'company_id_screen.dart';
 import 'login_screen.dart';
+import 'profile_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
 import 'kundenverwaltung_screen.dart';
@@ -725,7 +726,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 },
               ),
             onSelected: (v) {
-              if (v == 'einstellungen') {
+              if (v == 'profil') {
+                _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (_) => ProfileScreen(
+                      companyId: _companyId,
+                      onBack: _goToHome,
+                      onSchnellstartChanged: _load,
+                      hideAppBar: true,
+                    ),
+                  ),
+                  (_) => false,
+                );
+              } else if (v == 'einstellungen') {
                 _openModule(const AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9));
               } else if (v == 'logout') {
                 _logout();
@@ -733,10 +746,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
             itemBuilder: (_) {
               final items = <PopupMenuItem<String>>[
+                const PopupMenuItem(value: 'profil', child: ListTile(leading: Icon(Icons.person_outline), title: Text('Profil'), contentPadding: EdgeInsets.zero)),
                 const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Abmelden'), contentPadding: EdgeInsets.zero)),
               ];
               if (_userHasModuleAccess('einstellungen')) {
-                items.insert(0, const PopupMenuItem(value: 'einstellungen', child: ListTile(leading: Icon(Icons.settings), title: Text('Einstellungen'), contentPadding: EdgeInsets.zero)));
+                items.insert(1, const PopupMenuItem(value: 'einstellungen', child: ListTile(leading: Icon(Icons.settings), title: Text('Einstellungen'), contentPadding: EdgeInsets.zero)));
               }
               return items;
             },

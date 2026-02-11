@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import '../app_config.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
@@ -99,7 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _plzCtrl.text = d['plz']?.toString() ?? '';
         _ortCtrl.text = d['ort']?.toString() ?? '';
         _telefonCtrl.text = d['telefon']?.toString() ?? d['telefonnummer']?.toString() ?? '';
-        _emailCtrl.text = d['email']?.toString() ?? user.email ?? '';
+        _emailCtrl.text = _realEmailOnly(d['email']?.toString() ?? user.email ?? '');
         _fotoUrl = d['fotoUrl']?.toString() ?? d['profilfoto']?.toString();
         final gb = d['geburtsdatum'];
         if (gb != null) {
@@ -109,7 +110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           }
         }
       } else if (mounted) {
-        _emailCtrl.text = user.email ?? '';
+        _emailCtrl.text = _realEmailOnly(user.email ?? '');
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
@@ -251,6 +252,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (d != null) setState(() => _geburtsdatum = d);
   }
 
+  /// Liefert nur echte E-Mail – pseudoEmail (z.B. 113@keg-luenen.rettbase.de) wird nie angezeigt.
+  String _realEmailOnly(String? email) {
+    if (email == null || email.trim().isEmpty) return '';
+    final e = email.trim();
+    if (e.endsWith('.${AppConfig.rootDomain}')) return '';
+    return e;
+  }
+
   String _formatDate(DateTime? d) {
     if (d == null) return '';
     return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
@@ -279,6 +288,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 _buildPhotoSection(),
+                                const SizedBox(height: 8),
+                                _buildWeitereDetailsDropdown(),
                                 const SizedBox(height: 16),
                                 _buildProfilesFormFields(),
                               ],
@@ -290,7 +301,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     _buildPhotoSection(),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 8),
                                     _buildWeitereDetailsDropdown(),
                                   ],
                                 ),
@@ -320,8 +331,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (MediaQuery.sizeOf(context).width >= 600) _buildWeitereDetailsDropdown(),
-        if (MediaQuery.sizeOf(context).width >= 600) const SizedBox(height: 8),
         _buildReadOnlyField('Personalnummer', _personalnummer ?? '—'),
         const SizedBox(height: 8),
         Builder(
@@ -401,6 +410,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildWeitereDetailsDropdown() {
+    return PopupMenuButton<String>(
+      offset: const Offset(0, 40),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 180),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Weitere Details', style: TextStyle(fontSize: 13, color: AppTheme.textPrimary)),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 20, color: AppTheme.textPrimary),
+          ],
+        ),
+      ),
+      onSelected: (value) {
+        if (value == 'schnellstart') {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => SchnellstartScreen(
+                companyId: widget.companyId,
+                onBack: widget.onBack,
+                onSaved: widget.onSchnellstartChanged,
+              ),
+            ),
+          );
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem<String>(
+          value: 'schnellstart',
+          child: ListTile(
+            leading: Icon(Icons.dashboard_customize, size: 22),
+            title: Text('Schnellstart'),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPhotoSection() {
     const aspectRatio = 35 / 45;
     const boxWidth = 160.0;
@@ -457,38 +513,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
           ),
         ),
-    );
-  }
-
-  Widget _buildWeitereDetailsDropdown() {
-    return SizedBox(
-      width: 160,
-      child: DropdownButtonFormField<String>(
-        value: null,
-        isExpanded: true,
-        hint: const Text('Weitere Details', overflow: TextOverflow.ellipsis),
-        decoration: InputDecoration(
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        ),
-        items: const [
-          DropdownMenuItem(value: 'schnellstart', child: Text('Schnellstart')),
-        ],
-        onChanged: (value) {
-          if (value == 'schnellstart') {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => SchnellstartScreen(
-                  companyId: widget.companyId,
-                  onSaved: widget.onSchnellstartChanged,
-                ),
-              ),
-            ).then((_) => widget.onSchnellstartChanged?.call());
-          }
-        },
-      ),
     );
   }
 

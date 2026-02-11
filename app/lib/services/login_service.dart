@@ -45,9 +45,32 @@ class LoginService {
     final input = emailOrPersonalnummer.trim();
     if (input.isEmpty) throw Exception('Bitte Benutzerkennung eingeben.');
 
-    if (_isEmail(input)) return _result(input, null, null);
-
     final normalizedCompanyId = _normalizeCompanyId(companyId);
+
+    // E-Mail-Login: Nutzer gibt echte E-Mail ein. Suche Mitarb. mit email==input; für Firebase Auth nutzen wir pseudoEmail.
+    if (_isEmail(input)) {
+      var searchCompanyId = normalizedCompanyId;
+      var snapshot = await _searchMitarbeiterByEmail(searchCompanyId, input);
+      if (snapshot.docs.isEmpty) {
+        final resolved = await _resolveDocId(normalizedCompanyId);
+        if (resolved != null && resolved != normalizedCompanyId) {
+          searchCompanyId = resolved;
+          snapshot = await _searchMitarbeiterByEmail(searchCompanyId, input);
+        }
+      }
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        if (data['active'] != false && data['status'] != false) {
+          final docPseudo = data['pseudoEmail']?.toString();
+          if (docPseudo != null && docPseudo.isNotEmpty) {
+            final path = 'kunden/$searchCompanyId/mitarbeiter/${snapshot.docs.first.id}';
+            return _result(docPseudo, path, searchCompanyId);
+          }
+        }
+      }
+      return _result(input, null, null);
+    }
+
 
     // Sonderfall: Superadmin 112 in Firma Admin – Login nur über Firebase Auth (112@admin.rettbase.de)
     if (_isAdminSuperadmin112(companyId, input)) {
@@ -99,6 +122,16 @@ class LoginService {
           .get();
     }
     return snapshot;
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> _searchMitarbeiterByEmail(String companyId, String email) async {
+    return _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('mitarbeiter')
+        .where('email', isEqualTo: email.trim())
+        .limit(1)
+        .get();
   }
 
   Future<String?> _resolveDocId(String companyId) async {
