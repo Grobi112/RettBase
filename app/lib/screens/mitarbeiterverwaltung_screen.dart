@@ -481,11 +481,6 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
                               (m.qualifikation!).join(', '),
                               style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
                             ),
-                          if (m.email != null && m.email!.isNotEmpty)
-                            Text(
-                              m.email!,
-                              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-                            ),
                         ],
                       ),
                     ),
@@ -724,16 +719,19 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
         });
         final newId = createRes.data['docId'] as String;
         if (uid != null) {
+          final usersData = <String, dynamic>{
+            'email': mitarbeiter.email ?? pseudoEmail ?? '',
+            'role': _role,
+            'companyId': widget.companyId,
+            'status': true,
+            'mitarbeiterDocId': newId,
+          };
+          if (mitarbeiter.vorname != null && mitarbeiter.vorname!.isNotEmpty) usersData['vorname'] = mitarbeiter.vorname;
+          if (mitarbeiter.nachname != null && mitarbeiter.nachname!.isNotEmpty) usersData['nachname'] = mitarbeiter.nachname;
           await functions.httpsCallable('saveUsersDoc').call({
             'companyId': widget.companyId,
             'uid': uid,
-            'data': {
-              'email': mitarbeiter.email ?? pseudoEmail ?? '',
-              'role': _role,
-              'companyId': widget.companyId,
-              'status': true,
-              'mitarbeiterDocId': newId,
-            },
+            'data': usersData,
           });
         }
         if (mounted) Navigator.of(context).pop(mitarbeiter.copyWith(id: newId));
@@ -759,6 +757,8 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
         if (_geburtsdatum != null) updates['geburtsdatum'] = _geburtsdatum!.millisecondsSinceEpoch;
         if (widget.mitarbeiter!.fromUsersOnly && widget.mitarbeiter!.uid != null) {
           updates['status'] = mitarbeiter.active;
+          updates['vorname'] = mitarbeiter.vorname;
+          updates['nachname'] = mitarbeiter.nachname;
           await functions.httpsCallable('saveUsersDoc').call({
             'companyId': widget.companyId,
             'uid': widget.mitarbeiter!.uid!,

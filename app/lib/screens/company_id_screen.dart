@@ -62,15 +62,18 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
         return;
       }
 
+      // docId = Firestore-Dokument-ID (kann von kundenId abweichen, wenn Kunden-ID geändert wurde)
+      final docId = (res.data['docId'] as String?)?.trim().toLowerCase() ?? kundenId;
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('rettbase_company_configured', true);
-      await prefs.setString('rettbase_company_id', kundenId);
+      await prefs.setString('rettbase_company_id', docId);
       await prefs.setString('rettbase_subdomain', kundenId);
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => LoginScreen(companyId: kundenId),
+          builder: (_) => LoginScreen(companyId: docId),
         ),
       );
     } catch (e) {

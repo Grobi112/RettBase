@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
 import '../theme/app_theme.dart';
 import '../services/login_service.dart';
@@ -95,20 +96,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
     String resolvedEmail = '';
     String? mitarbeiterDocPath;
+    String? effectiveCompanyId;
     try {
       final info = await _loginService.resolveLoginInfo(userInput, widget.companyId);
       resolvedEmail = info.email;
       mitarbeiterDocPath = info.mitarbeiterDocPath;
-      debugPrint('RettBase Login: Anmeldung mit E-Mail=$resolvedEmail (Kunden-ID=${widget.companyId})');
+      effectiveCompanyId = info.effectiveCompanyId?.trim().toLowerCase();
+      final dashboardCompanyId = (effectiveCompanyId != null && effectiveCompanyId.isNotEmpty)
+          ? effectiveCompanyId
+          : _normalizeCompanyId(widget.companyId);
+      debugPrint('RettBase Login: Anmeldung mit E-Mail=$resolvedEmail (Company-ID=$dashboardCompanyId)');
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: resolvedEmail,
         password: password,
       );
       if (!mounted) return;
-      final companyId = _normalizeCompanyId(widget.companyId);
+      if (effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('rettbase_company_id', effectiveCompanyId!);
+      }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => DashboardScreen(companyId: companyId),
+          builder: (_) => DashboardScreen(companyId: dashboardCompanyId),
         ),
       );
     } on FirebaseAuthException catch (e) {
@@ -131,7 +140,13 @@ class _LoginScreenState extends State<LoginScreen> {
             await FirebaseFirestore.instance.doc(mitarbeiterDocPath).set(updates, SetOptions(merge: true));
           }
           if (!mounted) return;
-          final companyId = _normalizeCompanyId(widget.companyId);
+          final companyId = effectiveCompanyId != null && effectiveCompanyId.isNotEmpty
+              ? effectiveCompanyId!
+              : _normalizeCompanyId(widget.companyId);
+          if (effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('rettbase_company_id', effectiveCompanyId!);
+          }
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => DashboardScreen(companyId: companyId),

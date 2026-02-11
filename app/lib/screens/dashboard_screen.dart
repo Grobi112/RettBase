@@ -65,7 +65,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _displayName;
   String? _vorname;
   String? _userRole;
+  /// Effektive Company-ID für Firestore (authData.companyId oder widget.companyId)
+  String _effectiveCompanyId = '';
   bool _loading = true;
+
+  String get _companyId => _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
 
   final _containerSlotsNotifier = ValueNotifier<List<String?>>([]);
   final _infoItemsNotifier = ValueNotifier<List<Information>>([]);
@@ -90,32 +94,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) _goToLogin();
       return;
     }
+    debugPrint('RettBase Dashboard _load: uid=${user.uid} email=${user.email} widget.companyId=${widget.companyId}');
     try {
       final authData = await _authDataService.getAuthData(
         user.uid,
         user.email ?? '',
         widget.companyId,
       );
-      var allMods = await _modulesService.getModulesForCompany(widget.companyId, authData.role);
-      var shortcuts = await _modulesService.getShortcuts(widget.companyId, authData.role);
+      debugPrint('RettBase Dashboard: authData role=${authData.role} companyId=${authData.companyId} displayName=${authData.displayName} vorname=${authData.vorname}');
+      final effectiveCompanyId = authData.companyId.trim().isNotEmpty ? authData.companyId : widget.companyId;
+      var allMods = await _modulesService.getModulesForCompany(effectiveCompanyId, authData.role);
+      var shortcuts = await _modulesService.getShortcuts(effectiveCompanyId, authData.role);
 
       var menuStructure = <Map<String, dynamic>>[];
-      final isAdminCompany = (widget.companyId.trim().toLowerCase()) == 'admin';
-      var bereich = await _kundenService.getCompanyBereich(widget.companyId);
+      final isAdminCompany = (effectiveCompanyId.trim().toLowerCase()) == 'admin';
+      var bereich = await _kundenService.getCompanyBereich(effectiveCompanyId);
+      debugPrint('RettBase Dashboard: getCompanyBereich($effectiveCompanyId)=$bereich');
       if (bereich == null || bereich.isEmpty) {
         bereich = isAdminCompany ? KundenBereich.admin : KundenBereich.rettungsdienst;
       }
       if (bereich != null && bereich.isNotEmpty) {
         menuStructure = await _menuService.loadMenuStructure(bereich);
-        if (menuStructure.isNotEmpty && !isAdminCompany) {
-          // Shortcuts auf Menü-Module beschränken (Hamburger-Menü bleibt 1:1)
+        debugPrint('RettBase Dashboard: loadMenuStructure($bereich) -> ${menuStructure.length} items');
+        if (menuStructure.isEmpty) {
+          menuStructure = await _menuService.loadLegacyGlobalMenu();
+          debugPrint('RettBase Dashboard: loadLegacyGlobalMenu Fallback -> ${menuStructure.length} items');
+        }
+        final isSuperadmin = (authData.role ?? '').toLowerCase().trim() == 'superadmin';
+        if (menuStructure.isNotEmpty && !isAdminCompany && !isSuperadmin) {
+          // Shortcuts auf Menü-Module beschränken (Superadmin behält alle)
           final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
           if (menuModuleIds.isNotEmpty) {
-            final modById = {for (final m in allMods) m.id: m};
             final shortcutList = shortcuts.whereType<AppModule>().toList();
             final filtered = shortcutList.where((m) => menuModuleIds.contains(m.id)).toList();
             if (filtered.isNotEmpty) {
-              shortcuts = filtered.cast<AppModule?>();
+              shortcuts = List<AppModule?>.from(filtered);
               while (shortcuts.length < 6) shortcuts.add(null);
               shortcuts = shortcuts.take(6).toList();
             }
@@ -123,14 +136,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
 
-      final slots = await _loadContainerSlots();
-      final infos = await _infoService.loadInformationen(widget.companyId);
+      final slots = await _loadContainerSlots(effectiveCompanyId);
+      final infos = await _infoService.loadInformationen(effectiveCompanyId);
 
       if (!mounted) return;
+      final displayName = authData.displayName?.trim().isNotEmpty == true
+          ? authData.displayName
+          : (user.email != null && user.email!.contains('@')
+              ? user.email!.split('@').first
+              : null);
       setState(() {
-        _displayName = authData.displayName;
+        _displayName = displayName ?? authData.displayName;
         _vorname = authData.vorname;
         _userRole = authData.role;
+        _effectiveCompanyId = effectiveCompanyId;
         _allModules = allMods;
         _shortcuts = shortcuts;
         _menuStructure = menuStructure;
@@ -138,16 +157,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
       _containerSlotsNotifier.value = slots;
       _infoItemsNotifier.value = infos;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('RettBase Dashboard _load FEHLER: $e');
+      debugPrint('RettBase Dashboard _load StackTrace: $st');
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<List<String?>> _loadContainerSlots() async {
+  Future<List<String?>> _loadContainerSlots(String companyId) async {
     try {
       final ref = FirebaseFirestore.instance
           .collection('kunden')
-          .doc(widget.companyId)
+          .doc(companyId)
           .collection('settings')
           .doc('informationssystem');
       final snap = await ref.get();
@@ -162,7 +183,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _goToLogin() {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => LoginScreen(companyId: widget.companyId)),
+      MaterialPageRoute(builder: (_) => LoginScreen(companyId: _companyId)),
       (r) => false,
     );
   }
@@ -190,10 +211,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onShortcutTap: _onShortcutTap,
       containerSlotsListenable: _containerSlotsNotifier,
       informationenItemsListenable: _infoItemsNotifier,
-      companyId: widget.companyId,
+      companyId: _companyId,
       userRole: _userRole,
       onInfoDeleted: () async {
-        final infos = await _infoService.loadInformationen(widget.companyId);
+        final infos = await _infoService.loadInformationen(_companyId);
         if (mounted) _infoItemsNotifier.value = infos;
       },
     );
@@ -206,7 +227,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     switch (mod.id) {
       case 'schichtanmeldung':
         screen = SchichtanmeldungScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
           hideAppBar: true,
           onFahrtenbuchOpen: (v) {
@@ -217,55 +238,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
         break;
       case 'schichtuebersicht':
         screen = SchichtuebersichtScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
         );
         break;
       case 'fahrtenbuch':
         screen = FahrtenbuchuebersichtScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
         );
         break;
       case 'fahrtenbuchuebersicht':
         screen = FahrtenbuchuebersichtScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
         );
         break;
       case 'wachbuch':
         screen = WachbuchScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
         );
         break;
       case 'wachbuchuebersicht':
         screen = WachbuchUebersichtScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
         );
         break;
       case 'checklisten':
         screen = ChecklistenUebersichtScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole ?? 'user',
           onBack: onBack,
         );
         break;
       case 'informationssystem':
         screen = InformationssystemScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole,
           onBack: onBack,
           onInfoChanged: () async {
-            final infos = await _infoService.loadInformationen(widget.companyId);
+            final infos = await _infoService.loadInformationen(_companyId);
             if (mounted) _infoItemsNotifier.value = infos;
           },
         );
         break;
       case 'einstellungen':
         screen = EinstellungenScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
           onInformationssystemSaved: _load,
           hideAppBar: true,
@@ -273,7 +294,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         break;
       case 'maengelmelder':
         screen = MaengelmelderScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userId: _authService.currentUser?.uid ?? '',
           userRole: _userRole ?? 'user',
           onBack: onBack,
@@ -281,41 +302,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
         break;
       case 'fahrzeugmanagement':
         screen = FleetManagementScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole ?? 'user',
           onBack: onBack,
         );
         break;
       case 'dokumente':
         screen = DokumenteScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole,
           onBack: onBack,
         );
         break;
       case 'unfallbericht':
         screen = UnfallberichtScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
         );
         break;
       case 'schnittstellenmeldung':
         screen = SchnittstellenmeldungScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole,
           onBack: onBack,
         );
         break;
       case 'uebergriffsmeldung':
         screen = UebergriffsmeldungScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole,
           onBack: onBack,
         );
         break;
       case 'telefonliste':
         screen = TelefonlisteScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole ?? 'user',
           currentUserUid: _authService.currentUser?.uid,
           onBack: onBack,
@@ -330,14 +351,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         break;
       case 'kundenverwaltung':
         screen = KundenverwaltungScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           onBack: onBack,
           hideAppBar: true,
         );
         break;
       case 'admin':
         screen = MitarbeiterverwaltungScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole,
           onBack: onBack,
           hideAppBar: true,
@@ -345,7 +366,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         break;
       case 'modulverwaltung':
         screen = ModulverwaltungScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole,
           onBack: onBack,
           hideAppBar: true,
@@ -353,7 +374,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         break;
       case 'menueverwaltung':
         screen = MenueverwaltungScreen(
-          companyId: widget.companyId,
+          companyId: _companyId,
           userRole: _userRole,
           onBack: onBack,
           onMenuSaved: _load,
@@ -364,27 +385,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Fallback: Alte HTML-URLs → native Screens (verhindert 404)
         if (mod.url.contains('mitarbeiterverwaltung.html')) {
           screen = MitarbeiterverwaltungScreen(
-            companyId: widget.companyId,
+            companyId: _companyId,
             userRole: _userRole,
             onBack: onBack,
             hideAppBar: true,
           );
         } else if (mod.url.contains('kundenverwaltung.html')) {
           screen = KundenverwaltungScreen(
-            companyId: widget.companyId,
+            companyId: _companyId,
             onBack: onBack,
             hideAppBar: true,
           );
         } else if (mod.url.contains('modulverwaltung.html')) {
           screen = ModulverwaltungScreen(
-            companyId: widget.companyId,
+            companyId: _companyId,
             userRole: _userRole,
             onBack: onBack,
             hideAppBar: true,
           );
         } else if (mod.url.contains('menue.html')) {
           screen = MenueverwaltungScreen(
-            companyId: widget.companyId,
+            companyId: _companyId,
             userRole: _userRole,
             onBack: onBack,
             onMenuSaved: _load,
@@ -393,7 +414,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } else if (mod.url.isNotEmpty) {
           screen = ModuleWebViewScreen(
             module: mod,
-            companyId: widget.companyId,
+            companyId: _companyId,
             onBack: onBack,
             hideAppBar: true,
           );
@@ -594,6 +615,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             ..._buildDrawerMenuContent(),
+            if ((_userRole ?? '').toLowerCase().trim() == 'superadmin' &&
+                (_companyId.trim().toLowerCase()) != 'admin') ...[
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text('Administration', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
+              ),
+              ..._allModules.where((m) => ['kundenverwaltung', 'modulverwaltung', 'menueverwaltung'].contains(m.id)).map((mod) => ListTile(
+                leading: Icon(_drawerIconForModule(mod.id), size: 22),
+                title: Text(mod.label),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openModule(mod);
+                },
+              )),
+            ],
             const Divider(),
             ListTile(
               leading: const Icon(Icons.person_outline),
@@ -603,7 +640,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
                   MaterialPageRoute(
                     builder: (_) => ProfileScreen(
-                      companyId: widget.companyId,
+                      companyId: _companyId,
                       onBack: _goToHome,
                       onSchnellstartChanged: _load,
                       hideAppBar: true,
@@ -705,7 +742,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
                   MaterialPageRoute(
                     builder: (_) => ProfileScreen(
-                      companyId: widget.companyId,
+                      companyId: _companyId,
                       onBack: _goToHome,
                       onSchnellstartChanged: _load,
                       hideAppBar: true,

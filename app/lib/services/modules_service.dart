@@ -113,10 +113,12 @@ class ModulesService {
       final allMods = await _getAllModuleDefs();
       final result = <AppModule>[];
       final isAdminCompany = cid == 'admin';
+      // admin@rettbase.de = Superadmin in JEDER Firma – alle Module sichtbar
+      final isGlobalSuperadmin = roleLower == 'superadmin';
 
       for (final m in defaultNativeModules) {
-        // Admin-Firma: alle Module freigeschaltet; sonst: nur explizit enabled
-        final enabled = isAdminCompany || (companyMods[m.id] == true);
+        // Admin-Firma oder Superadmin: alle Module; sonst: nur explizit enabled
+        final enabled = isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
         if (!enabled) continue;
         final def = allMods[m.id];
         final roles = def?['roles'] as List? ?? m.roles;

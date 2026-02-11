@@ -553,7 +553,7 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
       'zipCity': _zipCityCtrl.text.trim(),
       'phone': _phoneCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
-      'subdomain': kundenId,
+      'kundenId': kundenId,
       'bereich': _bereich,
       'status': _status,
       '_modules': modulesToSave,

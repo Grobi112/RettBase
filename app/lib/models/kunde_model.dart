@@ -84,7 +84,7 @@ class Kunde {
         'zipCity': zipCity,
         'phone': phone,
         'email': email,
-        'subdomain': kundenId, // Firestore behält 'subdomain' für Abwärtskompatibilität
+        'kundenId': kundenId,
         'bereich': bereich,
         'status': status,
       };

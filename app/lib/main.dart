@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'app_config.dart';
@@ -68,27 +69,39 @@ class _RettBaseHomeState extends State<RettBaseHome> {
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
-    // Kunden-ID nur einmal abfragen: nach dem ersten Eintrag direkt zum Login.
     final companyConfigured = prefs.getBool('rettbase_company_configured') ?? false;
-    final companyId = prefs.getString('rettbase_company_id') ??
+    var companyId = prefs.getString('rettbase_company_id') ??
         prefs.getString('rettbase_subdomain') ??
         '';
 
-    if (!mounted) return;
-
     if (!companyConfigured || companyId.isEmpty) {
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => const CompanyIdScreen(),
         ),
       );
-    } else {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => LoginScreen(companyId: companyId),
-        ),
-      );
+      return;
     }
+
+    try {
+      final res = await FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('kundeExists')
+          .call<Map<String, dynamic>>({'companyId': companyId.trim().toLowerCase()});
+      final exists = res.data['exists'] == true;
+      final docId = (res.data['docId'] as String?)?.trim().toLowerCase();
+      if (exists && docId != null && docId.isNotEmpty && docId != companyId.trim().toLowerCase()) {
+        companyId = docId;
+        await prefs.setString('rettbase_company_id', docId);
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => LoginScreen(companyId: companyId),
+      ),
+    );
   }
 
   @override

@@ -103,29 +103,22 @@ class KundenverwaltungService {
   }
 
   /// Lädt den Bereich eines Kunden (für Menü-Zuordnung).
-  /// Sucht zuerst kunden/{companyId}, falls nicht gefunden per subdomain/kundenId.
+  /// Sucht kunden/{companyId}, bei leerem bereich zusätzlich per kundenId/subdomain (Umbenennung).
   Future<String?> getCompanyBereich(String companyId) async {
     final cid = companyId.trim().toLowerCase();
     if (cid.isEmpty) return null;
     try {
       final doc = await _db.collection('kunden').doc(cid).get();
-      final b = doc.data()?['bereich']?.toString();
+      var b = doc.data()?['bereich']?.toString();
       if (b != null && b.isNotEmpty) return b;
-      if (!doc.exists) {
-        final q = await _db.collection('kunden')
-            .where('subdomain', isEqualTo: cid)
-            .limit(1)
-            .get();
-        if (q.docs.isNotEmpty) {
-          return q.docs.first.data()['bereich']?.toString();
-        }
-        final q2 = await _db.collection('kunden')
-            .where('kundenId', isEqualTo: cid)
-            .limit(1)
-            .get();
-        if (q2.docs.isNotEmpty) {
-          return q2.docs.first.data()['bereich']?.toString();
-        }
+      // Auch bei existierendem Doc: Fallback wenn bereich fehlt (z.B. kkg-luenen leer, keg-luenen hat bereich)
+      var q = await _db.collection('kunden').where('kundenId', isEqualTo: cid).limit(5).get();
+      if (q.docs.isEmpty) {
+        q = await _db.collection('kunden').where('subdomain', isEqualTo: cid).limit(5).get();
+      }
+      for (final d in q.docs) {
+        final br = d.data()['bereich']?.toString();
+        if (br != null && br.isNotEmpty) return br;
       }
     } catch (_) {}
     return null;

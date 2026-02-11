@@ -99,7 +99,9 @@ function toPlainObject(obj) {
   return obj;
 }
 
-/** Prüft ob eine Kunden-ID existiert (ohne Auth, für Eingabe beim Start). */
+/** Prüft ob eine Kunden-ID existiert (ohne Auth, für Eingabe beim Start).
+ *  Sucht kundenId + subdomain zusammen (keg hat subdomain kkg, evtl. kein kundenId),
+ *  bevorzugt Doc mit anderer ID (Umbenennung), dann per Document-ID. */
 exports.kundeExists = functions.region("europe-west1").https.onCall(async (data) => {
   const companyId = data?.companyId;
   if (!companyId || typeof companyId !== "string") {
@@ -108,13 +110,45 @@ exports.kundeExists = functions.region("europe-west1").https.onCall(async (data)
   const id = companyId.trim().toLowerCase();
   if (!id) return { exists: false };
   try {
+    const seen = new Set();
+    const allDocs = [];
+    const byKundenId = await db.collection("kunden").where("kundenId", "==", id).limit(5).get();
+    byKundenId.docs.forEach((d) => {
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        allDocs.push(d);
+      }
+    });
+    const bySubdomain = await db.collection("kunden").where("subdomain", "==", id).limit(5).get();
+    bySubdomain.docs.forEach((d) => {
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        allDocs.push(d);
+      }
+    });
+    if (allDocs.length > 0) {
+      const docId = _pickBestDocId(allDocs, id);
+      if (docId) return { exists: true, docId };
+    }
     const doc = await db.collection("kunden").doc(id).get();
-    return { exists: doc.exists };
+    if (doc.exists) {
+      return { exists: true, docId: doc.id };
+    }
+    return { exists: false };
   } catch (e) {
     console.warn("kundeExists Fehler:", e.message);
     return { exists: false };
   }
 });
+
+function _pickBestDocId(docs, searchId) {
+  if (!docs || docs.length === 0) return null;
+  const withDifferentId = docs.filter((d) => d.id !== searchId);
+  if (withDifferentId.length > 0) {
+    return withDifferentId[0].id;
+  }
+  return docs[0].id;
+}
 
 /** Lädt alle Kunden (Firmen) – umgeht Firestore-Regeln für Web-App.
  *  Projekt: rett-fe0fa, Collection: kunden. */

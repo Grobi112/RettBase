@@ -1,0 +1,43 @@
+# Automatisches Deployment der RettBase-WebApp zu Strato
+# Läuft bei jedem Push auf main (und optional manuell).
+
+name: Deploy WebApp zu Strato
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Manueller Start unter Actions → "Deploy WebApp zu Strato" → Run workflow
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Flutter einrichten
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Abhängigkeiten installieren
+        run: flutter pub get
+
+      - name: Web-App bauen
+        run: flutter build web --release
+
+      - name: Zu Strato hochladen (FTP)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./build/web/
+          server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**

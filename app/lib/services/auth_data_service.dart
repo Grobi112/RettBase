@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import '../app_config.dart';
 
 /// Holt Rolle und Benutzerdaten aus Firestore – analog zu getAuthData in auth.js
 class AuthDataService {
@@ -23,10 +25,12 @@ class AuthDataService {
 
   Future<AuthData> getAuthData(String uid, String email, String companyId) async {
     if (uid.isEmpty || email.isEmpty) {
+      debugPrint('RettBase getAuthData: uid oder email leer -> guest');
       return AuthData(role: 'guest', companyId: companyId, uid: null, displayName: null, vorname: null);
     }
 
     final cid = companyId.trim().toLowerCase();
+    debugPrint('RettBase getAuthData: cid=$cid uid=$uid email=$email');
     String? role;
     String? displayName;
 
@@ -136,9 +140,11 @@ class AuthDataService {
     if (mitarbeiter.exists) {
       final d = mitarbeiter.data();
       role = (d?['role'] ?? 'user').toString().toLowerCase();
-      displayName = _formatName(d?['vorname'], d?['nachname']);
+      displayName = _formatName(d?['vorname'], d?['nachname'])
+          ?? d?['displayName']?.toString().trim()
+          ?? _nameFromEmail(email);
       final vorname = (d?['vorname'] ?? '').toString().trim();
-      return AuthData(role: role, companyId: cid, uid: uid, displayName: displayName, vorname: vorname.isNotEmpty ? vorname : null);
+      return AuthData(role: role, companyId: cid, uid: uid, displayName: displayName ?? 'Benutzer', vorname: vorname.isNotEmpty ? vorname : null);
     }
 
     try {
@@ -146,34 +152,91 @@ class AuthDataService {
       if (byUid.docs.isNotEmpty) {
         final d = byUid.docs.first.data();
         role = (d['role'] ?? 'user').toString().toLowerCase();
-        displayName = _formatName(d['vorname'], d['nachname']);
+        displayName = _formatName(d['vorname'], d['nachname']) ?? d['displayName']?.toString().trim() ?? _nameFromEmail(email);
         final v = (d['vorname'] ?? '').toString().trim();
-        return AuthData(role: role, companyId: cid, uid: uid, displayName: displayName, vorname: v.isNotEmpty ? v : null);
+        return AuthData(role: role, companyId: cid, uid: uid, displayName: displayName ?? 'Benutzer', vorname: v.isNotEmpty ? v : null);
       }
     } catch (_) {}
 
     try {
-      final byEmail = await _db.collection('kunden').doc(cid).collection('mitarbeiter').where('email', isEqualTo: email).limit(1).get();
+      var byEmail = await _db.collection('kunden').doc(cid).collection('mitarbeiter').where('email', isEqualTo: email).limit(1).get();
       if (byEmail.docs.isEmpty) {
-        final byPseudo = await _db.collection('kunden').doc(cid).collection('mitarbeiter').where('pseudoEmail', isEqualTo: email).limit(1).get();
+        var byPseudo = await _db.collection('kunden').doc(cid).collection('mitarbeiter').where('pseudoEmail', isEqualTo: email).limit(1).get();
+        if (byPseudo.docs.isEmpty && email.contains('@')) {
+          final prefix = email.split('@').first;
+          final docSnap = await _db.collection('kunden').doc(cid).get();
+          final kundenId = docSnap.data()?['kundenId']?.toString().trim().toLowerCase()
+              ?? docSnap.data()?['subdomain']?.toString().trim().toLowerCase();
+          if (kundenId != null && kundenId.isNotEmpty) {
+            final altEmail = '$prefix@$kundenId.${AppConfig.rootDomain}';
+            byPseudo = await _db.collection('kunden').doc(cid).collection('mitarbeiter')
+                .where('pseudoEmail', isEqualTo: altEmail).limit(1).get();
+          }
+          if (byPseudo.docs.isEmpty && prefix.isNotEmpty && RegExp(r'^\d+$').hasMatch(prefix)) {
+            byPseudo = await _db.collection('kunden').doc(cid).collection('mitarbeiter')
+                .where('personalnummer', isEqualTo: prefix).limit(1).get();
+            if (byPseudo.docs.isEmpty) {
+              final pnInt = int.tryParse(prefix);
+              if (pnInt != null) {
+                byPseudo = await _db.collection('kunden').doc(cid).collection('mitarbeiter')
+                    .where('personalnummer', isEqualTo: pnInt).limit(1).get();
+              }
+            }
+          }
+        }
         if (byPseudo.docs.isNotEmpty) {
           final d = byPseudo.docs.first.data();
           role = (d['role'] ?? 'user').toString().toLowerCase();
-          displayName = _formatName(d['vorname'], d['nachname']);
+          displayName = _formatName(d['vorname'], d['nachname']) ?? d['displayName']?.toString().trim() ?? _nameFromEmail(email);
           final v = (d['vorname'] ?? '').toString().trim();
-          return AuthData(role: role, companyId: cid, uid: uid, displayName: displayName, vorname: v.isNotEmpty ? v : null);
+          return AuthData(role: role, companyId: cid, uid: uid, displayName: displayName ?? 'Benutzer', vorname: v.isNotEmpty ? v : null);
         }
       } else {
         final d = byEmail.docs.first.data();
         role = (d['role'] ?? 'user').toString().toLowerCase();
-        displayName = _formatName(d['vorname'], d['nachname']);
+        displayName = _formatName(d['vorname'], d['nachname']) ?? d['displayName']?.toString().trim() ?? _nameFromEmail(email);
         final v = (d['vorname'] ?? '').toString().trim();
-        return AuthData(role: role, companyId: cid, uid: uid, displayName: displayName, vorname: v.isNotEmpty ? v : null);
+        return AuthData(role: role, companyId: cid, uid: uid, displayName: displayName ?? 'Benutzer', vorname: v.isNotEmpty ? v : null);
       }
     } catch (_) {}
 
-    final nameFromEmail = email.contains('@') ? email.split('@').first : 'Benutzer';
+    if (email.contains('@') && email.contains('.${AppConfig.rootDomain}')) {
+      final domainPart = email.split('@').last.replaceFirst('.${AppConfig.rootDomain}', '');
+      if (domainPart.isNotEmpty && domainPart != cid) {
+        try {
+          var altDocs = await _db.collection('kunden').where('kundenId', isEqualTo: domainPart).limit(3).get();
+          if (altDocs.docs.isEmpty) {
+            altDocs = await _db.collection('kunden').where('subdomain', isEqualTo: domainPart).limit(3).get();
+          }
+          for (final d in altDocs.docs) {
+            final altCid = d.id;
+            if (altCid == cid) continue;
+            var byP = await _db.collection('kunden').doc(altCid).collection('mitarbeiter')
+                .where('pseudoEmail', isEqualTo: email).limit(1).get();
+            if (byP.docs.isEmpty) {
+              byP = await _db.collection('kunden').doc(altCid).collection('mitarbeiter')
+                  .where('uid', isEqualTo: uid).limit(1).get();
+            }
+            if (byP.docs.isNotEmpty) {
+              final d2 = byP.docs.first.data();
+              role = (d2['role'] ?? 'user').toString().toLowerCase();
+              displayName = _formatName(d2['vorname'], d2['nachname']) ?? d2['displayName']?.toString().trim() ?? _nameFromEmail(email);
+              final v = (d2['vorname'] ?? '').toString().trim();
+              return AuthData(role: role, companyId: altCid, displayName: displayName ?? 'Benutzer', vorname: v.isNotEmpty ? v : null, uid: uid);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    final nameFromEmail = _nameFromEmail(email);
+    debugPrint('RettBase getAuthData: kein Mitarb.-Treffer unter $cid, Fallback role=user displayName=$nameFromEmail');
     return AuthData(role: 'user', companyId: cid, uid: uid, displayName: nameFromEmail.isNotEmpty ? nameFromEmail : 'Benutzer', vorname: null);
+  }
+
+  String _nameFromEmail(String email) {
+    if (email.contains('@')) return email.split('@').first.trim();
+    return email.trim().isNotEmpty ? email.trim() : 'Benutzer';
   }
 
   String? _formatName(dynamic vorname, dynamic nachname) {
