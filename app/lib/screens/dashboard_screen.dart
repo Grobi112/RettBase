@@ -28,7 +28,6 @@ import 'uebergriffsmeldung_screen.dart';
 import 'telefonliste_screen.dart';
 import 'company_id_screen.dart';
 import 'login_screen.dart';
-import 'profile_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
 import 'kundenverwaltung_screen.dart';
@@ -498,6 +497,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return modById[id] ?? AppModule(id: id, label: label, url: url, order: 0);
   }
 
+  /// Prüft ob die aktuelle Rolle Zugriff auf ein Modul hat (nur für Modul-Items).
+  bool _userHasModuleAccess(String moduleId) {
+    if (moduleId.isEmpty) return false;
+    return _allModules.any((m) => m.id == moduleId);
+  }
+
   List<Widget> _buildDrawerMenuContent() {
     final children = <Widget>[];
     for (final item in _menuStructure) {
@@ -511,6 +516,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (c is! Map) continue;
           final cType = (c['type'] ?? '').toString();
           if (cType == 'module') {
+            final modId = (c['id'] ?? '').toString();
+            if (!_userHasModuleAccess(modId)) continue;
             final mod = _moduleFromMenuItem(Map<String, dynamic>.from(c));
             childTiles.add(ListTile(
               dense: true,
@@ -535,18 +542,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ));
           }
         }
-        children.add(Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            initiallyExpanded: false,
-            leading: const Icon(Icons.folder_outlined, size: 22),
-            title: Text(label.isNotEmpty ? label : 'Oberbegriff', style: const TextStyle(fontWeight: FontWeight.w500)),
-            children: childTiles.isEmpty
-                ? [Padding(padding: const EdgeInsets.all(12), child: Text('Keine Unterpunkte', style: TextStyle(fontSize: 13, color: Colors.grey[600])))]
-                : childTiles,
-          ),
-        ));
+        if (childTiles.isNotEmpty) {
+          children.add(Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: false,
+              leading: const Icon(Icons.folder_outlined, size: 22),
+              title: Text(label.isNotEmpty ? label : 'Oberbegriff', style: const TextStyle(fontWeight: FontWeight.w500)),
+              children: childTiles,
+            ),
+          ));
+        }
       } else if (type == 'module') {
+        final modId = (item['id'] ?? '').toString();
+        if (!_userHasModuleAccess(modId)) continue;
         final mod = _moduleFromMenuItem(item);
         children.add(ListTile(
           leading: Icon(_drawerIconForModule(mod.id)),
@@ -596,22 +605,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            DrawerHeader(
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
               decoration: const BoxDecoration(color: AppTheme.headerBg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Image.asset('img/rettbase.png', height: 36, fit: BoxFit.contain),
-                  if (_displayName != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      _displayName!,
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset('img/rettbase.png', height: 32, fit: BoxFit.contain),
+                    if (_displayName != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _displayName!,
+                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             ..._buildDrawerMenuContent(),
@@ -632,42 +646,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               )),
             ],
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: const Text('Profil'),
-              onTap: () {
-                Navigator.pop(context);
-                _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) => ProfileScreen(
-                      companyId: _companyId,
-                      onBack: _goToHome,
-                      onSchnellstartChanged: _load,
-                      hideAppBar: true,
-                    ),
-                  ),
-                  (_) => false,
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Einstellungen'),
-              onTap: () {
-                Navigator.pop(context);
-                _openModule(const AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.business),
-              title: const Text('Unternehmen wechseln'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CompanyIdScreen()),
-                );
-              },
-            ),
+            if (_userHasModuleAccess('einstellungen'))
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('Einstellungen'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openModule(const AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9));
+                },
+              ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout),
@@ -738,34 +725,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 },
               ),
             onSelected: (v) {
-              if (v == 'profil') {
-                _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) => ProfileScreen(
-                      companyId: _companyId,
-                      onBack: _goToHome,
-                      onSchnellstartChanged: _load,
-                      hideAppBar: true,
-                    ),
-                  ),
-                  (_) => false,
-                );
-              } else if (v == 'einstellungen') {
+              if (v == 'einstellungen') {
                 _openModule(const AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9));
-              } else if (v == 'company') {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const CompanyIdScreen()),
-                );
               } else if (v == 'logout') {
                 _logout();
               }
             },
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: 'profil', child: ListTile(leading: Icon(Icons.person_outline), title: Text('Profil'), contentPadding: EdgeInsets.zero)),
-              const PopupMenuItem(value: 'einstellungen', child: ListTile(leading: Icon(Icons.settings), title: Text('Einstellungen'), contentPadding: EdgeInsets.zero)),
-              const PopupMenuItem(value: 'company', child: ListTile(leading: Icon(Icons.business), title: Text('Unternehmen wechseln'), contentPadding: EdgeInsets.zero)),
-              const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Abmelden'), contentPadding: EdgeInsets.zero)),
-            ],
+            itemBuilder: (_) {
+              final items = <PopupMenuItem<String>>[
+                const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Abmelden'), contentPadding: EdgeInsets.zero)),
+              ];
+              if (_userHasModuleAccess('einstellungen')) {
+                items.insert(0, const PopupMenuItem(value: 'einstellungen', child: ListTile(leading: Icon(Icons.settings), title: Text('Einstellungen'), contentPadding: EdgeInsets.zero)));
+              }
+              return items;
+            },
           ),
           ),
         ],

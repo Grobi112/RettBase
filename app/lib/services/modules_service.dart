@@ -18,7 +18,7 @@ class ModulesService {
 
   static List<AppModule> get defaultNativeModules => [
     // Native Admin-Module (keine WebView/iframe mehr)
-    AppModule(id: 'admin', label: 'Mitgliederverwaltung', url: '', order: 4, roles: ['superadmin', 'admin', 'leiterssd']),
+    AppModule(id: 'admin', label: 'Mitgliederverwaltung', url: '', order: 4, roles: ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'wachleitung', 'leiterssd']),
     AppModule(id: 'kundenverwaltung', label: 'Kundenverwaltung', url: '', order: 5, roles: ['superadmin']),
     AppModule(id: 'modulverwaltung', label: 'Modul-Verwaltung', url: '', order: 6, roles: ['superadmin']),
     AppModule(id: 'menueverwaltung', label: 'Menü-Verwaltung', url: '', order: 10, roles: ['superadmin']),
@@ -28,10 +28,10 @@ class ModulesService {
     AppModule(id: 'fahrtenbuch', label: 'Fahrtenbuch', url: '', order: 16, roles: _defaultRoles),
     AppModule(id: 'fahrtenbuchuebersicht', label: 'Fahrtenbuch-Übersicht', url: '', order: 17, roles: _defaultRoles),
     AppModule(id: 'wachbuch', label: 'Wachbuch', url: '', order: 18, roles: _defaultRoles),
-    AppModule(id: 'wachbuchuebersicht', label: 'Wachbuch-Übersicht', url: '', order: 19, roles: _defaultRoles),
+    AppModule(id: 'wachbuchuebersicht', label: 'Wachbuch-Übersicht', url: '', order: 19, roles: ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'wachleitung', 'leiterssd']),
     AppModule(id: 'checklisten', label: 'Checklisten', url: '', order: 20, roles: _defaultRoles),
     AppModule(id: 'informationssystem', label: 'Informationssystem', url: '', order: 21, roles: ['superadmin', 'admin', 'leiterssd', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'wachleitung', 'koordinator']),
-    AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9, roles: ['superadmin', 'admin', 'leiterssd']),
+    AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9, roles: ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung']),
     AppModule(id: 'maengelmelder', label: 'Mängelmelder', url: '', order: 22, roles: _defaultRoles),
     AppModule(id: 'fahrzeugmanagement', label: 'Fahrzeugmanagement', url: '', order: 23, roles: _defaultRoles),
     AppModule(id: 'dokumente', label: 'Dokumente', url: '', order: 24, roles: _defaultRoles),
