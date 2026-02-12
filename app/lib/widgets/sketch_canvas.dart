@@ -21,11 +21,15 @@ class _Stroke {
   });
 }
 
-/// Zeichenfläche mit Stift, Radierer, Rückgängig und Löschen
+/// Zeichenfläche mit Stift, Radierer, Rückgängig und Löschen.
+/// Optional: backgroundImage als Hintergrund (z.B. Körperfigur zum Markieren von Verletzungen).
+/// Optional: initialImageBytes als Vorzeichnung (z.B. beim erneuten Bearbeiten).
 class SketchCanvas extends StatefulWidget {
   final double height;
+  final String? backgroundImage;
+  final Uint8List? initialImageBytes;
 
-  const SketchCanvas({super.key, this.height = 240});
+  const SketchCanvas({super.key, this.height = 240, this.backgroundImage, this.initialImageBytes});
 
   @override
   State<SketchCanvas> createState() => SketchCanvasState();
@@ -34,6 +38,7 @@ class SketchCanvas extends StatefulWidget {
 class SketchCanvasState extends State<SketchCanvas> {
   final List<_Stroke> _strokes = [];
   final GlobalKey _repaintKey = GlobalKey();
+  final GlobalKey _canvasKey = GlobalKey();
   Color _penColor = Colors.black;
   double _penWidth = 3.0;
   double _eraserWidth = 24.0;
@@ -51,11 +56,14 @@ class SketchCanvasState extends State<SketchCanvas> {
 
   void _clear() => setState(() => _strokes.clear());
 
+  /// Öffentlich aufrufbar zum Zurücksetzen der Zeichenfläche
+  void clear() => _clear();
+
   bool get hasContent => _strokes.isNotEmpty;
 
   /// Canvas als PNG-Bild erfassen (für Upload)
   Future<Uint8List?> captureImage() async {
-    if (_strokes.isEmpty) return null;
+    if (_strokes.isEmpty && widget.initialImageBytes == null) return null;
     try {
       final boundary = _repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) return null;
@@ -67,11 +75,20 @@ class SketchCanvasState extends State<SketchCanvas> {
     }
   }
 
+  Color get _eraserColor =>
+      widget.backgroundImage != null ? Colors.white : _canvasBg;
+
+  Offset _toCanvasPosition(PointerEvent e) {
+    final canvasBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (canvasBox == null) return e.localPosition;
+    return canvasBox.globalToLocal(e.position);
+  }
+
   void _onPointerDown(PointerDownEvent e) {
-    final local = e.localPosition;
+    final local = _toCanvasPosition(e);
     _strokes.add(_Stroke(
       points: [local],
-      color: _isEraser ? _canvasBg : _penColor,
+      color: _isEraser ? _eraserColor : _penColor,
       strokeWidth: _isEraser ? _eraserWidth : _penWidth,
       isEraser: _isEraser,
     ));
@@ -80,7 +97,7 @@ class SketchCanvasState extends State<SketchCanvas> {
 
   void _onPointerMove(PointerMoveEvent e) {
     if (_strokes.isEmpty) return;
-    final local = e.localPosition;
+    final local = _toCanvasPosition(e);
     _strokes.last.points.add(local);
     setState(() {});
   }
@@ -143,7 +160,7 @@ class SketchCanvasState extends State<SketchCanvas> {
               ],
             ),
           ),
-          // Canvas
+          // Canvas (ggf. mit Hintergrundbild – 1:1 Ausrichtung, Figuren größer)
           SizedBox(
             height: widget.height,
             width: double.infinity,
@@ -155,10 +172,65 @@ class SketchCanvasState extends State<SketchCanvas> {
               onPointerCancel: _onPointerCancel,
               child: RepaintBoundary(
                 key: _repaintKey,
-                child: CustomPaint(
-                  painter: _SketchPainter(strokes: _strokes),
-                  size: Size.infinite,
-                ),
+                child: widget.backgroundImage != null
+                    ? Center(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final side = (constraints.maxWidth < constraints.maxHeight
+                                    ? constraints.maxWidth
+                                    : constraints.maxHeight)
+                                .clamp(320.0, 440.0);
+                            return SizedBox(
+                              key: _canvasKey,
+                              width: side,
+                              height: side,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    IgnorePointer(
+                                      child: Image.asset(
+                                        widget.backgroundImage!,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    if (widget.initialImageBytes != null)
+                                      IgnorePointer(
+                                        child: Image.memory(
+                                          widget.initialImageBytes!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    CustomPaint(
+                                      painter: _SketchPainter(strokes: _strokes),
+                                      size: Size.infinite,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                    : SizedBox(
+                        key: _canvasKey,
+                        width: double.infinity,
+                        height: double.infinity,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: _canvasBg,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: CustomPaint(
+                            painter: _SketchPainter(strokes: _strokes),
+                            size: Size.infinite,
+                          ),
+                        ),
+                      ),
               ),
             ),
           ),
