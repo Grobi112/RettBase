@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -47,9 +49,27 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
 
   Future<Uint8List> _buildPdf(PdfPageFormat format) async {
     final p = protokoll;
-    final pdf = pw.Document();
+    pw.Font? roboto;
+    try {
+      final robotoData = await rootBundle.load('fonts/Roboto-Regular.ttf');
+      roboto = pw.Font.ttf(robotoData);
+    } catch (_) {}
+    final pdf = pw.Document(theme: roboto != null ? pw.ThemeData.withFont(base: roboto, bold: roboto) : null);
+    String companyName = '';
+    try {
+      final doc = await FirebaseFirestore.instance.collection('kunden').doc(companyId).get();
+      companyName = (doc.data()?['name'] ?? '').toString().trim();
+    } catch (_) {}
     const fs = 8.0;
     const fsTitle = 9.0;
+
+    final styleBase = roboto != null ? pw.TextStyle(font: roboto, fontSize: fs) : const pw.TextStyle(fontSize: fs);
+    final styleBaseGrey = roboto != null ? pw.TextStyle(font: roboto, fontSize: fs, color: PdfColors.grey700) : pw.TextStyle(fontSize: fs, color: PdfColors.grey700);
+    final styleBaseGrey600 = roboto != null ? pw.TextStyle(font: roboto, fontSize: fs, color: PdfColors.grey600) : pw.TextStyle(fontSize: fs, color: PdfColors.grey600);
+    final styleSmallGrey = roboto != null ? pw.TextStyle(font: roboto, fontSize: fs - 1, color: PdfColors.grey700) : pw.TextStyle(fontSize: fs - 1, color: PdfColors.grey700);
+    final styleBold = roboto != null ? pw.TextStyle(font: roboto, fontSize: fs, fontWeight: pw.FontWeight.bold) : pw.TextStyle(fontSize: fs, fontWeight: pw.FontWeight.bold);
+    final styleTitle = roboto != null ? pw.TextStyle(font: roboto, fontSize: fsTitle, fontWeight: pw.FontWeight.bold, color: PdfColors.black) : pw.TextStyle(fontSize: fsTitle, fontWeight: pw.FontWeight.bold, color: PdfColors.black);
+    final styleHeader = roboto != null ? pw.TextStyle(font: roboto, fontSize: 12, fontWeight: pw.FontWeight.bold) : pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold);
 
     const labelW = 95.0;
     pw.Widget field(String label, String value, {double? labelWidth}) {
@@ -59,8 +79,8 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
         child: pw.Row(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.SizedBox(width: w, child: pw.Text('$label:', style: pw.TextStyle(fontSize: fs, color: PdfColors.grey700))),
-            pw.Expanded(child: pw.Text(value, style: const pw.TextStyle(fontSize: fs))),
+            pw.SizedBox(width: w, child: pw.Text('$label:', style: styleBaseGrey)),
+            pw.Expanded(child: pw.Text(value, style: styleBase)),
           ],
         ),
       );
@@ -70,21 +90,24 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
       padding: const pw.EdgeInsets.only(bottom: 2),
       child: pw.Row(
         children: items.map((e) => pw.Expanded(
-          child: pw.Text('${e.label}: ${e.value ? "Ja" : "-"}', style: const pw.TextStyle(fontSize: fs)),
+          child: pw.Text('${e.label}: ${e.value ? "Ja" : "-"}', style: styleBase),
         )).toList(),
       ),
     );
 
     pw.Widget checkLine(String label, bool value) => pw.Padding(
       padding: const pw.EdgeInsets.only(bottom: 2),
-      child: pw.Text('$label: ${value ? "Ja" : "-"}', style: const pw.TextStyle(fontSize: fs)),
+      child: pw.Text('$label: ${value ? "Ja" : "-"}', style: styleBase),
     );
 
     pw.Widget sectionHeader(String title) => pw.Container(
       width: double.infinity,
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      color: PdfColors.blue900,
-      child: pw.Text(title, style: pw.TextStyle(fontSize: fsTitle, fontWeight: pw.FontWeight.bold, color: PdfColors.white)),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        border: pw.Border.all(color: PdfColors.black, width: 1),
+      ),
+      child: pw.Text(title, style: styleTitle),
     );
 
     pw.Widget section(String title, List<pw.Widget> children) => pw.Column(
@@ -128,7 +151,13 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
     }
 
     final children = <pw.Widget>[
-      pw.Center(child: pw.Text('Einsatzprotokoll Schulsanitätsdienst', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold))),
+      pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text('Einsatzprotokoll Schulsanitätsdienst', style: styleHeader),
+          pw.Text(companyName.isEmpty ? '-' : companyName, style: styleHeader),
+        ],
+      ),
       pw.SizedBox(height: 8),
       section('Rettungstechnische Daten', [
         pw.Row(
@@ -138,9 +167,9 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
             pw.Row(
               mainAxisSize: pw.MainAxisSize.min,
               children: [
-                pw.Text('Datum: ${_str(p['datumEinsatz'])}', style: const pw.TextStyle(fontSize: fs)),
+                pw.Text('Datum: ${_str(p['datumEinsatz'])}', style: styleBase),
                 pw.SizedBox(width: 16),
-                pw.Text('Uhrzeit: ${_str(p['uhrzeit'])} Uhr', style: const pw.TextStyle(fontSize: fs)),
+                pw.Text('Uhrzeit: ${_str(p['uhrzeit'])} Uhr', style: styleBase),
               ],
             ),
           ],
@@ -155,60 +184,134 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
       ]),
       section('Patientendaten', [
         pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Expanded(child: field('Vorname', _str(p['vornameErkrankter']))),
-            pw.Expanded(child: field('Name', _str(p['nameErkrankter']))),
-            pw.Expanded(child: field('Geburtsdatum', _str(p['geburtsdatum']))),
-            pw.Expanded(child: field('Klasse', _str(p['klasse']))),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  field('Vorname', _str(p['vornameErkrankter']), labelWidth: 60),
+                  field('Name', _str(p['nameErkrankter']), labelWidth: 60),
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 24),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  field('Geburtsdatum', _str(p['geburtsdatum']), labelWidth: 60),
+                  field('Klasse', _str(p['klasse']), labelWidth: 60),
+                ],
+              ),
+            ),
           ],
         ),
       ]),
       section('Angaben zur Erkrankung/Verletzung', [
-        checkRow([
-          (label: 'Erkrankung', value: p['erkrankung'] == true),
-          (label: 'Unfall', value: p['unfall'] == true),
-        ]),
-        if (p['erkrankung'] == true) field('Art der Erkrankung', _str(p['artErkrankung'])),
-        if (p['unfall'] == true) field('Unfallort', _str(p['unfallOrt'])),
-        checkRow([
-          (label: 'Sportunterricht', value: p['sportunterricht'] == true),
-          (label: 'Sonstiger Unterricht', value: p['sonstigerUnterricht'] == true),
-          (label: 'Pause', value: p['pause'] == true),
-          (label: 'Schulweg', value: p['schulweg'] == true),
-          (label: 'Sonstiges', value: p['sonstigesAktivitaet'] == true),
-        ]),
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  if (p['erkrankung'] == true) ...[
+                    checkLine('Erkrankung', true),
+                    field('Art der Erkrankung', _str(p['artErkrankung']), labelWidth: 60),
+                  ] else ...[
+                    checkLine('Erkrankung', false),
+                  ],
+                  if (p['unfall'] == true) ...[
+                    checkLine('Unfall', true),
+                    field('Unfallort', _str(p['unfallOrt']), labelWidth: 60),
+                  ] else ...[
+                    checkLine('Unfall', false),
+                  ],
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 24),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Was hat der Verletzte zum Unfallzeitpunkt gemacht:', style: styleBold),
+                  pw.SizedBox(height: 2),
+                  checkLine('Sportunterricht', p['sportunterricht'] == true),
+                  checkLine('Sonstiger Unterricht', p['sonstigerUnterricht'] == true),
+                  checkLine('Pause', p['pause'] == true),
+                  checkLine('Schulweg', p['schulweg'] == true),
+                  checkLine('Sonstiges', p['sonstigesAktivitaet'] == true),
+                ],
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 6),
         field('Schilderung', _str(p['schilderung'])),
       ]),
       section('Erstbefund', [
         pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Expanded(child: field('Schmerzen', _str(p['schmerzen']))),
-            pw.SizedBox(width: 8),
-            if (koerperImg != null)
-              pw.Image(pw.MemoryImage(koerperImg), width: 100, height: 100, fit: pw.BoxFit.contain)
-            else
-              pw.SizedBox(width: 100, height: 100, child: pw.Center(child: pw.Text('-', style: pw.TextStyle(fontSize: fs, color: PdfColors.grey600)))),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  field('Schmerzen', _str(p['schmerzen']), labelWidth: 60),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Welche Verletzung liegt vermutlich vor:', style: styleBold),
+                  pw.SizedBox(height: 2),
+                  checkLine('Prellung', p['verletzungPrellung'] == true),
+                  checkLine('Bruch', p['verletzungBruch'] == true),
+                  checkLine('Wunde', p['verletzungWunde'] == true),
+                  checkLine('Sonstiges', p['verletzungSonstiges'] == true),
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 12),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  if (koerperImg != null)
+                    pw.Image(pw.MemoryImage(koerperImg), width: 100, height: 100, fit: pw.BoxFit.contain)
+                  else
+                    pw.SizedBox(width: 100, height: 100, child: pw.Center(child: pw.Text('-', style: styleBaseGrey600))),
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 12),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Atmung:', style: styleBold),
+                  pw.SizedBox(height: 2),
+                  checkLine('spontan / frei', p['atmungSpontan'] == true),
+                  checkLine('Hyperventilation', p['atmungHyperventilation'] == true),
+                  checkLine('Atemnot', p['atmungAtemnot'] == true),
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 12),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  field('Puls', _str(p['puls']), labelWidth: 65),
+                  field('SpO2', _str(p['spo2']) == '-' ? '-' : '${_str(p['spo2'])} %', labelWidth: 65),
+                  field('Blutdruck', _str(p['blutdruck']) == '-' ? '-' : '${_str(p['blutdruck'])} mmHg', labelWidth: 65),
+                ],
+              ),
+            ),
           ],
         ),
-        checkRow([
-          (label: 'Prellung', value: p['verletzungPrellung'] == true),
-          (label: 'Bruch', value: p['verletzungBruch'] == true),
-          (label: 'Wunde', value: p['verletzungWunde'] == true),
-          (label: 'Sonstiges', value: p['verletzungSonstiges'] == true),
-        ]),
-        checkRow([
-          (label: 'Atmung spontan', value: p['atmungSpontan'] == true),
-          (label: 'Hyperventilation', value: p['atmungHyperventilation'] == true),
-          (label: 'Atemnot', value: p['atmungAtemnot'] == true),
-        ]),
-        pw.Row(
-          children: [
-            pw.Expanded(child: field('Puls', _str(p['puls']))),
-            pw.Expanded(child: field('SpO2', _str(p['spo2']))),
-            pw.Expanded(child: field('Blutdruck', _str(p['blutdruck']))),
-          ],
-        ),
-        field('Beschwerden', _str(p['beschwerden'])),
+        pw.SizedBox(height: 6),
+        pw.Text('Der/die Erkrankte/Verletzte klagt über:', style: styleBold),
+        pw.SizedBox(height: 2),
+        pw.Text(_str(p['beschwerden']), style: styleBase),
       ]),
       section('Getroffene Maßnahmen', [
         pw.Row(
@@ -218,7 +321,7 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('Maßnahmen:', style: pw.TextStyle(fontSize: fs, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Maßnahmen:', style: styleBold),
                   pw.SizedBox(height: 2),
                   checkLine('Betreuung', p['massnahmeBetreuung'] == true),
                   checkLine('Pflaster', p['massnahmePflaster'] == true),
@@ -236,7 +339,7 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('Informiert:', style: pw.TextStyle(fontSize: fs, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Informiert:', style: styleBold),
                   pw.SizedBox(height: 2),
                   checkLine('Sekretariat', p['sekretariatInformiert'] == true),
                   checkLine('Schulleitung', p['schulleitungInformiert'] == true),
@@ -271,12 +374,12 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('Schulsanitäter/in 1', style: pw.TextStyle(fontSize: fs, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Schulsanitäter/in 1', style: styleBold),
                   pw.SizedBox(height: 2),
                   if (sig1Img != null)
                     pw.Image(pw.MemoryImage(sig1Img), height: 35, fit: pw.BoxFit.contain)
                   else
-                    pw.SizedBox(height: 35, child: pw.Center(child: pw.Text('-', style: pw.TextStyle(fontSize: fs, color: PdfColors.grey600)))),
+                    pw.SizedBox(height: 35, child: pw.Center(child: pw.Text('-', style: styleBaseGrey600))),
                 ],
               ),
             ),
@@ -285,19 +388,19 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('Schulsanitäter/in 2', style: pw.TextStyle(fontSize: fs, fontWeight: pw.FontWeight.bold)),
+                  pw.Text('Schulsanitäter/in 2', style: styleBold),
                   pw.SizedBox(height: 2),
                   if (sig2Img != null)
                     pw.Image(pw.MemoryImage(sig2Img), height: 35, fit: pw.BoxFit.contain)
                   else
-                    pw.SizedBox(height: 35, child: pw.Center(child: pw.Text('-', style: pw.TextStyle(fontSize: fs, color: PdfColors.grey600)))),
+                    pw.SizedBox(height: 35, child: pw.Center(child: pw.Text('-', style: styleBaseGrey600))),
                 ],
               ),
             ),
           ],
         ),
         pw.SizedBox(height: 4),
-        pw.Text('Erstellt von: ${_str(p['createdByName'])}', style: pw.TextStyle(fontSize: fs - 1, color: PdfColors.grey700)),
+        pw.Text('Erstellt von: ${_str(p['createdByName'])}', style: styleSmallGrey),
       ]),
     ];
 
