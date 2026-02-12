@@ -45,9 +45,14 @@ class SketchCanvasState extends State<SketchCanvas> {
   bool _isEraser = false;
   static const Color _canvasBg = Color(0xFFFAFAFA);
 
+  bool get _hasProtectedBackground => widget.backgroundImage != null;
+
   void _pen() => setState(() => _isEraser = false);
 
-  void _eraser() => setState(() => _isEraser = true);
+  void _eraser() {
+    if (_hasProtectedBackground) return; // Radierer deaktiviert bei Vorlage
+    setState(() => _isEraser = true);
+  }
 
   void _undo() {
     if (_strokes.isEmpty) return;
@@ -86,11 +91,12 @@ class SketchCanvasState extends State<SketchCanvas> {
 
   void _onPointerDown(PointerDownEvent e) {
     final local = _toCanvasPosition(e);
+    final useEraser = _isEraser && !_hasProtectedBackground;
     _strokes.add(_Stroke(
       points: [local],
-      color: _isEraser ? _eraserColor : _penColor,
-      strokeWidth: _isEraser ? _eraserWidth : _penWidth,
-      isEraser: _isEraser,
+      color: useEraser ? _eraserColor : _penColor,
+      strokeWidth: useEraser ? _eraserWidth : _penWidth,
+      isEraser: useEraser,
     ));
     setState(() {});
   }
@@ -136,13 +142,15 @@ class SketchCanvasState extends State<SketchCanvas> {
                   selected: !_isEraser,
                   onTap: _pen,
                 ),
-                const SizedBox(width: 8),
-                _ToolButton(
-                  icon: Icons.cleaning_services,
-                  label: 'Radierer',
-                  selected: _isEraser,
-                  onTap: _eraser,
-                ),
+                if (!_hasProtectedBackground) ...[
+                  const SizedBox(width: 8),
+                  _ToolButton(
+                    icon: Icons.cleaning_services,
+                    label: 'Radierer',
+                    selected: _isEraser,
+                    onTap: _eraser,
+                  ),
+                ],
                 const SizedBox(width: 8),
                 _ToolButton(
                   icon: Icons.undo,

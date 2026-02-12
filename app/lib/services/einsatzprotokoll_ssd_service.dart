@@ -11,6 +11,43 @@ class EinsatzprotokollSsdService {
   CollectionReference<Map<String, dynamic>> _col(String companyId) =>
       _db.collection('kunden').doc(companyId).collection('einsatzprotokoll-ssd');
 
+  /// Nächste Einsatz-Nr. im Format YYYYNNNN (z.B. 20260001). Laufende Nr. beginnt am 1.1. um 00:00 Uhr neu.
+  Future<String> getNextEinsatzNr(String companyId) async {
+    final year = DateTime.now().year;
+    final prefix = '$year';
+    final snap = await _col(companyId).get();
+    int maxNr = 0;
+    for (final doc in snap.docs) {
+      final nr = (doc.data()['protokollNr'] ?? '').toString().trim();
+      if (nr.length >= 8 && nr.startsWith(prefix)) {
+        final run = int.tryParse(nr.substring(4)) ?? 0;
+        if (run > maxNr) maxNr = run;
+      }
+    }
+    return '$prefix${(maxNr + 1).toString().padLeft(4, '0')}';
+  }
+
+  /// Protokoll löschen (inkl. Storage-Dateien)
+  Future<void> delete(String companyId, String docId) async {
+    final doc = _col(companyId).doc(docId);
+    final data = (await doc.get()).data();
+    if (data != null) {
+      try {
+        final ref = _storage.ref().child('kunden/$companyId/einsatzprotokoll-ssd/$docId');
+        final list = await ref.listAll();
+        for (final item in list.items) {
+          await item.delete();
+        }
+      } catch (_) {}
+    }
+    await doc.delete();
+  }
+
+  /// Einsatz-Nr. eines Protokolls aktualisieren (nur Superadmin)
+  Future<void> updateProtokollNr(String companyId, String docId, String protokollNr) async {
+    await _col(companyId).doc(docId).update({'protokollNr': protokollNr.trim()});
+  }
+
   /// Alle Protokolle streamen (neueste zuerst)
   Stream<List<Map<String, dynamic>>> streamProtokolle(String companyId) {
     return _col(companyId)

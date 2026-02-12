@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../services/einsatzprotokoll_ssd_service.dart';
 import '../services/auth_service.dart';
 import '../services/auth_data_service.dart';
+import 'einsatzprotokoll_ssd_uebersicht_screen.dart';
 import '../widgets/sketch_canvas.dart';
 import '../widgets/signature_pad.dart';
 
@@ -98,6 +99,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   bool _schulleitungInformiert = false;
   bool _lehrerInformiert = false;
   bool _leiterSSDInformiert = false;
+  final _verlaufsbeschreibungCtrl = TextEditingController();
+  String? _uebergabeAn; // null = bitte auswählen, 'zurueck_unterricht', 'eltern', 'rettungsdienst'
 
   bool _saving = false;
   bool _loading = true;
@@ -112,29 +115,41 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   Uint8List? _unterschriftBytes1;
   Uint8List? _unterschriftBytes2;
 
+  static const _protokollUebersichtRollen = ['superadmin', 'admin', 'leiterssd'];
+  AuthData? _authData;
+
+  bool get _canViewProtokollUebersicht =>
+      _authData != null &&
+      _protokollUebersichtRollen.contains((_authData?.role ?? '').toLowerCase().trim());
+
   @override
   void initState() {
     super.initState();
     _datumEinsatz = DateTime.now();
     _uhrzeitCtrl.text = '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}';
     _loadNextNr();
+    _loadAuth();
   }
 
   Future<void> _loadNextNr() async {
     try {
-      final snap = await _service.streamProtokolle(widget.companyId).first;
-      final count = snap.length;
-      setState(() {
-        _nextProtokollNr = '${count + 1}';
-        _protokollNrCtrl.text = _nextProtokollNr ?? '';
-        _loading = false;
-      });
+      final next = await _service.getNextEinsatzNr(widget.companyId);
+      if (mounted) {
+        setState(() {
+          _nextProtokollNr = next;
+          _protokollNrCtrl.text = next;
+          _loading = false;
+        });
+      }
     } catch (_) {
-      setState(() {
-        _nextProtokollNr = '1';
-        _protokollNrCtrl.text = '1';
-        _loading = false;
-      });
+      if (mounted) {
+        final year = DateTime.now().year;
+        setState(() {
+          _nextProtokollNr = '$year${'1'.padLeft(4, '0')}';
+          _protokollNrCtrl.text = _nextProtokollNr ?? '';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -159,9 +174,22 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     _blutdruckCtrl.dispose();
     _beschwerdenCtrl.dispose();
     _massnahmeSonstigesTextCtrl.dispose();
+    _verlaufsbeschreibungCtrl.dispose();
     _notrufZeitstempelCtrl.dispose();
     _elternBenachrichtigtZeitstempelCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAuth() async {
+    final user = _authService.currentUser;
+    if (user == null) {
+      if (mounted) setState(() {});
+      return;
+    }
+    final auth = await _authDataService.getAuthData(user.uid, user.email ?? '', widget.companyId);
+    if (mounted) {
+      setState(() => _authData = auth);
+    }
   }
 
   Future<void> _pickDatum() async {
@@ -171,7 +199,21 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (d != null) setState(() => _datumEinsatz = d);
+    if (d != null) {
+      setState(() => _datumEinsatz = d);
+    }
+  }
+
+  void _openProtokollUebersicht() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => EinsatzprotokollSsdUebersichtScreen(
+          companyId: widget.companyId,
+          userRole: _authData?.role ?? '',
+          onBack: () => Navigator.of(context).pop(),
+        ),
+      ),
+    );
   }
 
   Future<void> _speichern() async {
@@ -249,6 +291,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
         'schulleitungInformiert': _schulleitungInformiert,
         'lehrerInformiert': _lehrerInformiert,
         'leiterSSDInformiert': _leiterSSDInformiert,
+        'verlaufsbeschreibung': _verlaufsbeschreibungCtrl.text.trim().isEmpty ? null : _verlaufsbeschreibungCtrl.text.trim(),
+        'uebergabeAn': _uebergabeAn,
       };
 
       final docId = await _service.create(
@@ -278,7 +322,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Einsatzprotokoll gespeichert.')));
-        _resetForm();
+        await _resetForm();
       }
     } catch (e) {
       if (mounted) {
@@ -289,10 +333,11 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     }
   }
 
-  void _resetForm() {
-    final nextNr = (int.tryParse(_protokollNrCtrl.text) ?? 0) + 1;
+  Future<void> _resetForm() async {
+    final next = await _service.getNextEinsatzNr(widget.companyId);
+    if (!mounted) return;
     setState(() {
-      _protokollNrCtrl.text = '$nextNr';
+      _protokollNrCtrl.text = next;
       _vornameErkrankterCtrl.clear();
       _nameErkrankterCtrl.clear();
       _geburtsdatumCtrl.clear();
@@ -345,6 +390,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
       _schulleitungInformiert = false;
       _lehrerInformiert = false;
       _leiterSSDInformiert = false;
+      _verlaufsbeschreibungCtrl.clear();
+      _uebergabeAn = null;
     });
   }
 
@@ -361,6 +408,18 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
           controller: ctrl,
           maxLines: maxLines,
           decoration: _inputDecoration.copyWith(labelText: label, alignLabelWithHint: maxLines > 1),
+        ),
+      );
+
+  Widget _fieldReadOnly(TextEditingController ctrl, String label) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextField(
+          controller: ctrl,
+          readOnly: true,
+          decoration: _inputDecoration.copyWith(
+            labelText: label,
+            fillColor: Colors.grey.shade100,
+          ),
         ),
       );
 
@@ -428,17 +487,38 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appBarActions = _canViewProtokollUebersicht
+        ? [
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: _openProtokollUebersicht,
+                icon: const Icon(Icons.list_alt, size: 20),
+                label: const Text('Protokollübersicht'),
+              ),
+            ),
+          ]
+        : null;
+
     if (_loading) {
       return Scaffold(
         backgroundColor: AppTheme.surfaceBg,
-        appBar: AppTheme.buildModuleAppBar(title: 'Einsatzprotokoll Schulsanitätsdienst', onBack: widget.onBack),
+        appBar: AppTheme.buildModuleAppBar(
+          title: 'Einsatzprotokoll Schulsanitätsdienst',
+          onBack: widget.onBack,
+          actions: appBarActions,
+        ),
         body: const Center(child: CircularProgressIndicator(color: AppTheme.primary)),
       );
     }
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppTheme.buildModuleAppBar(title: 'Einsatzprotokoll Schulsanitätsdienst', onBack: widget.onBack),
+      appBar: AppTheme.buildModuleAppBar(
+        title: 'Einsatzprotokoll Schulsanitätsdienst',
+        onBack: widget.onBack,
+        actions: appBarActions,
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -471,7 +551,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _field(_protokollNrCtrl, 'Protokoll Nr. / Einsatz-Nr.'),
+                          _fieldReadOnly(_protokollNrCtrl, 'Protokoll Nr. / Einsatz-Nr.'),
                           const SizedBox(height: 16),
                           _buildSchulsanitaeterCard(),
                         ],
@@ -738,57 +818,64 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                     Container(
                       color: Theme.of(context).colorScheme.surface,
                       padding: const EdgeInsets.all(16),
-                      child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _checkboxRow('Betreuung', _massnahmeBetreuung, (v) => setState(() => _massnahmeBetreuung = v)),
-                              _checkboxRow('Pflaster', _massnahmePflaster, (v) => setState(() => _massnahmePflaster = v)),
-                              _checkboxRow('Verband', _massnahmeVerband, (v) => setState(() => _massnahmeVerband = v)),
-                              _checkboxRow('Kühlung', _massnahmeKuehlung, (v) => setState(() => _massnahmeKuehlung = v)),
-                              _checkboxRow('Sonstiges', _massnahmeSonstiges, (v) => setState(() => _massnahmeSonstiges = v)),
-                              if (_massnahmeSonstiges) _field(_massnahmeSonstigesTextCtrl, 'Sonstiges – Angabe'),
-                              _checkboxRow('Elternbrief mitgegeben', _elternbriefMitgegeben, (v) => setState(() => _elternbriefMitgegeben = v)),
-                              _checkboxRow('Arztbesuch empfohlen', _arztbesuchEmpfohlen, (v) => setState(() => _arztbesuchEmpfohlen = v)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _checkboxRow('Betreuung', _massnahmeBetreuung, (v) => setState(() => _massnahmeBetreuung = v)),
+                                    _checkboxRow('Pflaster', _massnahmePflaster, (v) => setState(() => _massnahmePflaster = v)),
+                                    _checkboxRow('Verband', _massnahmeVerband, (v) => setState(() => _massnahmeVerband = v)),
+                                    _checkboxRow('Kühlung', _massnahmeKuehlung, (v) => setState(() => _massnahmeKuehlung = v)),
+                                    _checkboxRow('Sonstiges', _massnahmeSonstiges, (v) => setState(() => _massnahmeSonstiges = v)),
+                                    if (_massnahmeSonstiges) _field(_massnahmeSonstigesTextCtrl, 'Sonstiges – Angabe'),
+                                    _checkboxRow('Elternbrief mitgegeben', _elternbriefMitgegeben, (v) => setState(() => _elternbriefMitgegeben = v)),
+                                    _checkboxRow('Arztbesuch empfohlen', _arztbesuchEmpfohlen, (v) => setState(() => _arztbesuchEmpfohlen = v)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 24),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _checkboxRowMitZeitstempel('Notruf', _notruf, _notrufZeitstempelCtrl, 'Notruf abgesetzt um', (v) {
+                                      setState(() {
+                                        _notruf = v;
+                                        if (v && _notrufZeitstempelCtrl.text.isEmpty) {
+                                          _notrufZeitstempelCtrl.text = _formatZeitstempel(DateTime.now());
+                                        }
+                                      });
+                                    }),
+                                    _checkboxRowMitZeitstempel('Eltern benachrichtigt', _elternBenachrichtigt, _elternBenachrichtigtZeitstempelCtrl, 'Eltern benachrichtigt um', (v) {
+                                      setState(() {
+                                        _elternBenachrichtigt = v;
+                                        if (v && _elternBenachrichtigtZeitstempelCtrl.text.isEmpty) {
+                                          _elternBenachrichtigtZeitstempelCtrl.text = _formatZeitstempel(DateTime.now());
+                                        }
+                                      });
+                                    }),
+                                    const SizedBox(height: 16),
+                                    Text('Mindestens eine Person muss informiert worden sein:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                                    const SizedBox(height: 6),
+                                    _checkboxRow('Sekretariat informiert', _sekretariatInformiert, (v) => setState(() => _sekretariatInformiert = v)),
+                                    _checkboxRow('Schulleitung informiert', _schulleitungInformiert, (v) => setState(() => _schulleitungInformiert = v)),
+                                    _checkboxRow('Lehrer informiert', _lehrerInformiert, (v) => setState(() => _lehrerInformiert = v)),
+                                    _checkboxRow('Leiter SSD informiert', _leiterSSDInformiert, (v) => setState(() => _leiterSSDInformiert = v)),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 24),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _checkboxRowMitZeitstempel('Notruf', _notruf, _notrufZeitstempelCtrl, 'Notruf abgesetzt um', (v) {
-                                setState(() {
-                                  _notruf = v;
-                                  if (v && _notrufZeitstempelCtrl.text.isEmpty) {
-                                    _notrufZeitstempelCtrl.text = _formatZeitstempel(DateTime.now());
-                                  }
-                                });
-                              }),
-                              _checkboxRowMitZeitstempel('Eltern benachrichtigt', _elternBenachrichtigt, _elternBenachrichtigtZeitstempelCtrl, 'Eltern benachrichtigt um', (v) {
-                                setState(() {
-                                  _elternBenachrichtigt = v;
-                                  if (v && _elternBenachrichtigtZeitstempelCtrl.text.isEmpty) {
-                                    _elternBenachrichtigtZeitstempelCtrl.text = _formatZeitstempel(DateTime.now());
-                                  }
-                                });
-                              }),
-                              const SizedBox(height: 16),
-                              Text('Mindestens eine Person muss informiert worden sein:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                              const SizedBox(height: 6),
-                              _checkboxRow('Sekretariat informiert', _sekretariatInformiert, (v) => setState(() => _sekretariatInformiert = v)),
-                              _checkboxRow('Schulleitung informiert', _schulleitungInformiert, (v) => setState(() => _schulleitungInformiert = v)),
-                              _checkboxRow('Lehrer informiert', _lehrerInformiert, (v) => setState(() => _lehrerInformiert = v)),
-                              _checkboxRow('Leiter SSD informiert', _leiterSSDInformiert, (v) => setState(() => _leiterSSDInformiert = v)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 16),
+                          _field(_verlaufsbeschreibungCtrl, 'Verlaufsbeschreibung', maxLines: 4),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -820,7 +907,14 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                     Container(
                       color: Theme.of(context).colorScheme.surface,
                       padding: const EdgeInsets.all(16),
-                      child: _buildUnterschriftenfeld(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildUebergabeAnDropdown(),
+                          const SizedBox(height: 24),
+                          _buildUnterschriftenfeld(),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -965,6 +1059,27 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
               width: size,
               height: size,
             ),
+    );
+  }
+
+  static const _uebergabeAnOptions = [
+    (null, 'bitte auswählen ...'),
+    ('zurueck_unterricht', 'zurück in den Unterricht'),
+    ('eltern', 'Eltern'),
+    ('rettungsdienst', 'Rettungsdienst'),
+  ];
+
+  Widget _buildUebergabeAnDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DropdownButtonFormField<String?>(
+        value: _uebergabeAn,
+        decoration: _inputDecoration.copyWith(labelText: 'Übergabe an'),
+        items: _uebergabeAnOptions
+            .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2)))
+            .toList(),
+        onChanged: (v) => setState(() => _uebergabeAn = v),
+      ),
     );
   }
 
