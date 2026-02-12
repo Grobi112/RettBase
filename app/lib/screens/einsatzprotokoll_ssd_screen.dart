@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import '../theme/app_theme.dart';
 import '../services/einsatzprotokoll_ssd_service.dart';
 import '../services/auth_service.dart';
 import '../services/auth_data_service.dart';
 import '../widgets/sketch_canvas.dart';
+import '../widgets/signature_pad.dart';
 
 String _formatDate(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
@@ -36,6 +38,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   final _authDataService = AuthDataService();
   final _formKey = GlobalKey<FormState>();
   final _sketchKey = GlobalKey<SketchCanvasState>();
+  final _signatureKey1 = GlobalKey<SignaturePadState>();
+  final _signatureKey2 = GlobalKey<SignaturePadState>();
 
   final _protokollNrCtrl = TextEditingController();
   final _vornameErkrankterCtrl = TextEditingController();
@@ -89,6 +93,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   bool _loading = true;
   String? _nextProtokollNr;
   Uint8List? _sketchImageBytes;
+  Uint8List? _unterschriftBytes1;
+  Uint8List? _unterschriftBytes2;
 
   @override
   void initState() {
@@ -228,6 +234,16 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
         }
       }
 
+      // Unterschriften hochladen falls vorhanden
+      if (_unterschriftBytes1 != null && _unterschriftBytes1!.isNotEmpty) {
+        final url = await _service.uploadUnterschrift(widget.companyId, docId, _unterschriftBytes1!, 1);
+        if (url != null) await _service.updateUnterschriftUrl(widget.companyId, docId, url, 1);
+      }
+      if (_unterschriftBytes2 != null && _unterschriftBytes2!.isNotEmpty) {
+        final url = await _service.uploadUnterschrift(widget.companyId, docId, _unterschriftBytes2!, 2);
+        if (url != null) await _service.updateUnterschriftUrl(widget.companyId, docId, url, 2);
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Einsatzprotokoll gespeichert.')));
         _resetForm();
@@ -278,6 +294,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
       _verletzungSonstiges = false;
       _beschwerdenCtrl.clear();
       _sketchImageBytes = null;
+      _unterschriftBytes1 = null;
+      _unterschriftBytes2 = null;
       _massnahmeBetreuung = false;
       _massnahmePflaster = false;
       _massnahmeVerband = false;
@@ -310,6 +328,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   Widget _checkboxRow(String label, bool value, ValueChanged<bool> onChanged) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
               width: 24,
@@ -317,7 +336,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
               child: Checkbox(value: value, onChanged: (v) => onChanged(v ?? false), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
             ),
             const SizedBox(width: 8),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
+            Flexible(child: Text(label, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis)),
           ],
         ),
       );
@@ -520,28 +539,47 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                       ),
                                     ],
                                   )
-                                : Column(
+                                : Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(child: _buildSchmerzen()),
-                                          const SizedBox(width: 12),
-                                          Expanded(child: Center(child: SizedBox(width: 280, height: 280, child: _buildKoerperSkizze()))),
-                                          const SizedBox(width: 12),
-                                          Expanded(child: _buildVerletzung()),
-                                          const SizedBox(width: 12),
-                                          Expanded(child: _buildAtmung()),
-                                        ],
+                                      Expanded(
+                                        flex: 1,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            _buildSchmerzen(),
+                                            const SizedBox(height: 8),
+                                            _buildVerletzung(),
+                                          ],
+                                        ),
                                       ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          Expanded(child: _field(_pulsCtrl, 'Puls')),
-                                          const SizedBox(width: 12),
-                                          Expanded(child: _field(_blutdruckCtrl, 'Blutdruck (mm/Hg)')),
-                                        ],
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Center(
+                                          child: SizedBox(width: 280, height: 280, child: _buildKoerperSkizze()),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(child: _buildAtmung()),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                children: [
+                                                  _field(_pulsCtrl, 'Puls'),
+                                                  const SizedBox(height: 8),
+                                                  _field(_blutdruckCtrl, 'Blutdruck (mm/Hg)'),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -580,6 +618,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                         _checkboxRow('Elternbrief mitgegeben', _elternbriefMitgegeben, (v) => setState(() => _elternbriefMitgegeben = v)),
                         _checkboxRow('Arztbesuch empfohlen', _arztbesuchEmpfohlen, (v) => setState(() => _arztbesuchEmpfohlen = v)),
                         _checkboxRow('Notruf', _notruf, (v) => setState(() => _notruf = v)),
+                        const SizedBox(height: 16),
+                        _buildUnterschriftenfeld(),
                       ],
                     ),
                   ),
@@ -605,10 +645,10 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Schmerzen:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
-        _radioRow('keine', _schmerzen, 'keine', (v) => setState(() => _schmerzen = v)),
-        _radioRow('starke', _schmerzen, 'starke', (v) => setState(() => _schmerzen = v)),
-        _radioRow('mittelstarke', _schmerzen, 'mittelstarke', (v) => setState(() => _schmerzen = v)),
+        Text('Schmerzen:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+        _checkboxRow('keine', _schmerzen == 'keine', (v) => setState(() => _schmerzen = v ? 'keine' : null)),
+        _checkboxRow('starke', _schmerzen == 'starke', (v) => setState(() => _schmerzen = v ? 'starke' : null)),
+        _checkboxRow('mittelstarke', _schmerzen == 'mittelstarke', (v) => setState(() => _schmerzen = v ? 'mittelstarke' : null)),
       ],
     );
   }
@@ -617,7 +657,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Atmung:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+        Text('Atmung:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
         _checkboxRow('spontan / frei', _atmungSpontan, (v) => setState(() => _atmungSpontan = v)),
         _checkboxRow('Hyperventilation', _atmungHyperventilation, (v) => setState(() => _atmungHyperventilation = v)),
         _checkboxRow('Atemnot', _atmungAtemnot, (v) => setState(() => _atmungAtemnot = v)),
@@ -629,7 +669,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Welche Verletzung liegt vermutlich vor:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+        Text('Welche Verletzung liegt vermutlich vor:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
         _checkboxRow('Prellung, Zerrung', _verletzungPrellung, (v) => setState(() => _verletzungPrellung = v)),
         _checkboxRow('Knochenbruch', _verletzungBruch, (v) => setState(() => _verletzungBruch = v)),
         _checkboxRow('Wunde', _verletzungWunde, (v) => setState(() => _verletzungWunde = v)),
@@ -665,6 +705,82 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
               height: size,
             ),
     );
+  }
+
+  Widget _buildUnterschriftenfeld() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _buildUnterschriftenfeldEinzel(1, 'Unterschrift Ersthelfer 1', _unterschriftBytes1, _signatureKey1, (b) => _unterschriftBytes1 = b)),
+        const SizedBox(width: 12),
+        Expanded(child: _buildUnterschriftenfeldEinzel(2, 'Unterschrift Ersthelfer 2', _unterschriftBytes2, _signatureKey2, (b) => _unterschriftBytes2 = b)),
+      ],
+    );
+  }
+
+  Widget _buildUnterschriftenfeldEinzel(
+    int index,
+    String label,
+    Uint8List? bytes,
+    GlobalKey<SignaturePadState> signatureKey,
+    void Function(Uint8List?) onSaved,
+  ) {
+    return GestureDetector(
+      onTap: () => _openUnterschriftEditor(index, signatureKey, bytes, onSaved),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 80,
+              width: double.infinity,
+              child: bytes != null && bytes.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(bytes, fit: BoxFit.contain),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text('Zum Eintragen tippen', style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openUnterschriftEditor(
+    int index,
+    GlobalKey<SignaturePadState> signatureKey,
+    Uint8List? initialBytes,
+    void Function(Uint8List?) onSaved,
+  ) async {
+    final result = await showDialog<Uint8List?>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _UnterschriftEditorDialog(
+        signatureKey: signatureKey,
+        initialImageBytes: initialBytes,
+        title: 'Unterschrift Ersthelfer $index',
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() => onSaved(result.isEmpty ? null : result));
+    }
   }
 
   Future<void> _openSketchEditor() async {
@@ -737,6 +853,72 @@ class _SketchEditorDialogState extends State<_SketchEditorDialog> {
                     onPressed: () async {
                       final bytes = await widget.sketchKey.currentState?.captureImage();
                       Navigator.of(context).pop(bytes);
+                    },
+                    child: const Text('Speichern'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UnterschriftEditorDialog extends StatelessWidget {
+  final GlobalKey<SignaturePadState> signatureKey;
+  final Uint8List? initialImageBytes;
+  final String title;
+
+  const _UnterschriftEditorDialog({required this.signatureKey, this.initialImageBytes, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 500),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Text(
+                'Mit Finger, Tabletstift oder Maus unterschreiben.',
+                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: PointerInterceptor(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SignaturePad(key: signatureKey, height: 180),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (initialImageBytes != null)
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(Uint8List(0)),
+                      child: const Text('Entfernen'),
+                    ),
+                  if (initialImageBytes != null) const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Abbrechen'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () async {
+                      final bytes = await signatureKey.currentState?.captureImage();
+                      if (context.mounted) Navigator.of(context).pop(bytes ?? Uint8List(0));
                     },
                     child: const Text('Speichern'),
                   ),

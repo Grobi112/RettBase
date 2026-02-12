@@ -42,4 +42,18 @@ class EinsatzprotokollSsdService {
   Future<void> updateKoerperSkizzeUrl(String companyId, String docId, String url) async {
     await _col(companyId).doc(docId).update({'koerperSkizzeUrl': url});
   }
+
+  /// Unterschrift eines Ersthelfers hochladen (index: 1 oder 2)
+  Future<String?> uploadUnterschrift(String companyId, String docId, Uint8List bytes, int index) async {
+    if (bytes.isEmpty) return null;
+    final path = 'kunden/$companyId/einsatzprotokoll-ssd/$docId/unterschrift-$index.png';
+    final ref = _storage.ref().child(path);
+    await ref.putData(bytes, SettableMetadata(contentType: 'image/png'));
+    return ref.getDownloadURL();
+  }
+
+  /// Unterschrift-URL im Protokoll-Dokument speichern (index: 1 oder 2)
+  Future<void> updateUnterschriftUrl(String companyId, String docId, String url, int index) async {
+    await _col(companyId).doc(docId).update({'unterschriftUrl$index': url});
+  }
 }
