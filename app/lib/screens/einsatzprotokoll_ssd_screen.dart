@@ -12,6 +12,9 @@ import '../widgets/signature_pad.dart';
 String _formatDate(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
 
+String _formatZeitstempel(DateTime d) =>
+    '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
 const _inputDecoration = InputDecoration(
   filled: true,
   fillColor: Colors.white,
@@ -71,6 +74,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   bool _atmungHyperventilation = false;
   bool _atmungAtemnot = false;
   final _pulsCtrl = TextEditingController();
+  final _spo2Ctrl = TextEditingController();
   final _blutdruckCtrl = TextEditingController();
   bool _verletzungPrellung = false;
   bool _verletzungBruch = false;
@@ -88,11 +92,23 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   bool _elternbriefMitgegeben = false;
   bool _arztbesuchEmpfohlen = false;
   bool _notruf = false;
+  final _notrufZeitstempelCtrl = TextEditingController();
+  final _elternBenachrichtigtZeitstempelCtrl = TextEditingController();
+  bool _sekretariatInformiert = false;
+  bool _schulleitungInformiert = false;
+  bool _lehrerInformiert = false;
+  bool _leiterSSDInformiert = false;
 
   bool _saving = false;
   bool _loading = true;
   String? _nextProtokollNr;
   Uint8List? _sketchImageBytes;
+  bool _rettungstechnischeDatenExpanded = true;
+  bool _patientendatenExpanded = true;
+  bool _angabenErkrankungVerletzungExpanded = true;
+  bool _erstbefundExpanded = true;
+  bool _getroffeneMassnahmenExpanded = true;
+  bool _einsatzabschlussExpanded = true;
   Uint8List? _unterschriftBytes1;
   Uint8List? _unterschriftBytes2;
 
@@ -139,9 +155,12 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     _unfallOrtCtrl.dispose();
     _schilderungCtrl.dispose();
     _pulsCtrl.dispose();
+    _spo2Ctrl.dispose();
     _blutdruckCtrl.dispose();
     _beschwerdenCtrl.dispose();
     _massnahmeSonstigesTextCtrl.dispose();
+    _notrufZeitstempelCtrl.dispose();
+    _elternBenachrichtigtZeitstempelCtrl.dispose();
     super.dispose();
   }
 
@@ -160,6 +179,12 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     if (schilderung.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Bitte Schilderung des Unfalls/der Erkrankung ausfüllen.')),
+      );
+      return;
+    }
+    if (!_sekretariatInformiert && !_schulleitungInformiert && !_lehrerInformiert && !_leiterSSDInformiert) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bitte mindestens eine Person ankreuzen (Sekretariat, Schulleitung, Lehrer oder Leiter SSD).')),
       );
       return;
     }
@@ -201,6 +226,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
         'atmungHyperventilation': _atmungHyperventilation,
         'atmungAtemnot': _atmungAtemnot,
         'puls': _pulsCtrl.text.trim().isEmpty ? null : _pulsCtrl.text.trim(),
+        'spo2': _spo2Ctrl.text.trim().isEmpty ? null : _spo2Ctrl.text.trim(),
         'blutdruck': _blutdruckCtrl.text.trim().isEmpty ? null : _blutdruckCtrl.text.trim(),
         'verletzungPrellung': _verletzungPrellung,
         'verletzungBruch': _verletzungBruch,
@@ -217,6 +243,12 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
         'elternbriefMitgegeben': _elternbriefMitgegeben,
         'arztbesuchEmpfohlen': _arztbesuchEmpfohlen,
         'notruf': _notruf,
+        'notrufZeitstempel': _notrufZeitstempelCtrl.text.trim().isEmpty ? null : _notrufZeitstempelCtrl.text.trim(),
+        'elternBenachrichtigtZeitstempel': _elternBenachrichtigtZeitstempelCtrl.text.trim().isEmpty ? null : _elternBenachrichtigtZeitstempelCtrl.text.trim(),
+        'sekretariatInformiert': _sekretariatInformiert,
+        'schulleitungInformiert': _schulleitungInformiert,
+        'lehrerInformiert': _lehrerInformiert,
+        'leiterSSDInformiert': _leiterSSDInformiert,
       };
 
       final docId = await _service.create(
@@ -287,6 +319,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
       _atmungHyperventilation = false;
       _atmungAtemnot = false;
       _pulsCtrl.clear();
+      _spo2Ctrl.clear();
       _blutdruckCtrl.clear();
       _verletzungPrellung = false;
       _verletzungBruch = false;
@@ -306,6 +339,12 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
       _elternbriefMitgegeben = false;
       _arztbesuchEmpfohlen = false;
       _notruf = false;
+      _notrufZeitstempelCtrl.clear();
+      _elternBenachrichtigtZeitstempelCtrl.clear();
+      _sekretariatInformiert = false;
+      _schulleitungInformiert = false;
+      _lehrerInformiert = false;
+      _leiterSSDInformiert = false;
     });
   }
 
@@ -341,6 +380,37 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
         ),
       );
 
+  Widget _checkboxRowMitZeitstempel(String label, bool value, TextEditingController zeitstempelCtrl, String zeitstempelLabel, ValueChanged<bool> onChanged) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(value: value, onChanged: (v) => onChanged(v ?? false), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                ),
+                const SizedBox(width: 8),
+                Flexible(child: Text(label, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+            if (value) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextField(
+                  controller: zeitstempelCtrl,
+                  decoration: _inputDecoration.copyWith(labelText: zeitstempelLabel),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+
   Widget _radioRow(String label, String? groupValue, String value, ValueChanged<String?> onChanged) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Row(
@@ -361,158 +431,202 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: AppTheme.surfaceBg,
-        appBar: AppTheme.buildModuleAppBar(title: 'Einsatzprotokoll SSD', onBack: widget.onBack),
+        appBar: AppTheme.buildModuleAppBar(title: 'Einsatzprotokoll Schulsanitätsdienst', onBack: widget.onBack),
         body: const Center(child: CircularProgressIndicator(color: AppTheme.primary)),
       );
     }
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppTheme.buildModuleAppBar(title: 'Einsatzprotokoll SSD', onBack: widget.onBack),
+      appBar: AppTheme.buildModuleAppBar(title: 'Einsatzprotokoll Schulsanitätsdienst', onBack: widget.onBack),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Header
+            // Rettungstechnische Daten (ausklappbar)
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              child: Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _rettungstechnischeDatenExpanded,
+                  onExpansionChanged: (v) => setState(() => _rettungstechnischeDatenExpanded = v),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  childrenPadding: EdgeInsets.zero,
+                  collapsedBackgroundColor: AppTheme.primary,
+                  backgroundColor: AppTheme.primary,
+                  textColor: Colors.white,
+                  collapsedTextColor: Colors.white,
+                  iconColor: Colors.white,
+                  collapsedIconColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  title: Text('Rettungstechnische Daten', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
                   children: [
-                    Text('Einsatzprotokoll des Schulsanitätsdienstes', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 12),
-                    _field(_protokollNrCtrl, 'Protokoll Nr.'),
+                    Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _field(_protokollNrCtrl, 'Protokoll Nr. / Einsatz-Nr.'),
+                          const SizedBox(height: 16),
+                          _buildSchulsanitaeterCard(),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Erkrankter • Verletzter
+            // Patientendaten (ausklappbar)
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _sectionHeader('Erkrankter • Verletzter'),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        _field(_vornameErkrankterCtrl, 'Vorname'),
-                        _field(_nameErkrankterCtrl, 'Name'),
-                        _field(_geburtsdatumCtrl, 'Geburtsdatum'),
-                        _field(_klasseCtrl, 'Klasse'),
-                      ],
+              child: Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _patientendatenExpanded,
+                  onExpansionChanged: (v) => setState(() => _patientendatenExpanded = v),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  childrenPadding: EdgeInsets.zero,
+                  collapsedBackgroundColor: AppTheme.primary,
+                  backgroundColor: AppTheme.primary,
+                  textColor: Colors.white,
+                  collapsedTextColor: Colors.white,
+                  iconColor: Colors.white,
+                  collapsedIconColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  title: Text('Patientendaten', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                  children: [
+                    Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: _field(_vornameErkrankterCtrl, 'Vorname')),
+                              const SizedBox(width: 12),
+                              Expanded(child: _field(_nameErkrankterCtrl, 'Name')),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              Expanded(child: _field(_geburtsdatumCtrl, 'Geburtsdatum')),
+                              const SizedBox(width: 12),
+                              Expanded(child: _field(_klasseCtrl, 'Klasse')),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Schulsanitäter • Ersthelfer
+            // Angaben zur Erkrankung/Verletzung (ausklappbar)
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _sectionHeader('Schulsanitäter • Ersthelfer'),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        _field(_vornameHelfer1Ctrl, 'Vorname (1. Ersthelfer)'),
-                        _field(_nameHelfer1Ctrl, 'Name (1. Ersthelfer)'),
-                        _field(_vornameHelfer2Ctrl, 'Vorname (2. Ersthelfer)'),
-                        _field(_nameHelfer2Ctrl, 'Name (2. Ersthelfer)'),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Row(
+              child: Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _angabenErkrankungVerletzungExpanded,
+                  onExpansionChanged: (v) => setState(() => _angabenErkrankungVerletzungExpanded = v),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  childrenPadding: EdgeInsets.zero,
+                  collapsedBackgroundColor: AppTheme.primary,
+                  backgroundColor: AppTheme.primary,
+                  textColor: Colors.white,
+                  collapsedTextColor: Colors.white,
+                  iconColor: Colors.white,
+                  collapsedIconColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  title: Text('Angaben zur Erkrankung/Verletzung', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                  children: [
+                    Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
-                                child: InkWell(
-                                  onTap: _pickDatum,
-                                  child: InputDecorator(
-                                    decoration: _inputDecoration.copyWith(labelText: 'Datum'),
-                                    child: Text(_datumEinsatz != null ? _formatDate(_datumEinsatz!) : 'Datum wählen'),
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Art des Vorfalls:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                                    _checkboxRow('Erkrankung', _erkrankung, (v) => setState(() => _erkrankung = v)),
+                                    _checkboxRow('Unfall', _unfall, (v) => setState(() => _unfall = v)),
+                                    if (_erkrankung) _field(_artErkrankungCtrl, 'Art der Erkrankung'),
+                                    if (_unfall) _field(_unfallOrtCtrl, 'Wo genau ist der Unfall passiert?'),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              const SizedBox(width: 24),
                               Expanded(
-                                child: TextField(
-                                  controller: _uhrzeitCtrl,
-                                  decoration: _inputDecoration.copyWith(labelText: 'Uhrzeit', hintText: 'HH:MM'),
-                                  keyboardType: TextInputType.datetime,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Was hat der Verletzte zum Unfallzeitpunkt gemacht:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                                    _checkboxRow('Sportunterricht', _sportunterricht, (v) => setState(() => _sportunterricht = v)),
+                                    _checkboxRow('Sonstiger Unterricht', _sonstigerUnterricht, (v) => setState(() => _sonstigerUnterricht = v)),
+                                    _checkboxRow('Pause', _pause, (v) => setState(() => _pause = v)),
+                                    _checkboxRow('Schulweg', _schulweg, (v) => setState(() => _schulweg = v)),
+                                    _checkboxRow('Sonstiges', _sonstigesAktivitaet, (v) => setState(() => _sonstigesAktivitaet = v)),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        _field(_einsatzortCtrl, 'Einsatzort'),
-                      ],
+                          const SizedBox(height: 12),
+                          _field(_schilderungCtrl, 'Schilderung des Unfalls oder der Erkrankung *', maxLines: 4),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Weitere Angaben
+            // Erstbefund (ausklappbar)
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _sectionHeader('Weitere Angaben'),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Art des Vorfalls:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
-                        _checkboxRow('Erkrankung', _erkrankung, (v) => setState(() => _erkrankung = v)),
-                        _checkboxRow('Unfall', _unfall, (v) => setState(() => _unfall = v)),
-                        if (_erkrankung) _field(_artErkrankungCtrl, 'Art der Erkrankung'),
-                        if (_unfall) _field(_unfallOrtCtrl, 'Wo genau ist der Unfall passiert?'),
-                        const SizedBox(height: 12),
-                        Text('Was hat der Verletzte zum Unfallzeitpunkt gemacht:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
-                        _checkboxRow('Sportunterricht', _sportunterricht, (v) => setState(() => _sportunterricht = v)),
-                        _checkboxRow('Sonstiger Unterricht', _sonstigerUnterricht, (v) => setState(() => _sonstigerUnterricht = v)),
-                        _checkboxRow('Pause', _pause, (v) => setState(() => _pause = v)),
-                        _checkboxRow('Schulweg', _schulweg, (v) => setState(() => _schulweg = v)),
-                        _checkboxRow('Sonstiges', _sonstigesAktivitaet, (v) => setState(() => _sonstigesAktivitaet = v)),
-                        const SizedBox(height: 12),
-                        _field(_schilderungCtrl, 'Schilderung des Unfalls oder der Erkrankung *', maxLines: 4),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Erstbefund
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _sectionHeader('Erstbefund'),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: LayoutBuilder(
+              child: Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _erstbefundExpanded,
+                  onExpansionChanged: (v) => setState(() => _erstbefundExpanded = v),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  childrenPadding: EdgeInsets.zero,
+                  collapsedBackgroundColor: AppTheme.primary,
+                  backgroundColor: AppTheme.primary,
+                  textColor: Colors.white,
+                  collapsedTextColor: Colors.white,
+                  iconColor: Colors.white,
+                  collapsedIconColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  title: Text('Erstbefund', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                  children: [
+                    Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      padding: const EdgeInsets.all(16),
+                      child: LayoutBuilder(
                       builder: (context, constraints) {
                         final isNarrow = constraints.maxWidth < 800;
                         return Column(
@@ -533,6 +647,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                       Row(
                                         children: [
                                           Expanded(child: _field(_pulsCtrl, 'Puls')),
+                                          const SizedBox(width: 8),
+                                          Expanded(child: _field(_spo2Ctrl, 'Sauerstoffsättigung (SpO2)')),
                                           const SizedBox(width: 8),
                                           Expanded(child: _field(_blutdruckCtrl, 'Blutdruck (mm/Hg)')),
                                         ],
@@ -574,6 +690,8 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                                 children: [
                                                   _field(_pulsCtrl, 'Puls'),
                                                   const SizedBox(height: 8),
+                                                  _field(_spo2Ctrl, 'Sauerstoffsättigung (SpO2)'),
+                                                  const SizedBox(height: 8),
                                                   _field(_blutdruckCtrl, 'Blutdruck (mm/Hg)'),
                                                 ],
                                               ),
@@ -589,41 +707,123 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                         );
                       },
                     ),
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // Getroffene Maßnahmen
+            // Getroffene Maßnahmen (ausklappbar)
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _sectionHeader('Getroffene Maßnahmen'),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+              child: Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _getroffeneMassnahmenExpanded,
+                  onExpansionChanged: (v) => setState(() => _getroffeneMassnahmenExpanded = v),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  childrenPadding: EdgeInsets.zero,
+                  collapsedBackgroundColor: AppTheme.primary,
+                  backgroundColor: AppTheme.primary,
+                  textColor: Colors.white,
+                  collapsedTextColor: Colors.white,
+                  iconColor: Colors.white,
+                  collapsedIconColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  title: Text('Getroffene Maßnahmen', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                  children: [
+                    Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _checkboxRow('Betreuung', _massnahmeBetreuung, (v) => setState(() => _massnahmeBetreuung = v)),
-                        _checkboxRow('Pflaster', _massnahmePflaster, (v) => setState(() => _massnahmePflaster = v)),
-                        _checkboxRow('Verband', _massnahmeVerband, (v) => setState(() => _massnahmeVerband = v)),
-                        _checkboxRow('Kühlung', _massnahmeKuehlung, (v) => setState(() => _massnahmeKuehlung = v)),
-                        _checkboxRow('Sonstiges', _massnahmeSonstiges, (v) => setState(() => _massnahmeSonstiges = v)),
-                        if (_massnahmeSonstiges) _field(_massnahmeSonstigesTextCtrl, 'Sonstiges – Angabe'),
-                        _checkboxRow('Eltern benachrichtigt', _elternBenachrichtigt, (v) => setState(() => _elternBenachrichtigt = v)),
-                        _checkboxRow('Elternbrief mitgegeben', _elternbriefMitgegeben, (v) => setState(() => _elternbriefMitgegeben = v)),
-                        _checkboxRow('Arztbesuch empfohlen', _arztbesuchEmpfohlen, (v) => setState(() => _arztbesuchEmpfohlen = v)),
-                        _checkboxRow('Notruf', _notruf, (v) => setState(() => _notruf = v)),
-                        const SizedBox(height: 16),
-                        _buildUnterschriftenfeld(),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _checkboxRow('Betreuung', _massnahmeBetreuung, (v) => setState(() => _massnahmeBetreuung = v)),
+                              _checkboxRow('Pflaster', _massnahmePflaster, (v) => setState(() => _massnahmePflaster = v)),
+                              _checkboxRow('Verband', _massnahmeVerband, (v) => setState(() => _massnahmeVerband = v)),
+                              _checkboxRow('Kühlung', _massnahmeKuehlung, (v) => setState(() => _massnahmeKuehlung = v)),
+                              _checkboxRow('Sonstiges', _massnahmeSonstiges, (v) => setState(() => _massnahmeSonstiges = v)),
+                              if (_massnahmeSonstiges) _field(_massnahmeSonstigesTextCtrl, 'Sonstiges – Angabe'),
+                              _checkboxRow('Elternbrief mitgegeben', _elternbriefMitgegeben, (v) => setState(() => _elternbriefMitgegeben = v)),
+                              _checkboxRow('Arztbesuch empfohlen', _arztbesuchEmpfohlen, (v) => setState(() => _arztbesuchEmpfohlen = v)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _checkboxRowMitZeitstempel('Notruf', _notruf, _notrufZeitstempelCtrl, 'Notruf abgesetzt um', (v) {
+                                setState(() {
+                                  _notruf = v;
+                                  if (v && _notrufZeitstempelCtrl.text.isEmpty) {
+                                    _notrufZeitstempelCtrl.text = _formatZeitstempel(DateTime.now());
+                                  }
+                                });
+                              }),
+                              _checkboxRowMitZeitstempel('Eltern benachrichtigt', _elternBenachrichtigt, _elternBenachrichtigtZeitstempelCtrl, 'Eltern benachrichtigt um', (v) {
+                                setState(() {
+                                  _elternBenachrichtigt = v;
+                                  if (v && _elternBenachrichtigtZeitstempelCtrl.text.isEmpty) {
+                                    _elternBenachrichtigtZeitstempelCtrl.text = _formatZeitstempel(DateTime.now());
+                                  }
+                                });
+                              }),
+                              const SizedBox(height: 16),
+                              Text('Mindestens eine Person muss informiert worden sein:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                              const SizedBox(height: 6),
+                              _checkboxRow('Sekretariat informiert', _sekretariatInformiert, (v) => setState(() => _sekretariatInformiert = v)),
+                              _checkboxRow('Schulleitung informiert', _schulleitungInformiert, (v) => setState(() => _schulleitungInformiert = v)),
+                              _checkboxRow('Lehrer informiert', _lehrerInformiert, (v) => setState(() => _lehrerInformiert = v)),
+                              _checkboxRow('Leiter SSD informiert', _leiterSSDInformiert, (v) => setState(() => _leiterSSDInformiert = v)),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Einsatzabschluss (ausklappbar)
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+              child: Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  initiallyExpanded: _einsatzabschlussExpanded,
+                  onExpansionChanged: (v) => setState(() => _einsatzabschlussExpanded = v),
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  childrenPadding: EdgeInsets.zero,
+                  collapsedBackgroundColor: AppTheme.primary,
+                  backgroundColor: AppTheme.primary,
+                  textColor: Colors.white,
+                  collapsedTextColor: Colors.white,
+                  iconColor: Colors.white,
+                  collapsedIconColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  title: Text('Einsatzabschluss', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                  children: [
+                    Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      padding: const EdgeInsets.all(16),
+                      child: _buildUnterschriftenfeld(),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -637,6 +837,67 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSchulsanitaeterCard() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionHeader('Schulsanitäter/in • Ersthelfer'),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _field(_vornameHelfer1Ctrl, 'Vorname (Schulsanitäter/in 1)')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _field(_nameHelfer1Ctrl, 'Name (Schulsanitäter/in 1)')),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Expanded(child: _field(_vornameHelfer2Ctrl, 'Vorname (Schulsanitäter/in 2)')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _field(_nameHelfer2Ctrl, 'Name (Schulsanitäter/in 2)')),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: _pickDatum,
+                          child: InputDecorator(
+                            decoration: _inputDecoration.copyWith(labelText: 'Datum'),
+                            child: Text(_datumEinsatz != null ? _formatDate(_datumEinsatz!) : 'Datum wählen'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _uhrzeitCtrl,
+                          decoration: _inputDecoration.copyWith(labelText: 'Uhrzeit', hintText: 'HH:MM'),
+                          keyboardType: TextInputType.datetime,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _field(_einsatzortCtrl, 'Einsatzort'),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -711,9 +972,9 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _buildUnterschriftenfeldEinzel(1, 'Unterschrift Ersthelfer 1', _unterschriftBytes1, _signatureKey1, (b) => _unterschriftBytes1 = b)),
+        Expanded(child: _buildUnterschriftenfeldEinzel(1, 'Unterschrift Schulsanitäter/in 1', _unterschriftBytes1, _signatureKey1, (b) => _unterschriftBytes1 = b)),
         const SizedBox(width: 12),
-        Expanded(child: _buildUnterschriftenfeldEinzel(2, 'Unterschrift Ersthelfer 2', _unterschriftBytes2, _signatureKey2, (b) => _unterschriftBytes2 = b)),
+        Expanded(child: _buildUnterschriftenfeldEinzel(2, 'Unterschrift Schulsanitäter/in 2', _unterschriftBytes2, _signatureKey2, (b) => _unterschriftBytes2 = b)),
       ],
     );
   }
@@ -775,7 +1036,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
       builder: (context) => _UnterschriftEditorDialog(
         signatureKey: signatureKey,
         initialImageBytes: initialBytes,
-        title: 'Unterschrift Ersthelfer $index',
+        title: 'Unterschrift Schulsanitäter/in $index',
       ),
     );
     if (result != null && mounted) {
