@@ -176,14 +176,26 @@ class _HomeScreenState extends State<HomeScreen> {
               builder: (context, slots, _) {
                 return LayoutBuilder(
                   builder: (context, constraints) {
-                final crossAxisCount = MediaQuery.sizeOf(context).width < 500 ? 2 : 3;
-                const rowCount = 2;
+                final isNarrow = MediaQuery.sizeOf(context).width < 500;
+                final crossAxisCount = isNarrow ? 2 : 3;
                 final spacing = MediaQuery.sizeOf(context).width < 500 ? 10.0 : 12.0;
-                final availableWidth = constraints.maxWidth - (spacing * (crossAxisCount - 1));
-                final buttonWidth = availableWidth / crossAxisCount;
                 final buttonHeight = MediaQuery.sizeOf(context).width < 500 ? 44.0 : 35.0;
 
-                final containerTypes = slots.whereType<String>().toList();
+                // Nur belegte Schnellstart-Felder anzeigen; leere ausblenden
+                final filledShortcuts = <(int, AppModule)>[];
+                for (var i = 0; i < widget.shortcuts.length; i++) {
+                  final m = widget.shortcuts[i];
+                  if (m != null) filledShortcuts.add((i, m));
+                }
+                final buttonWidth = filledShortcuts.isNotEmpty
+                    ? (constraints.maxWidth - (spacing * (crossAxisCount - 1))) / crossAxisCount
+                    : 0.0;
+
+                // Nur Slots mit ausgewähltem Container anzeigen; null (= "— Kein Container —") ausblenden
+                final containerTypes = slots
+                    .whereType<String>()
+                    .where((s) => s.trim().isNotEmpty)
+                    .toList();
                 final showContainers = containerTypes.isNotEmpty;
                 final infoListenable = widget.informationenItemsListenable ?? _emptyInfoItemsNotifier;
 
@@ -192,29 +204,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      ...List.generate(rowCount, (row) {
-                        return Padding(
-                          padding: EdgeInsets.only(bottom: row < rowCount - 1 ? spacing : spacing),
-                          child: Row(
-                            children: List.generate(crossAxisCount, (col) {
-                              final index = row * crossAxisCount + col;
-                              return Expanded(
-                                child: Padding(
-                                  padding: EdgeInsets.only(right: col < crossAxisCount - 1 ? spacing : 0),
-                                  child: _ShortcutButton(
-                                    index: index,
-                                    width: buttonWidth,
-                                    height: buttonHeight,
-                                    module: index < widget.shortcuts.length ? widget.shortcuts[index] : null,
-                                    chatUnreadListenable: widget.chatUnreadListenable,
-                                    onTap: () => widget.onShortcutTap?.call(index),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                        );
-                      }),
+                      if (filledShortcuts.isNotEmpty)
+                        Wrap(
+                          spacing: spacing,
+                          runSpacing: spacing,
+                          children: filledShortcuts.map((e) {
+                            final origIndex = e.$1;
+                            final mod = e.$2;
+                            return SizedBox(
+                              width: buttonWidth,
+                              height: buttonHeight,
+                              child: _ShortcutButton(
+                                index: origIndex,
+                                width: buttonWidth,
+                                height: buttonHeight,
+                                module: mod,
+                                chatUnreadListenable: widget.chatUnreadListenable,
+                                onTap: () => widget.onShortcutTap?.call(origIndex),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       if (showContainers) ...[
                         const SizedBox(height: 24),
                         LayoutBuilder(

@@ -29,6 +29,7 @@ import 'telefonliste_screen.dart';
 import 'company_id_screen.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
+import 'einsatzprotokoll_ssd_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
 import 'kundenverwaltung_screen.dart';
@@ -103,16 +104,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       debugPrint('RettBase Dashboard: authData role=${authData.role} companyId=${authData.companyId} displayName=${authData.displayName} vorname=${authData.vorname}');
       final effectiveCompanyId = authData.companyId.trim().isNotEmpty ? authData.companyId : widget.companyId;
-      var allMods = await _modulesService.getModulesForCompany(effectiveCompanyId, authData.role);
-      var shortcuts = await _modulesService.getShortcuts(effectiveCompanyId, authData.role);
-
-      var menuStructure = <Map<String, dynamic>>[];
-      final isAdminCompany = (effectiveCompanyId.trim().toLowerCase()) == 'admin';
       var bereich = await _kundenService.getCompanyBereich(effectiveCompanyId);
-      debugPrint('RettBase Dashboard: getCompanyBereich($effectiveCompanyId)=$bereich');
+      final isAdminCompany = (effectiveCompanyId.trim().toLowerCase()) == 'admin';
       if (bereich == null || bereich.isEmpty) {
         bereich = isAdminCompany ? KundenBereich.admin : KundenBereich.rettungsdienst;
       }
+      var allMods = await _modulesService.getModulesForCompany(effectiveCompanyId, authData.role, bereich: bereich);
+      var shortcuts = await _modulesService.getShortcuts(effectiveCompanyId, authData.role, bereich: bereich);
+
+      var menuStructure = <Map<String, dynamic>>[];
+      debugPrint('RettBase Dashboard: getCompanyBereich($effectiveCompanyId)=$bereich');
       if (bereich != null && bereich.isNotEmpty) {
         menuStructure = await _menuService.loadMenuStructure(bereich);
         debugPrint('RettBase Dashboard: loadMenuStructure($bereich) -> ${menuStructure.length} items');
@@ -121,8 +122,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           debugPrint('RettBase Dashboard: loadLegacyGlobalMenu Fallback -> ${menuStructure.length} items');
         }
         final isSuperadmin = (authData.role ?? '').toLowerCase().trim() == 'superadmin';
-        if (menuStructure.isNotEmpty && !isAdminCompany && !isSuperadmin) {
-          // Shortcuts auf Menü-Module beschränken (Superadmin behält alle)
+        // Bei eigenem Schnellstart: Benutzerauswahl respektieren, nicht nach Menü filtern
+        final hasCustomSchnellstart = await _modulesService.hasCustomSchnellstart(effectiveCompanyId);
+        if (!hasCustomSchnellstart && menuStructure.isNotEmpty && !isAdminCompany && !isSuperadmin) {
+          // Shortcuts auf Menü-Module beschränken (nur bei Default-Schnellstart)
           final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
           if (menuModuleIds.isNotEmpty) {
             final shortcutList = shortcuts.whereType<AppModule>().toList();
@@ -343,10 +346,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
         break;
       case 'ssd':
-        screen = PlaceholderModuleScreen(
-          moduleName: 'Notfallprotokoll SSD',
+        screen = EinsatzprotokollSsdScreen(
+          companyId: _companyId,
           onBack: onBack,
-          hideAppBar: true,
         );
         break;
       case 'kundenverwaltung':

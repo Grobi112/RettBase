@@ -7,10 +7,33 @@ class ModulverwaltungService {
   CollectionReference<Map<String, dynamic>> get _items =>
       _db.collection('settings').doc('modules').collection('items');
 
-  /// Lädt alle Modul-Definitionen
+  static const _ssdRoles = [
+    'superadmin', 'admin', 'leiterssd', 'geschaeftsfuehrung', 'rettungsdienstleitung',
+    'koordinator', 'wachleitung', 'ovd', 'user', 'fahrzeugbeauftragter', 'mpg-beauftragter',
+  ];
+
+  /// Stellt sicher, dass das Modul Einsatzprotokoll SSD in Firestore existiert.
+  Future<void> ensureSsdModuleExists() async {
+    try {
+      await _db.collection('settings').doc('modules').set({'_exists': true}, SetOptions(merge: true));
+      await _items.doc('ssd').set({
+        'label': 'Einsatzprotokoll SSD',
+        'url': '',
+        'icon': 'default',
+        'roles': _ssdRoles,
+        'bereich': 'schulsanitaetsdienst',
+        'free': true,
+        'order': 29,
+        'active': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  /// Lädt alle Modul-Definitionen (ohne orderBy – manche Docs könnten order fehlen)
   Future<Map<String, Map<String, dynamic>>> getAllModules() async {
     try {
-      final snap = await _items.orderBy('order').get();
+      final snap = await _items.get();
       return {for (final d in snap.docs) d.id: d.data()..['id'] = d.id};
     } catch (_) {
       return {};

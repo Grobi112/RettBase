@@ -52,6 +52,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       _error = null;
     });
     try {
+      await _modulService.ensureSsdModuleExists();
       var items = await _menuService.loadMenuStructure(_selectedBereich);
       // Menü startet leer – keine Legacy-Migration, Nutzer legt alles selbst an
       var mods = await _modulService.getAllModules();
@@ -64,6 +65,8 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
           mods[m.id] = {'id': m.id, 'label': m.label, 'url': m.url ?? ''};
         }
       }
+      // Einsatzprotokoll SSD immer verfügbar
+      mods['ssd'] ??= {'id': 'ssd', 'label': 'Einsatzprotokoll SSD', 'url': ''};
       if (mounted) {
         setState(() {
           _items = items;
@@ -461,14 +464,18 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
 
   void _showModulePicker({int? underHeadingIndex}) {
     final usedIds = _usedModuleIds();
-    final available = _availableModules.entries
+    var available = _availableModules.entries
         .where((e) => !usedIds.contains(e.key))
-        .toList()
-      ..sort((a, b) {
-        final la = (a.value['label'] ?? a.key).toString().toLowerCase();
-        final lb = (b.value['label'] ?? b.key).toString().toLowerCase();
-        return la.compareTo(lb);
-      });
+        .toList();
+    // Einsatzprotokoll-SSD nur für Bereich Schulsanitätsdienst
+    if (_selectedBereich != KundenBereich.schulsanitaetsdienst) {
+      available = available.where((e) => e.key != 'ssd').toList();
+    }
+    available.sort((a, b) {
+      final la = (a.value['label'] ?? a.key).toString().toLowerCase();
+      final lb = (b.value['label'] ?? b.key).toString().toLowerCase();
+      return la.compareTo(lb);
+    });
     final maxH = MediaQuery.of(context).size.height * 0.75;
     showDialog(
       context: context,

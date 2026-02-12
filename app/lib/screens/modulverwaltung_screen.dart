@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/modulverwaltung_service.dart';
 import '../services/kundenverwaltung_service.dart';
+import '../services/modules_service.dart';
 
 /// Native Modulverwaltung – CRUD für settings/modules/items.
 /// Nur für Superadmin.
@@ -26,10 +27,17 @@ class ModulverwaltungScreen extends StatefulWidget {
 class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
   final _modulService = ModulverwaltungService();
   final _kundenService = KundenverwaltungService();
+  final _searchCtrl = TextEditingController();
 
   Map<String, Map<String, dynamic>> _modules = {};
   bool _loading = true;
   String? _error;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -43,15 +51,21 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
       _error = null;
     });
     try {
-      final mods = await _modulService.getAllModules();
+      await _modulService.ensureSsdModuleExists();
+      var mods = await _modulService.getAllModules();
       if (mods.isEmpty) {
         final defs = await _kundenService.getAllModuleDefs();
         if (defs.isNotEmpty) {
-          for (final e in defs.entries) {
-            mods[e.key] = {'id': e.key, ...e.value};
-          }
+          mods = {for (final e in defs.entries) e.key: {'id': e.key, ...e.value}};
         }
       }
+      for (final m in ModulesService.defaultNativeModules) {
+        if (!mods.containsKey(m.id)) {
+          mods[m.id] = {'id': m.id, 'label': m.label, 'url': m.url ?? '', 'order': m.order};
+        }
+      }
+      // Einsatzprotokoll SSD immer anzeigen (Fallback falls Merge übersprungen)
+      mods['ssd'] ??= {'id': 'ssd', 'label': 'Einsatzprotokoll SSD', 'url': '', 'order': 29, 'active': true, 'roles': _allRoles};
       if (mounted) {
         setState(() {
           _modules = mods;
@@ -226,25 +240,53 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
       );
     }
 
-    final list = _modules.entries.toList()
-      ..sort((a, b) => ((a.value['order'] as num?) ?? 999).compareTo((b.value['order'] as num?) ?? 999));
-
-    if (list.isEmpty) {
-      return Center(
-        child: Text(
-          'Keine Module vorhanden.',
-          style: TextStyle(color: AppTheme.textMuted, fontSize: 16),
-        ),
-      );
+    final query = _searchCtrl.text.trim().toLowerCase();
+    var list = _modules.entries.toList();
+    if (query.isNotEmpty) {
+      list = list.where((e) {
+        final label = (e.value['label'] ?? e.key).toString().toLowerCase();
+        final id = e.key.toLowerCase();
+        return label.contains(query) || id.contains(query);
+      }).toList();
     }
+    list.sort((a, b) {
+      final la = (a.value['label'] ?? a.key).toString().toLowerCase();
+      final lb = (b.value['label'] ?? b.key).toString().toLowerCase();
+      return la.compareTo(lb);
+    });
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      color: AppTheme.primary,
-      child: ListView.builder(
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(Responsive.horizontalPadding(context), 12, Responsive.horizontalPadding(context), 8),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Module suchen …',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+        ),
+        Expanded(
+          child: list.isEmpty
+              ? Center(
+                  child: Text(
+                    query.isNotEmpty ? 'Keine Module gefunden.' : 'Keine Module vorhanden.',
+                    style: TextStyle(color: AppTheme.textMuted, fontSize: 16),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  color: AppTheme.primary,
+                  child: ListView.builder(
         padding: EdgeInsets.fromLTRB(
           Responsive.horizontalPadding(context),
-          16,
+          8,
           Responsive.horizontalPadding(context),
           24,
         ),
@@ -254,7 +296,6 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
           final id = e.key;
           final m = e.value;
           final label = (m['label'] ?? id).toString();
-          final url = (m['url'] ?? '').toString();
           final active = m['active'] != false;
           final isSystem = ['home', 'admin', 'kundenverwaltung'].contains(id);
 
@@ -268,9 +309,20 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                          Row(
                           children: [
                             Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                            if (id == 'ssd') ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text('Nur Schulsanitätsdienst', style: TextStyle(fontSize: 10, color: Colors.blue.shade700)),
+                              ),
+                            ],
                             const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -283,8 +335,7 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text('ID: $id · Reihenfolge: ${m['order'] ?? 999}', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-                        if (url.isNotEmpty) Text(url, style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                        Text('ID: $id', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
                         if (m['roles'] is List)
                           Text('Rollen: ${(m['roles'] as List).join(', ')}', style: TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                       ],
@@ -301,6 +352,9 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
           );
         },
       ),
+                ),
+        ),
+      ],
     );
   }
 }
@@ -317,8 +371,6 @@ class _ModulFormScreen extends StatefulWidget {
 
 class _ModulFormScreenState extends State<_ModulFormScreen> {
   late final TextEditingController _labelCtrl;
-  late final TextEditingController _urlCtrl;
-  late final TextEditingController _iconCtrl;
   late final TextEditingController _orderCtrl;
   late bool _active;
   late Set<String> _selectedRoles;
@@ -328,8 +380,6 @@ class _ModulFormScreenState extends State<_ModulFormScreen> {
     super.initState();
     final m = widget.module;
     _labelCtrl = TextEditingController(text: (m?['label'] ?? '').toString());
-    _urlCtrl = TextEditingController(text: (m?['url'] ?? '').toString());
-    _iconCtrl = TextEditingController(text: (m?['icon'] ?? 'default').toString());
     _orderCtrl = TextEditingController(text: ((m?['order'] as num?) ?? 999).toString());
     _active = m?['active'] != false;
     final roles = m?['roles'];
@@ -339,8 +389,6 @@ class _ModulFormScreenState extends State<_ModulFormScreen> {
   @override
   void dispose() {
     _labelCtrl.dispose();
-    _urlCtrl.dispose();
-    _iconCtrl.dispose();
     _orderCtrl.dispose();
     super.dispose();
   }
@@ -357,8 +405,8 @@ class _ModulFormScreenState extends State<_ModulFormScreen> {
     }
     Navigator.of(context).pop({
       'label': label,
-      'url': _urlCtrl.text.trim(),
-      'icon': _iconCtrl.text.trim().isEmpty ? 'default' : _iconCtrl.text.trim(),
+      'url': '', // Flutter nutzt keine URLs – native Module
+      'icon': 'default',
       'order': int.tryParse(_orderCtrl.text) ?? 999,
       'active': _active,
       'roles': _selectedRoles.toList(),
@@ -381,11 +429,7 @@ class _ModulFormScreenState extends State<_ModulFormScreen> {
         children: [
           TextField(controller: _labelCtrl, decoration: const InputDecoration(labelText: 'Label *')),
           const SizedBox(height: 12),
-          TextField(controller: _urlCtrl, decoration: const InputDecoration(labelText: 'URL')),
-          const SizedBox(height: 12),
-          TextField(controller: _iconCtrl, decoration: const InputDecoration(labelText: 'Icon')),
-          const SizedBox(height: 12),
-          TextField(controller: _orderCtrl, decoration: const InputDecoration(labelText: 'Reihenfolge'), keyboardType: TextInputType.number),
+          TextField(controller: _orderCtrl, decoration: const InputDecoration(labelText: 'Reihenfolge (für Menü)'), keyboardType: TextInputType.number),
           const SizedBox(height: 12),
           SwitchListTile(title: const Text('Aktiv'), value: _active, onChanged: (v) => setState(() => _active = v)),
           const SizedBox(height: 16),

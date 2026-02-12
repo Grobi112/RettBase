@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_module.dart';
+import '../models/kunde_model.dart';
 
 /// Lädt Module für die native App (Firestore + Firmen-Freischaltung).
 /// Firestore-Pfade nutzen immer normalisierte Kunden-ID (kleingeschrieben).
@@ -41,13 +42,13 @@ class ModulesService {
     AppModule(id: 'telefonliste', label: 'Telefonliste', url: '', order: 28, roles: _defaultRoles),
     AppModule(id: 'chat', label: 'Chat', url: '', order: 30, roles: _defaultRoles),
     AppModule(id: 'email', label: 'E-Mail', url: '', order: 31, roles: _defaultRoles),
-    AppModule(id: 'ssd', label: 'Notfallprotokoll SSD', url: '', order: 29, roles: _defaultRoles),
+    AppModule(id: 'ssd', label: 'Einsatzprotokoll SSD', url: '', order: 29, roles: _defaultRoles),
   ];
 
   /// Lädt Shortcuts für die Dashboard-Kacheln (6 Slots).
   /// Nutzt kunden/{companyId}/settings/schnellstart falls vorhanden, sonst erste 6 Module.
-  Future<List<AppModule?>> getShortcuts(String companyId, String role) async {
-    final modules = await getModulesForCompany(companyId, role);
+  Future<List<AppModule?>> getShortcuts(String companyId, String role, {String? bereich}) async {
+    final modules = await getModulesForCompany(companyId, role, bereich: bereich);
     final modById = {for (final m in modules) m.id: m};
 
     final custom = await _getSchnellstartSlots(companyId);
@@ -63,13 +64,19 @@ class ModulesService {
   }
 
   /// Lädt Schnellstart-Slot-IDs für Bearbeitung (custom oder Default = erste 6 Module).
-  Future<List<String?>> getSchnellstartSlotIds(String companyId, String role) async {
+  Future<List<String?>> getSchnellstartSlotIds(String companyId, String role, {String? bereich}) async {
     final custom = await _getSchnellstartSlots(companyId);
     if (custom != null) return custom;
-    final modules = await getModulesForCompany(companyId, role);
+    final modules = await getModulesForCompany(companyId, role, bereich: bereich);
     final list = <String?>[...modules.take(6).map((m) => m.id)];
     while (list.length < 6) list.add(null);
     return list;
+  }
+
+  /// Prüft, ob der Kunde eigene Schnellstart-Slots in Firestore gespeichert hat.
+  Future<bool> hasCustomSchnellstart(String companyId) async {
+    final slots = await _getSchnellstartSlots(companyId);
+    return slots != null;
   }
 
   /// Lädt gespeicherte Schnellstart-Slots aus Firestore (intern).
@@ -104,8 +111,9 @@ class ModulesService {
 
   /// Lädt alle für Firma+Rolle freigegebenen Module.
   /// Firestore: settings/modules/items (Definitionen), kunden/{companyId}/modules (Freischaltung).
-  /// Admin-Firma: alle Module frei. Andere Firmen: nur explizit enabled.
-  Future<List<AppModule>> getModulesForCompany(String companyId, String role) async {
+  /// Bereichs-spezifische Module (z.B. SSD): nur bei passendem bereich, automatisch freigeschaltet
+  /// – siehe docs/KONTEXT_LOGIN_DASHBOARD.md §3.9
+  Future<List<AppModule>> getModulesForCompany(String companyId, String role, {String? bereich}) async {
     try {
       final cid = _normalizeCompanyId(companyId);
       final roleLower = role.toLowerCase().trim();
@@ -113,12 +121,15 @@ class ModulesService {
       final allMods = await _getAllModuleDefs();
       final result = <AppModule>[];
       final isAdminCompany = cid == 'admin';
-      // admin@rettbase.de = Superadmin in JEDER Firma – alle Module sichtbar
       final isGlobalSuperadmin = roleLower == 'superadmin';
+      final bereichResolved = bereich ?? await _getCompanyBereich(cid);
 
       for (final m in defaultNativeModules) {
-        // Admin-Firma oder Superadmin: alle Module; sonst: nur explizit enabled
-        final enabled = isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
+        // Einsatzprotokoll-SSD nur bei Bereich Schulsanitätsdienst – für alle (auch Admin/Superadmin)
+        if (m.id == 'ssd' && bereichResolved != KundenBereich.schulsanitaetsdienst) continue;
+        // SSD bei Schulsanitätsdienst: immer enabled (ohne explizite Freischaltung in kunden/modules)
+        final ssdAutoEnabled = m.id == 'ssd' && bereichResolved == KundenBereich.schulsanitaetsdienst;
+        final enabled = ssdAutoEnabled || isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
         if (!enabled) continue;
         final def = allMods[m.id];
         final roles = def?['roles'] as List? ?? m.roles;
@@ -141,6 +152,28 @@ class ModulesService {
     } catch (_) {
       return defaultNativeModules;
     }
+  }
+
+  Future<String?> _getCompanyBereich(String companyId) async {
+    try {
+      final doc = await _db.collection('kunden').doc(companyId).get();
+      var b = doc.data()?['bereich']?.toString();
+      if (b != null && b.isNotEmpty) return b;
+      final cid = companyId.trim().toLowerCase();
+      final q = await _db.collection('kunden').where('kundenId', isEqualTo: cid).limit(5).get();
+      if (q.docs.isEmpty) {
+        final q2 = await _db.collection('kunden').where('subdomain', isEqualTo: cid).limit(5).get();
+        for (final d in q2.docs) {
+          final br = d.data()['bereich']?.toString();
+          if (br != null && br.isNotEmpty) return br;
+        }
+      }
+      for (final d in q.docs) {
+        final br = d.data()['bereich']?.toString();
+        if (br != null && br.isNotEmpty) return br;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<Map<String, bool>> _getCompanyEnabled(String companyId) async {

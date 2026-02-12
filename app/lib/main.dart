@@ -9,9 +9,14 @@ import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 import 'screens/company_id_screen.dart';
 import 'screens/login_screen.dart';
+import 'utils/service_worker_update_stub.dart'
+    if (dart.library.html) 'utils/service_worker_update_web.dart' as sw_update;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Web: Service-Worker auf Updates prüfen → automatischer Reload bei neuem Build
+  sw_update.initServiceWorkerUpdateListener();
 
   try {
     await Firebase.initializeApp(

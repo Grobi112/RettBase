@@ -99,10 +99,14 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
       ]);
       if (mounted) {
         setState(() {
-          _slots = results[0] as List<String?>;
-          _kategorien = results[1] as List<String>;
           _containerTypeIds = (results[2] as List<String>).isNotEmpty ? results[2] as List<String> : InformationssystemService.defaultContainerTypeIds;
           _containerLabels = (results[3] as Map<String, String>).isNotEmpty ? results[3] as Map<String, String> : InformationssystemService.defaultContainerLabels;
+          final rawSlots = results[0] as List<String?>;
+          _slots = rawSlots.map((s) {
+            if (s == null || s.isEmpty) return null;
+            return _containerTypeIds.contains(s) ? s : null;
+          }).toList();
+          _kategorien = results[1] as List<String>;
           if (_kategorien.isNotEmpty && _formKategorie.isEmpty) _formKategorie = _kategorien.first;
           if (_containerTypeIds.isNotEmpty && !_containerTypeIds.contains(_formTyp)) _formTyp = _containerTypeIds.first;
           _loading = false;
@@ -523,13 +527,15 @@ class _SlotDropdown extends StatelessWidget {
             child: Text(containerLabels[id] ?? id),
           )),
     ];
+    // value muss in options vorkommen; ungültige Werte (z.B. aus Firestore) → null
+    final safeValue = value == null || containerTypeIds.contains(value) ? value : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.textPrimary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String?>(
-          value: value,
+          value: safeValue,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

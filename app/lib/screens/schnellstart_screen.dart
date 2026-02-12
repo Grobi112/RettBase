@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/app_module.dart';
+import '../models/kunde_model.dart';
 import '../services/modules_service.dart';
 import '../services/auth_data_service.dart';
 import '../services/auth_service.dart';
+import '../services/kundenverwaltung_service.dart';
 
 /// Schnellstart-Bearbeitung: 6 Dropdowns für die Dashboard-Kacheln (1–6).
 class SchnellstartScreen extends StatefulWidget {
@@ -26,6 +28,7 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
   final _modulesService = ModulesService();
   final _authService = AuthService();
   final _authDataService = AuthDataService();
+  final _kundenService = KundenverwaltungService();
 
   List<AppModule> _allModules = [];
   List<String?> _slots = [null, null, null, null, null, null];
@@ -51,13 +54,17 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
         user.email ?? '',
         widget.companyId,
       );
+      final bereich = await _kundenService.getCompanyBereich(widget.companyId)
+          ?? KundenBereich.rettungsdienst;
       final modules = await _modulesService.getModulesForCompany(
         widget.companyId,
         authData.role,
+        bereich: bereich,
       );
       final slotIds = await _modulesService.getSchnellstartSlotIds(
         widget.companyId,
         authData.role,
+        bereich: bereich,
       );
       if (mounted) {
         setState(() {

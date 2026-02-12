@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -52,10 +53,10 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 SizedBox(height: narrow ? 16 : 24),
                 Text(
-                  'Rettungsdienst-Management',
+                  'Einfach. Sicher. Digital.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: narrow ? 20 : 28,
+                  style: GoogleFonts.roboto(
+                    fontSize: narrow ? 14 : 22,
                     fontWeight: FontWeight.bold,
                     color: Colors.white.withOpacity(0.95),
                     letterSpacing: 0.5,
