@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
+import '../services/chat_service.dart';
 import '../models/app_module.dart';
 import '../models/information_model.dart';
 import '../models/kunde_model.dart';
@@ -26,10 +28,12 @@ import 'unfallbericht_screen.dart';
 import 'schnittstellenmeldung_screen.dart';
 import 'uebergriffsmeldung_screen.dart';
 import 'telefonliste_screen.dart';
+import 'chat_screen.dart';
 import 'company_id_screen.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'einsatzprotokoll_ssd_screen.dart';
+import 'schichtplan_nfs_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
 import 'kundenverwaltung_screen.dart';
@@ -57,7 +61,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _authDataService = AuthDataService();
   final _modulesService = ModulesService();
   final _infoService = InformationenService();
+  final _chatService = ChatService();
   final _bodyNavigatorKey = GlobalKey<NavigatorState>();
+
+  final _chatUnreadNotifier = ValueNotifier<int>(0);
+  StreamSubscription<int>? _chatUnreadSub;
 
   List<AppModule?> _shortcuts = [];
   List<AppModule> _allModules = [];
@@ -79,16 +87,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _load();
+    _chatUnreadNotifier.addListener(_onChatUnreadChanged);
+  }
+
+  void _onChatUnreadChanged() => setState(() {});
+
+  void _startChatUnreadListener() {
+    _chatUnreadSub?.cancel();
+    final cid = _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
+    if (cid.isEmpty) return;
+    _chatUnreadSub = _chatService.streamUnreadCount(cid).listen((count) {
+      if (mounted) _chatUnreadNotifier.value = count;
+    });
   }
 
   @override
   void dispose() {
+    _chatUnreadNotifier.removeListener(_onChatUnreadChanged);
+    _chatUnreadNotifier.dispose();
+    _chatUnreadSub?.cancel();
     _containerSlotsNotifier.dispose();
     _infoItemsNotifier.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceMenuServerRead = false}) async {
     setState(() => _loading = true);
     final user = _authService.currentUser;
     if (user == null) {
@@ -110,34 +133,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         bereich = isAdminCompany ? KundenBereich.admin : KundenBereich.rettungsdienst;
       }
       var allMods = await _modulesService.getModulesForCompany(effectiveCompanyId, authData.role, bereich: bereich);
-      var shortcuts = await _modulesService.getShortcuts(effectiveCompanyId, authData.role, bereich: bereich);
 
       var menuStructure = <Map<String, dynamic>>[];
       debugPrint('RettBase Dashboard: getCompanyBereich($effectiveCompanyId)=$bereich');
       if (bereich != null && bereich.isNotEmpty) {
-        menuStructure = await _menuService.loadMenuStructure(bereich);
+        menuStructure = await _menuService.loadMenuStructure(bereich, forceServerRead: forceMenuServerRead);
         debugPrint('RettBase Dashboard: loadMenuStructure($bereich) -> ${menuStructure.length} items');
         if (menuStructure.isEmpty) {
-          menuStructure = await _menuService.loadLegacyGlobalMenu();
+          menuStructure = await _menuService.loadLegacyGlobalMenu(forceServerRead: forceMenuServerRead);
           debugPrint('RettBase Dashboard: loadLegacyGlobalMenu Fallback -> ${menuStructure.length} items');
         }
-        final isSuperadmin = (authData.role ?? '').toLowerCase().trim() == 'superadmin';
-        // Bei eigenem Schnellstart: Benutzerauswahl respektieren, nicht nach Menü filtern
-        final hasCustomSchnellstart = await _modulesService.hasCustomSchnellstart(effectiveCompanyId);
-        if (!hasCustomSchnellstart && menuStructure.isNotEmpty && !isAdminCompany && !isSuperadmin) {
-          // Shortcuts auf Menü-Module beschränken (nur bei Default-Schnellstart)
-          final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
-          if (menuModuleIds.isNotEmpty) {
-            final shortcutList = shortcuts.whereType<AppModule>().toList();
-            final filtered = shortcutList.where((m) => menuModuleIds.contains(m.id)).toList();
-            if (filtered.isNotEmpty) {
-              shortcuts = List<AppModule?>.from(filtered);
-              while (shortcuts.length < 6) shortcuts.add(null);
-              shortcuts = shortcuts.take(6).toList();
-            }
-          }
-        }
       }
+
+      // Schnellstart: Alle für Rolle und Bereich freigegebenen Module anzeigen.
+      // Bei gespeicherter Nutzerauswahl (6 Slots): nur diese anzeigen.
+      // menuModuleIds nutzen, damit auch im Menü sichtbare Module (z.B. Chat) in Slots auflösbar sind.
+      final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
+      final hasCustomSchnellstart = await _modulesService.hasCustomSchnellstart(effectiveCompanyId);
+      final List<AppModule?> shortcuts = hasCustomSchnellstart
+          ? await _modulesService.getShortcuts(effectiveCompanyId, authData.role, bereich: bereich, menuModuleIds: menuModuleIds)
+          : allMods.map((m) => m as AppModule?).toList();
 
       final slots = await _loadContainerSlots(effectiveCompanyId);
       final infos = await _infoService.loadInformationen(effectiveCompanyId);
@@ -160,6 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
       _containerSlotsNotifier.value = slots;
       _infoItemsNotifier.value = infos;
+      _startChatUnreadListener();
     } catch (e, st) {
       debugPrint('RettBase Dashboard _load FEHLER: $e');
       debugPrint('RettBase Dashboard _load StackTrace: $st');
@@ -176,12 +192,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .doc('informationssystem');
       final snap = await ref.get();
       final data = snap.data();
+      final validOrder = _parseContainerTypeOrder(data);
       final list = data?['containerSlots'] as List?;
-      if (list != null && list.length >= 2) {
-        return [list[0]?.toString(), list[1]?.toString()];
+      if (list != null && list.isNotEmpty) {
+        final validSet = validOrder.isNotEmpty ? validOrder.toSet() : null;
+        final slots = <String?>[];
+        for (var i = 0; i < list.length && i < 2; i++) {
+          final s = list[i]?.toString();
+          if (s != null && s.trim().isNotEmpty) {
+            if (validSet == null || validSet.contains(s)) {
+              slots.add(s);
+            }
+          } else {
+            slots.add(null);
+          }
+        }
+        while (slots.length < 2) slots.add(null);
+        return slots;
+      }
+      // Default: nur Typen aus containerTypeOrder nutzen, nicht hart verdrahtet
+      if (validOrder.isNotEmpty) {
+        return [validOrder.first, validOrder.length > 1 ? validOrder[1] : null];
       }
     } catch (_) {}
     return ['informationen', 'verkehrslage'];
+  }
+
+  List<String> _parseContainerTypeOrder(Map<String, dynamic>? data) {
+    final list = data?['containerTypeOrder'] as List?;
+    if (list != null && list.isNotEmpty) {
+      return list.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
+    }
+    final types = data?['containerTypes'] as List?;
+    if (types != null && types.isNotEmpty) {
+      return types
+          .map((e) => (e is Map ? e['id']?.toString() : null))
+          .whereType<String>()
+          .where((s) => s.trim().isNotEmpty)
+          .toList();
+    }
+    return [];
   }
 
   void _goToLogin() {
@@ -212,6 +262,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       vorname: _vorname,
       shortcuts: _shortcuts,
       onShortcutTap: _onShortcutTap,
+      chatUnreadListenable: _chatUnreadNotifier,
       containerSlotsListenable: _containerSlotsNotifier,
       informationenItemsListenable: _infoItemsNotifier,
       companyId: _companyId,
@@ -285,6 +336,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             final infos = await _infoService.loadInformationen(_companyId);
             if (mounted) _infoItemsNotifier.value = infos;
           },
+          onContainerTypesChanged: () async {
+            final slots = await _loadContainerSlots(_companyId);
+            if (mounted) _containerSlotsNotifier.value = slots;
+          },
         );
         break;
       case 'einstellungen':
@@ -345,9 +400,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onBack: onBack,
         );
         break;
+      case 'chat':
+        screen = ChatScreen(
+          companyId: _companyId,
+          onBack: onBack,
+          hideAppBar: true,
+        );
+        break;
       case 'ssd':
         screen = EinsatzprotokollSsdScreen(
           companyId: _companyId,
+          onBack: onBack,
+        );
+        break;
+      case 'schichtplannfs':
+        screen = SchichtplanNfsScreen(
+          companyId: _companyId,
+          userRole: _userRole,
           onBack: onBack,
         );
         break;
@@ -379,7 +448,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           companyId: _companyId,
           userRole: _userRole,
           onBack: onBack,
-          onMenuSaved: _load,
+          onMenuSaved: () => _load(forceMenuServerRead: true),
           hideAppBar: true,
         );
         break;
@@ -410,7 +479,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             companyId: _companyId,
             userRole: _userRole,
             onBack: onBack,
-            onMenuSaved: _load,
+            onMenuSaved: () => _load(forceMenuServerRead: true),
             hideAppBar: true,
           );
         } else if (mod.url.isNotEmpty) {
@@ -460,7 +529,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'modulverwaltung': return Icons.apps;
       case 'menueverwaltung': return Icons.menu;
       case 'schichtanmeldung':
-      case 'schichtuebersicht': return Icons.calendar_today;
+      case 'schichtuebersicht':
+      case 'schichtplannfs': return Icons.calendar_today;
       case 'fahrtenbuch':
       case 'fahrtenbuchuebersicht': return Icons.directions_car;
       case 'wachbuch':
@@ -474,6 +544,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'schnittstellenmeldung': return Icons.call_split;
       case 'uebergriffsmeldung': return Icons.warning;
       case 'telefonliste': return Icons.phone;
+      case 'chat': return Icons.chat_bubble_outline;
       case 'ssd': return Icons.medical_services;
       default: return Icons.apps;
     }
@@ -506,6 +577,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _allModules.any((m) => m.id == moduleId);
   }
 
+  /// Roter Kreis mit ungelesener Chat-Anzahl für Menü-Badge.
+  Widget _buildChatBadge() {
+    final count = _chatUnreadNotifier.value;
+    if (count <= 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: const BoxDecoration(
+        color: Colors.red,
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
   List<Widget> _buildDrawerMenuContent() {
     final children = <Widget>[];
     for (final item in _menuStructure) {
@@ -520,12 +608,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final cType = (c['type'] ?? '').toString();
           if (cType == 'module') {
             final modId = (c['id'] ?? '').toString();
-            if (!_userHasModuleAccess(modId)) continue;
+            if (modId.isEmpty) continue;
+            // Menüverwaltung ist maßgeblich: Wenn dem Bereich zugeordnet, für alle sichtbar
             final mod = _moduleFromMenuItem(Map<String, dynamic>.from(c));
             childTiles.add(ListTile(
               dense: true,
               leading: Icon(_drawerIconForModule(mod.id), size: 22),
               title: Text(mod.label, style: const TextStyle(fontSize: 14)),
+              trailing: mod.id == 'chat' ? _buildChatBadge() : null,
               onTap: () {
                 Navigator.pop(context);
                 _openModule(mod);
@@ -558,11 +648,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       } else if (type == 'module') {
         final modId = (item['id'] ?? '').toString();
-        if (!_userHasModuleAccess(modId)) continue;
+        if (modId.isEmpty) continue;
+        // Menüverwaltung ist maßgeblich: Wenn dem Bereich zugeordnet, für alle sichtbar
         final mod = _moduleFromMenuItem(item);
         children.add(ListTile(
           leading: Icon(_drawerIconForModule(mod.id)),
           title: Text(mod.label),
+          trailing: mod.id == 'chat' ? _buildChatBadge() : null,
           onTap: () {
             Navigator.pop(context);
             _openModule(mod);

@@ -16,5 +16,10 @@ alwaysApply: false
 - **getCompanyBereich**: Fallback per kundenId/subdomain auch wenn Doc existiert (bereich kann fehlen)
 - **AuthDataService**: Suche per personalnummer, altEmail (domain aus Kunden-doc), pseudoEmail
 
+## Bereichs-spezifische Module
+- Module wie SSD (Einsatzprotokoll) nur bei passendem `bereich` anzeigen – **ohne Ausnahme** für Admin/Superadmin
+- Bei passendem Bereich: **automatisch freigeschaltet** (kein Eintrag in `kunden/{companyId}/modules` nötig)
+- Pattern in `getModulesForCompany`: Bereichs-Check + `xxxAutoEnabled` für Auto-Freischaltung
+
 ## Kontext-Dokument
 Vollständiger Fortschritt: `docs/KONTEXT_LOGIN_DASHBOARD.md`

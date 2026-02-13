@@ -82,6 +82,53 @@ class ChatService {
     });
   }
 
+  /// Gesamtzahl ungelesener Nachrichten für Badge-Anzeige (Menü, Schnellstart).
+  Stream<int> streamUnreadCount(String companyId) {
+    return streamChats(companyId).map((chats) {
+      final uid = userId;
+      if (uid == null) return 0;
+      var total = 0;
+      for (final c in chats) {
+        var unread = c.unreadCount[uid] ?? 0;
+        if (unread == 0 &&
+            c.lastMessageFrom != null &&
+            c.lastMessageFrom != uid &&
+            c.lastMessageAt != null) {
+          final lastRead = c.lastReadAt[uid];
+          DateTime? lastReadAt;
+          if (lastRead is Timestamp) lastReadAt = lastRead.toDate();
+          if (lastRead is DateTime) lastReadAt = lastRead;
+          if (lastReadAt == null || c.lastMessageAt!.isAfter(lastReadAt)) unread = 1;
+        }
+        total += unread;
+      }
+      return total;
+    });
+  }
+
+  /// Einmaliges Laden der Nachrichten (robuster auf Flutter Web als snapshots).
+  Future<List<ChatMessage>> loadMessages(String companyId, String chatId) async {
+    final uid = userId;
+    if (uid == null) return [];
+
+    _markChatRead(companyId, chatId, uid);
+
+    final snap = await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt', descending: false)
+        .limit(100)
+        .get();
+
+    return snap.docs
+        .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
+        .where((m) => !m.deletedBy.contains(uid))
+        .toList();
+  }
+
   Stream<List<ChatMessage>> streamMessages(String companyId, String chatId) {
     final uid = userId;
     if (uid == null) return Stream.value([]);

@@ -1,0 +1,21 @@
+---
+description: Nur Flutter-App nutzen – rettbase/ JS-Web-App ignorieren
+alwaysApply: true
+---
+
+# Nur Flutter-App
+
+**Projekt-Fokus:** Es wird ausschließlich die **Flutter-App** (`app/`) weiterentwickelt.
+
+## Nicht mehr relevant
+
+- Der Ordner **`rettbase/`** (standalone JavaScript/HTML-Web-App, PWA) wird **nicht** mehr verwendet.
+- Bei Änderungen oder neuen Features: **nur** `app/lib/` und die Flutter-Struktur bearbeiten.
+- Code in `rettbase/` (dashboard.js, home.js, module/chat/, etc.) **nicht** anpassen oder referenzieren.
+
+## Zielplattformen der Flutter-App
+
+- iOS, Android, macOS (native)
+- **Web** (Flutter Web: `flutter run -d chrome` / `flutter build web`)
+
+Alle Änderungen erfolgen im Flutter-Projekt unter `app/`.
