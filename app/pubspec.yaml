@@ -9,6 +9,7 @@ executables:
   migrate_rolle_koordinator: bin/migrate_rolle_koordinator
   migrate_wachbuch_struktur: bin/migrate_wachbuch_struktur
   migrate_telefon_consolidate: bin/migrate_telefon_consolidate
+  migrate_reset_einsatznr: bin/migrate_reset_einsatznr
   seed_module_ssd: bin/seed_module_ssd
 
 # The following defines the version and build number for your application.

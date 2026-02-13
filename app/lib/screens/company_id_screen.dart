@@ -104,8 +104,8 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Image.asset(
-                    'img/rettbase.png',
-                    height: 64,
+                    'img/rettbase_splash.png',
+                    height: Responsive.isCompact(context) ? 100 : 140,
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 48),

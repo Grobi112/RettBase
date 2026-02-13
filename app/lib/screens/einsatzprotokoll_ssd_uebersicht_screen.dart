@@ -80,6 +80,37 @@ class _EinsatzprotokollSsdUebersichtScreenState extends State<EinsatzprotokollSs
     });
   }
 
+  Future<void> _resetNextEinsatzNr(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Einsatz-Nr. zurücksetzen?'),
+        content: const Text(
+          'Die nächste Einsatz-Nr. wird auf 20260001 gesetzt. Das neue Protokoll erhält dann diese Nummer.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Abbrechen')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Zurücksetzen')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _service.setNextEinsatzNr(widget.companyId, '20260001');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nächste Einsatz-Nr. wurde auf 20260001 gesetzt.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmDelete(BuildContext context, String docId, String protokollNr) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -122,6 +153,14 @@ class _EinsatzprotokollSsdUebersichtScreenState extends State<EinsatzprotokollSs
       appBar: AppTheme.buildModuleAppBar(
         title: 'Protokollübersicht',
         onBack: widget.onBack,
+        actions: [
+          if (_isSuperadmin)
+            IconButton(
+              icon: const Icon(Icons.restart_alt),
+              tooltip: 'Nächste Einsatz-Nr. auf 20260001 zurücksetzen',
+              onPressed: () => _resetNextEinsatzNr(context),
+            ),
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

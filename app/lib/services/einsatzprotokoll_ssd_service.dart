@@ -11,10 +11,30 @@ class EinsatzprotokollSsdService {
   CollectionReference<Map<String, dynamic>> _col(String companyId) =>
       _db.collection('kunden').doc(companyId).collection('einsatzprotokoll-ssd');
 
-  /// Nächste Einsatz-Nr. im Format YYYYNNNN (z.B. 20260001). Laufende Nr. beginnt am 1.1. um 00:00 Uhr neu.
+  DocumentReference<Map<String, dynamic>> _settingsDoc(String companyId) =>
+      _db.collection('kunden').doc(companyId).collection('settings').doc('einsatzprotokoll-ssd');
+
+  /// Nächste Einsatz-Nr. im Format YYYYNNNN (z.B. 20260001). Nutzt nextEinsatzNr aus Settings, falls gesetzt.
   Future<String> getNextEinsatzNr(String companyId) async {
     final year = DateTime.now().year;
     final prefix = '$year';
+
+    // Prüfen, ob eine gesetzte nächste Nr. vorliegt (z.B. nach Zurücksetzen)
+    final settingsSnap = await _settingsDoc(companyId).get();
+    final stored = (settingsSnap.data()?['nextEinsatzNr'] ?? '').toString().trim();
+    if (stored.length >= 8 && stored.startsWith(prefix)) {
+      final run = int.tryParse(stored.substring(4)) ?? 0;
+      if (run > 0) {
+        final nextNr = '$prefix${(run + 1).toString().padLeft(4, '0')}';
+        await _settingsDoc(companyId).set({
+          'nextEinsatzNr': nextNr,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        return stored;
+      }
+    }
+
+    // Fallback: höchste Nr. aus Protokollen ermitteln
     final snap = await _col(companyId).get();
     int maxNr = 0;
     for (final doc in snap.docs) {
@@ -25,6 +45,16 @@ class EinsatzprotokollSsdService {
       }
     }
     return '$prefix${(maxNr + 1).toString().padLeft(4, '0')}';
+  }
+
+  /// Nächste Einsatz-Nr. auf einen Wert setzen (z.B. Reset auf 20260001).
+  Future<void> setNextEinsatzNr(String companyId, String nr) async {
+    final trimmed = nr.trim();
+    if (trimmed.length < 8 || trimmed.substring(4) == '0000') return;
+    await _settingsDoc(companyId).set({
+      'nextEinsatzNr': trimmed,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   /// Protokoll löschen (inkl. Storage-Dateien)

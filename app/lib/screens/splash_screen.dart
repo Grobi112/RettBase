@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -40,29 +39,16 @@ class _SplashScreenState extends State<SplashScreen>
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: narrow ? 20 : 32,
-            ),
+            padding: EdgeInsets.symmetric(horizontal: narrow ? 24 : 48),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Image.asset(
-                  'img/rettbase.png',
-                  height: narrow ? 56 : 80,
+                  'img/rettbase_splash.png',
+                  height: narrow ? 100 : 140,
                   fit: BoxFit.contain,
                 ),
-                SizedBox(height: narrow ? 16 : 24),
-                Text(
-                  'Einfach. Sicher. Digital.',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.roboto(
-                    fontSize: narrow ? 14 : 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white.withOpacity(0.95),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                SizedBox(height: narrow ? 20 : 28),
+                SizedBox(height: narrow ? 24 : 32),
                 _ModernLoadingBar(
                   shimmerAnimation: _shimmerAnimation,
                   narrow: narrow,

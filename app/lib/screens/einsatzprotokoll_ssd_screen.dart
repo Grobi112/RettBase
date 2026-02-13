@@ -25,6 +25,9 @@ const _inputDecoration = InputDecoration(
   contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
 );
 
+/// Gelbe Füllung für leere Pflichtfelder (Label + Feld); wird weiß bei ausgefüllt
+const _pflichtfeldGelb = Color(0xFFFFF9C4); // Amber 100
+
 /// Einsatzprotokoll des Schulsanitätsdienstes – Formular
 class EinsatzprotokollSsdScreen extends StatefulWidget {
   final String companyId;
@@ -217,17 +220,42 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   }
 
   Future<void> _speichern() async {
-    final schilderung = _schilderungCtrl.text.trim();
-    if (schilderung.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte Schilderung des Unfalls/der Erkrankung ausfüllen.')),
-      );
-      return;
-    }
-    if (!_sekretariatInformiert && !_schulleitungInformiert && !_lehrerInformiert && !_leiterSSDInformiert) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte mindestens eine Person ankreuzen (Sekretariat, Schulleitung, Lehrer oder Leiter SSD).')),
-      );
+    var valid = true;
+    valid = valid && _nameHelfer1Ctrl.text.trim().isNotEmpty;
+    valid = valid && _einsatzortCtrl.text.trim().isNotEmpty;
+    valid = valid && _vornameErkrankterCtrl.text.trim().isNotEmpty;
+    valid = valid && _nameErkrankterCtrl.text.trim().isNotEmpty;
+    valid = valid && _klasseCtrl.text.trim().isNotEmpty;
+    valid = valid && (_erkrankung || _unfall);
+    valid = valid && (!_erkrankung || _artErkrankungCtrl.text.trim().isNotEmpty);
+    valid = valid && (!_unfall || _unfallOrtCtrl.text.trim().isNotEmpty);
+    valid = valid && (_sportunterricht || _sonstigerUnterricht || _pause || _schulweg || _sonstigesAktivitaet);
+    valid = valid && (_atmungSpontan || _atmungHyperventilation || _atmungAtemnot);
+    valid = valid && _pulsCtrl.text.trim().isNotEmpty;
+    valid = valid && _spo2Ctrl.text.trim().isNotEmpty;
+    valid = valid && _beschwerdenCtrl.text.trim().isNotEmpty;
+    valid = valid && (_massnahmeBetreuung || _massnahmePflaster || _massnahmeVerband || _massnahmeKuehlung || _massnahmeSonstiges);
+    valid = valid && _schilderungCtrl.text.trim().isNotEmpty;
+    valid = valid && (_sekretariatInformiert || _schulleitungInformiert || _lehrerInformiert || _leiterSSDInformiert);
+    valid = valid && (_uebergabeAn != null && _uebergabeAn!.trim().isNotEmpty);
+    valid = valid && (_unterschriftBytes1 != null && _unterschriftBytes1!.isNotEmpty);
+
+    if (!valid) {
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Hinweis', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+            content: const Text('Es wurden nicht alle Pflichtfelder ausgefüllt. Bitte ausfüllen.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
       return;
     }
 
@@ -262,7 +290,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
         'pause': _pause,
         'schulweg': _schulweg,
         'sonstigesAktivitaet': _sonstigesAktivitaet,
-        'schilderung': schilderung,
+        'schilderung': _schilderungCtrl.text.trim(),
         'schmerzen': _schmerzen,
         'atmungSpontan': _atmungSpontan,
         'atmungHyperventilation': _atmungHyperventilation,
@@ -402,12 +430,17 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
         child: Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey.shade800)),
       );
 
-  Widget _field(TextEditingController ctrl, String label, {int maxLines = 1}) => Padding(
+  Widget _field(TextEditingController ctrl, String label, {int maxLines = 1, bool required = false}) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(
           controller: ctrl,
           maxLines: maxLines,
-          decoration: _inputDecoration.copyWith(labelText: label, alignLabelWithHint: maxLines > 1),
+          onChanged: required ? (_) => setState(() {}) : null,
+          decoration: _inputDecoration.copyWith(
+            labelText: label,
+            alignLabelWithHint: maxLines > 1,
+            fillColor: required && ctrl.text.trim().isEmpty ? _pflichtfeldGelb : Colors.white,
+          ),
         ),
       );
 
@@ -423,7 +456,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
         ),
       );
 
-  Widget _checkboxRow(String label, bool value, ValueChanged<bool> onChanged) => Padding(
+  Widget _checkboxRow(String label, bool value, ValueChanged<bool> onChanged, {bool required = false, bool groupFulfilled = true}) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -431,7 +464,14 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
             SizedBox(
               width: 24,
               height: 24,
-              child: Checkbox(value: value, onChanged: (v) => onChanged(v ?? false), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+              child: Checkbox(
+                value: value,
+                onChanged: (v) => onChanged(v ?? false),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                fillColor: (required && !groupFulfilled)
+                    ? WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.selected) ? null : _pflichtfeldGelb)
+                    : null,
+              ),
             ),
             const SizedBox(width: 8),
             Flexible(child: Text(label, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis)),
@@ -592,16 +632,16 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                         children: [
                           Row(
                             children: [
-                              Expanded(child: _field(_vornameErkrankterCtrl, 'Vorname')),
+                              Expanded(child: _field(_vornameErkrankterCtrl, 'Vorname', required: true)),
                               const SizedBox(width: 12),
-                              Expanded(child: _field(_nameErkrankterCtrl, 'Name')),
+                              Expanded(child: _field(_nameErkrankterCtrl, 'Name', required: true)),
                             ],
                           ),
                           Row(
                             children: [
                               Expanded(child: _field(_geburtsdatumCtrl, 'Geburtsdatum')),
                               const SizedBox(width: 12),
-                              Expanded(child: _field(_klasseCtrl, 'Klasse')),
+                              Expanded(child: _field(_klasseCtrl, 'Klasse', required: true)),
                             ],
                           ),
                         ],
@@ -648,10 +688,10 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('Art des Vorfalls:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
-                                    _checkboxRow('Erkrankung', _erkrankung, (v) => setState(() => _erkrankung = v)),
-                                    _checkboxRow('Unfall', _unfall, (v) => setState(() => _unfall = v)),
-                                    if (_erkrankung) _field(_artErkrankungCtrl, 'Art der Erkrankung'),
-                                    if (_unfall) _field(_unfallOrtCtrl, 'Wo genau ist der Unfall passiert?'),
+                                    _checkboxRow('Erkrankung', _erkrankung, (v) => setState(() => _erkrankung = v), required: true, groupFulfilled: _erkrankung || _unfall),
+                                    _checkboxRow('Unfall', _unfall, (v) => setState(() => _unfall = v), required: true, groupFulfilled: _erkrankung || _unfall),
+                                    if (_erkrankung) _field(_artErkrankungCtrl, 'Art der Erkrankung', required: true),
+                                    if (_unfall) _field(_unfallOrtCtrl, 'Wo genau ist der Unfall passiert?', required: true),
                                   ],
                                 ),
                               ),
@@ -661,18 +701,18 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('Was hat der Verletzte zum Unfallzeitpunkt gemacht:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
-                                    _checkboxRow('Sportunterricht', _sportunterricht, (v) => setState(() => _sportunterricht = v)),
-                                    _checkboxRow('Sonstiger Unterricht', _sonstigerUnterricht, (v) => setState(() => _sonstigerUnterricht = v)),
-                                    _checkboxRow('Pause', _pause, (v) => setState(() => _pause = v)),
-                                    _checkboxRow('Schulweg', _schulweg, (v) => setState(() => _schulweg = v)),
-                                    _checkboxRow('Sonstiges', _sonstigesAktivitaet, (v) => setState(() => _sonstigesAktivitaet = v)),
+                                    _checkboxRow('Sportunterricht', _sportunterricht, (v) => setState(() => _sportunterricht = v), required: true, groupFulfilled: _sportunterricht || _sonstigerUnterricht || _pause || _schulweg || _sonstigesAktivitaet),
+                                    _checkboxRow('Sonstiger Unterricht', _sonstigerUnterricht, (v) => setState(() => _sonstigerUnterricht = v), required: true, groupFulfilled: _sportunterricht || _sonstigerUnterricht || _pause || _schulweg || _sonstigesAktivitaet),
+                                    _checkboxRow('Pause', _pause, (v) => setState(() => _pause = v), required: true, groupFulfilled: _sportunterricht || _sonstigerUnterricht || _pause || _schulweg || _sonstigesAktivitaet),
+                                    _checkboxRow('Schulweg', _schulweg, (v) => setState(() => _schulweg = v), required: true, groupFulfilled: _sportunterricht || _sonstigerUnterricht || _pause || _schulweg || _sonstigesAktivitaet),
+                                    _checkboxRow('Sonstiges', _sonstigesAktivitaet, (v) => setState(() => _sonstigesAktivitaet = v), required: true, groupFulfilled: _sportunterricht || _sonstigerUnterricht || _pause || _schulweg || _sonstigesAktivitaet),
                                   ],
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 12),
-                          _field(_schilderungCtrl, 'Schilderung des Unfalls oder der Erkrankung *', maxLines: 4),
+                          _field(_schilderungCtrl, 'Schilderung des Unfalls oder der Erkrankung *', maxLines: 4, required: true),
                         ],
                       ),
                     ),
@@ -726,9 +766,9 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                       const SizedBox(height: 8),
                                       Row(
                                         children: [
-                                          Expanded(child: _field(_pulsCtrl, 'Puls')),
+                                          Expanded(child: _field(_pulsCtrl, 'Puls', required: true)),
                                           const SizedBox(width: 8),
-                                          Expanded(child: _field(_spo2Ctrl, 'Sauerstoffsättigung (SpO2)')),
+                                          Expanded(child: _field(_spo2Ctrl, 'SpO2', required: true)),
                                           const SizedBox(width: 8),
                                           Expanded(child: _field(_blutdruckCtrl, 'Blutdruck (mm/Hg)')),
                                         ],
@@ -768,9 +808,9 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                               child: Column(
                                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                                 children: [
-                                                  _field(_pulsCtrl, 'Puls'),
+                                                  _field(_pulsCtrl, 'Puls', required: true),
                                                   const SizedBox(height: 8),
-                                                  _field(_spo2Ctrl, 'Sauerstoffsättigung (SpO2)'),
+                                                  _field(_spo2Ctrl, 'SpO2', required: true),
                                                   const SizedBox(height: 8),
                                                   _field(_blutdruckCtrl, 'Blutdruck (mm/Hg)'),
                                                 ],
@@ -828,11 +868,11 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    _checkboxRow('Betreuung', _massnahmeBetreuung, (v) => setState(() => _massnahmeBetreuung = v)),
-                                    _checkboxRow('Pflaster', _massnahmePflaster, (v) => setState(() => _massnahmePflaster = v)),
-                                    _checkboxRow('Verband', _massnahmeVerband, (v) => setState(() => _massnahmeVerband = v)),
-                                    _checkboxRow('Kühlung', _massnahmeKuehlung, (v) => setState(() => _massnahmeKuehlung = v)),
-                                    _checkboxRow('Sonstiges', _massnahmeSonstiges, (v) => setState(() => _massnahmeSonstiges = v)),
+                                    _checkboxRow('Betreuung', _massnahmeBetreuung, (v) => setState(() => _massnahmeBetreuung = v), required: true, groupFulfilled: _massnahmeBetreuung || _massnahmePflaster || _massnahmeVerband || _massnahmeKuehlung || _massnahmeSonstiges),
+                                    _checkboxRow('Pflaster', _massnahmePflaster, (v) => setState(() => _massnahmePflaster = v), required: true, groupFulfilled: _massnahmeBetreuung || _massnahmePflaster || _massnahmeVerband || _massnahmeKuehlung || _massnahmeSonstiges),
+                                    _checkboxRow('Verband', _massnahmeVerband, (v) => setState(() => _massnahmeVerband = v), required: true, groupFulfilled: _massnahmeBetreuung || _massnahmePflaster || _massnahmeVerband || _massnahmeKuehlung || _massnahmeSonstiges),
+                                    _checkboxRow('Kühlung', _massnahmeKuehlung, (v) => setState(() => _massnahmeKuehlung = v), required: true, groupFulfilled: _massnahmeBetreuung || _massnahmePflaster || _massnahmeVerband || _massnahmeKuehlung || _massnahmeSonstiges),
+                                    _checkboxRow('Sonstiges', _massnahmeSonstiges, (v) => setState(() => _massnahmeSonstiges = v), required: true, groupFulfilled: _massnahmeBetreuung || _massnahmePflaster || _massnahmeVerband || _massnahmeKuehlung || _massnahmeSonstiges),
                                     if (_massnahmeSonstiges) _field(_massnahmeSonstigesTextCtrl, 'Sonstiges – Angabe'),
                                     _checkboxRow('Elternbrief mitgegeben', _elternbriefMitgegeben, (v) => setState(() => _elternbriefMitgegeben = v)),
                                     _checkboxRow('Arztbesuch empfohlen', _arztbesuchEmpfohlen, (v) => setState(() => _arztbesuchEmpfohlen = v)),
@@ -863,10 +903,10 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                                     const SizedBox(height: 16),
                                     Text('Mindestens eine Person muss informiert worden sein:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                                     const SizedBox(height: 6),
-                                    _checkboxRow('Sekretariat informiert', _sekretariatInformiert, (v) => setState(() => _sekretariatInformiert = v)),
-                                    _checkboxRow('Schulleitung informiert', _schulleitungInformiert, (v) => setState(() => _schulleitungInformiert = v)),
-                                    _checkboxRow('Lehrer informiert', _lehrerInformiert, (v) => setState(() => _lehrerInformiert = v)),
-                                    _checkboxRow('Leiter SSD informiert', _leiterSSDInformiert, (v) => setState(() => _leiterSSDInformiert = v)),
+                                    _checkboxRow('Sekretariat informiert', _sekretariatInformiert, (v) => setState(() => _sekretariatInformiert = v), required: true, groupFulfilled: _sekretariatInformiert || _schulleitungInformiert || _lehrerInformiert || _leiterSSDInformiert),
+                                    _checkboxRow('Schulleitung informiert', _schulleitungInformiert, (v) => setState(() => _schulleitungInformiert = v), required: true, groupFulfilled: _sekretariatInformiert || _schulleitungInformiert || _lehrerInformiert || _leiterSSDInformiert),
+                                    _checkboxRow('Lehrer informiert', _lehrerInformiert, (v) => setState(() => _lehrerInformiert = v), required: true, groupFulfilled: _sekretariatInformiert || _schulleitungInformiert || _lehrerInformiert || _leiterSSDInformiert),
+                                    _checkboxRow('Leiter SSD informiert', _leiterSSDInformiert, (v) => setState(() => _leiterSSDInformiert = v), required: true, groupFulfilled: _sekretariatInformiert || _schulleitungInformiert || _lehrerInformiert || _leiterSSDInformiert),
                                   ],
                                 ),
                               ),
@@ -924,7 +964,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
 
             FilledButton(
               onPressed: _saving ? null : _speichern,
-              style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(vertical: 16)),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red, padding: const EdgeInsets.symmetric(vertical: 16)),
               child: _saving
                   ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Text('Protokoll speichern'),
@@ -951,7 +991,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                   children: [
                     Expanded(child: _field(_vornameHelfer1Ctrl, 'Vorname (Schulsanitäter/in 1)')),
                     const SizedBox(width: 12),
-                    Expanded(child: _field(_nameHelfer1Ctrl, 'Name (Schulsanitäter/in 1)')),
+                    Expanded(child: _field(_nameHelfer1Ctrl, 'Name (Schulsanitäter/in 1)', required: true)),
                   ],
                 ),
                 Row(
@@ -987,7 +1027,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _field(_einsatzortCtrl, 'Einsatzort'),
+                _field(_einsatzortCtrl, 'Einsatzort', required: true),
               ],
             ),
           ),
@@ -1009,13 +1049,14 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
   }
 
   Widget _buildAtmung() {
+    final atmungFulfilled = _atmungSpontan || _atmungHyperventilation || _atmungAtemnot;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Atmung:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-        _checkboxRow('spontan / frei', _atmungSpontan, (v) => setState(() => _atmungSpontan = v)),
-        _checkboxRow('Hyperventilation', _atmungHyperventilation, (v) => setState(() => _atmungHyperventilation = v)),
-        _checkboxRow('Atemnot', _atmungAtemnot, (v) => setState(() => _atmungAtemnot = v)),
+        _checkboxRow('spontan / frei', _atmungSpontan, (v) => setState(() => _atmungSpontan = v), required: true, groupFulfilled: atmungFulfilled),
+        _checkboxRow('Hyperventilation', _atmungHyperventilation, (v) => setState(() => _atmungHyperventilation = v), required: true, groupFulfilled: atmungFulfilled),
+        _checkboxRow('Atemnot', _atmungAtemnot, (v) => setState(() => _atmungAtemnot = v), required: true, groupFulfilled: atmungFulfilled),
       ],
     );
   }
@@ -1037,7 +1078,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _field(_beschwerdenCtrl, 'Der/die Erkrankte/Verletzte klagt über *', maxLines: 3),
+        _field(_beschwerdenCtrl, 'Der/die Erkrankte/Verletzte klagt über *', maxLines: 3, required: true),
       ],
     );
   }
@@ -1074,7 +1115,10 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
       padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String?>(
         value: _uebergabeAn,
-        decoration: _inputDecoration.copyWith(labelText: 'Übergabe an'),
+        decoration: _inputDecoration.copyWith(
+          labelText: 'Übergabe an',
+          fillColor: _uebergabeAn == null || _uebergabeAn!.isEmpty ? _pflichtfeldGelb : Colors.white,
+        ),
         items: _uebergabeAnOptions
             .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2)))
             .toList(),
@@ -1087,9 +1131,9 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _buildUnterschriftenfeldEinzel(1, 'Unterschrift Schulsanitäter/in 1', _unterschriftBytes1, _signatureKey1, (b) => _unterschriftBytes1 = b)),
+        Expanded(child: _buildUnterschriftenfeldEinzel(1, 'Unterschrift Schulsanitäter/in 1', _unterschriftBytes1, _signatureKey1, (b) => _unterschriftBytes1 = b, required: true)),
         const SizedBox(width: 12),
-        Expanded(child: _buildUnterschriftenfeldEinzel(2, 'Unterschrift Schulsanitäter/in 2', _unterschriftBytes2, _signatureKey2, (b) => _unterschriftBytes2 = b)),
+        Expanded(child: _buildUnterschriftenfeldEinzel(2, 'Unterschrift Schulsanitäter/in 2', _unterschriftBytes2, _signatureKey2, (b) => _unterschriftBytes2 = b, required: false)),
       ],
     );
   }
@@ -1099,13 +1143,16 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
     String label,
     Uint8List? bytes,
     GlobalKey<SignaturePadState> signatureKey,
-    void Function(Uint8List?) onSaved,
-  ) {
+    void Function(Uint8List?) onSaved, {
+    bool required = false,
+  }) {
+    final hasSignature = bytes != null && bytes.isNotEmpty;
+    final backgroundColor = required && !hasSignature ? _pflichtfeldGelb : (required ? Colors.white : Colors.grey.shade50);
     return GestureDetector(
       onTap: () => _openUnterschriftEditor(index, signatureKey, bytes, onSaved),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: Colors.grey.shade300),
         ),
