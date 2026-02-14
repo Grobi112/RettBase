@@ -51,4 +51,21 @@ Beim ersten Besuch der WebApp fragt der Browser nach Benachrichtigungs-Berechtig
 
 ---
 
+## 6. PWA zeigt weißen Bildschirm
+
+**Mögliche Ursachen und Lösungen:**
+
+1. **Service Worker / Cache:** Alte Version blockiert.  
+   - PWA vom Startbildschirm entfernen  
+   - Im Browser: Einstellungen → Website-Daten löschen (oder „Site-Daten und -Berechtigungen entfernen“)  
+   - Neu zum Startbildschirm hinzufügen
+
+2. **Unterordner-Deployment:** Läuft die App unter einem Unterordner (z.B. `www.rettbase.de/app/`)?  
+   - Beim Build: `flutter build web --base-href /app/`  
+   - Im GitHub-Workflow den Schritt „Web-App bauen“ entsprechend anpassen
+
+3. **App steht im Domain-Root:** Wenn die App unter `www.rettbase.de/` liegt, ist `base-href="/"` korrekt (Standard).
+
+---
+
 **Technisch:** Der `firebase-messaging-sw.js` Service Worker zeigt Push-Nachrichten auch bei geschlossenem Tab. Der VAPID-Key identifiziert deine Web-App gegenüber den Push-Servern.
