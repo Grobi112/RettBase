@@ -1,11 +1,11 @@
 {
-    "name": "RettBase – Schulsanitätsdienst",
+    "name": "RettBase",
     "short_name": "RettBase",
-    "start_url": "/",
+    "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "WebApp für den Schulsanitätsdienst: Einsätze, Wachbuch, Checklisten, Fahrtenbuch und mehr.",
+    "description": "RettBase – WebApp für Einsätze, Wachbuch, Checklisten und mehr.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

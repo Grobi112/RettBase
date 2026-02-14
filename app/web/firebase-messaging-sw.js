@@ -1,11 +1,7 @@
-// Firebase Messaging Service Worker – zeigt Push-Benachrichtigungen auch bei geschlossenem Tab
-// Muss im Web-Root liegen und dieselbe Firebase-Config wie die App nutzen.
-// install: skipWaiting – übernimmt sofort wenn ein anderer SW (z.B. Flutter) aktiv war.
-// activate: claim – übernimmt alle offenen Tabs sofort (Badge/postMessage funktionieren dann).
-self.addEventListener('install', function() { self.skipWaiting(); });
-self.addEventListener('activate', function(e) {
-  e.waitUntil(self.clients.claim());
-});
+// Firebase Messaging Service Worker – Push + Badge (setBadge-Handler).
+// Flutter-SW wird in index.html blockiert – wir sind der einzige SW.
+self.addEventListener('install',function(){self.skipWaiting();});
+self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim());});
 
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');

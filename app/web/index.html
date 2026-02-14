@@ -19,7 +19,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="RettBase – WebApp für den Schulsanitätsdienst. Einsätze, Wachbuch, Checklisten und mehr.">
+  <meta name="description" content="RettBase – WebApp für Einsätze, Wachbuch, Checklisten und mehr.">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -30,12 +30,23 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>RettBase – Schulsanitätsdienst</title>
+  <title>RettBase</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
   <script>
-    (function(){if('serviceWorker'in navigator)navigator.serviceWorker.register('/firebase-messaging-sw.js',{scope:'/'});})();
+    (function(){
+      if(!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.register('/firebase-messaging-sw.js',{scope:'/'});
+      // Flutter-SW-Registrierung abfangen – er würde sonst firebase-messaging-sw ersetzen
+      // und hätte keinen Badge-Handler. postMessage(setBadge) käme nie an.
+      var _reg=navigator.serviceWorker.register.bind(navigator.serviceWorker);
+      navigator.serviceWorker.register=function(url,opts){
+        if(typeof url==='string'&&url.indexOf('flutter_service_worker')>=0)
+          return navigator.serviceWorker.ready.then(function(reg){return reg;});
+        return _reg(url,opts);
+      };
+    })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
