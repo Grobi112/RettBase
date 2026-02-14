@@ -47,6 +47,7 @@ settings/modules/items/{moduleId}
 ### 3.4 LoginScreen
 - Übergibt `effectiveCompanyId` ans Dashboard
 - Aktualisiert SharedPreferences bei abweichender Company-ID
+- **Mobile-Login-Fix**: `PushNotificationService.saveToken` wird mit `unawaited()` im Hintergrund ausgeführt – blockiert nicht mehr. Ursache: Auf mobilen Browsern hingen `ensureServiceWorkerRegisteredWeb()`/`getToken()` und ließen den Login-Ladekreis endlos laufen.
 
 ### 3.5 AuthDataService
 - Suche nach `personalnummer` als Fallback (vorher nur uid, email, pseudoEmail)
@@ -64,6 +65,18 @@ settings/modules/items/{moduleId}
 - Fallback: `loadLegacyGlobalMenu()` wenn bereichs-Menü leer
 - DisplayName-Fallback aus E-Mail-Prefix
 
+### 3.9 Bereichs-spezifische Module (z.B. Einsatzprotokoll-SSD, Schichtplan NFS)
+- **Regel**: Module, die nur für einen bestimmten Bereich sichtbar sind, werden bei passendem `bereich` **automatisch freigeschaltet** – ohne Eintrag in `kunden/{companyId}/modules`.
+- **SSD (Einsatzprotokoll)**:
+  - Nur sichtbar bei `bereich == schulsanitaetsdienst`
+  - Gilt für alle Rollen, inkl. Admin/Superadmin – keine Ausnahme
+  - Bei Schulsanitätsdienst: `ssdAutoEnabled` ersetzt explizite Freischaltung
+- **Schichtplan NFS**:
+  - Nur sichtbar bei `bereich == notfallseelsorge`
+  - Native Flutter-App, Bereitschaften-Verwaltung
+  - Firestore: `schichtplanNfsStandorte`, `schichtplanNfsBereitschaftsTypen`, `schichtplanNfsMitarbeiter`, `schichtplanNfsBereitschaften/{dayId}/bereitschaften`
+- **Neue bereichs-spezifische Module**: Gleiches Muster anwenden (Bereichs-Check + Auto-Enabled bei passendem Bereich).
+
 ## 4. Wichtige Dateien
 
 | Datei | Rolle |
@@ -74,8 +87,11 @@ settings/modules/items/{moduleId}
 | `lib/services/login_service.dart` | E-Mail/PN-Auflösung, Fallback kundeExists |
 | `lib/services/auth_data_service.dart` | Rolle, DisplayName aus Firestore |
 | `lib/services/kundenverwaltung_service.dart` | getCompanyBereich |
+| `lib/services/modules_service.dart` | getModulesForCompany, bereichs-spezifische Module (SSD, Schichtplan NFS) |
 | `lib/services/menueverwaltung_service.dart` | loadMenuStructure(bereich) |
 | `lib/screens/dashboard_screen.dart` | _load, Menü, Shortcuts, Begrüßung |
+| `lib/screens/schichtplan_nfs_screen.dart` | Schichtplan NFS (Notfallseelsorge) |
+| `lib/services/schichtplan_nfs_service.dart` | schichtplanNfs* Firestore-Operationen |
 | `functions/index.js` | kundeExists, saveMitarbeiterDoc, saveUsersDoc |
 
 ## 5. Debug-Logging (bei Bedarf aktiv)

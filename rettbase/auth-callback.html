@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Anmeldung...</title>
+  <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}</style>
+</head>
+<body>
+  <p id="msg">Melde an…</p>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
+  <script>
+    // rett-fe0fa – einheitlich mit Flutter-App und exchangeToken
+    firebase.initializeApp({
+      apiKey: "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA",
+      authDomain: "rett-fe0fa.firebaseapp.com",
+      projectId: "rett-fe0fa",
+      storageBucket: "rett-fe0fa.firebasestorage.app",
+      messagingSenderId: "740721219821",
+      appId: "1:740721219821:web:a8e7f8070f875866ccd4e4"
+    });
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    const redirect = params.get('redirect') || '/';
+    if (!token) {
+      document.getElementById('msg').innerHTML = '<span style="color:red">Fehler: Token fehlt.</span>';
+    } else {
+      firebase.auth().signInWithCustomToken(token)
+        .then(function() { window.location.replace(redirect); })
+        .catch(function(err) {
+          document.getElementById('msg').innerHTML = '<span style="color:red">Anmeldung fehlgeschlagen: ' + (err.message || err.code) + '</span>';
+        });
+    }
+  </script>
+</body>
+</html>

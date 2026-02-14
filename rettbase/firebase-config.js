@@ -5,21 +5,20 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth
 import { getFirestore, enableMultiTabIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
 
-// 🔥 Deine Firebase Konfiguration (mit deinen Live-Daten)
+// 🔥 Firebase rett-fe0fa – einheitlich mit Flutter-App, Auth-Bridge und allen Modulen
 const firebaseConfig = {
-    apiKey: "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA", 
+    apiKey: "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA",
     authDomain: "rett-fe0fa.firebaseapp.com",
     projectId: "rett-fe0fa",
     storageBucket: "rett-fe0fa.firebasestorage.app",
     messagingSenderId: "740721219821",
     appId: "1:740721219821:web:a8e7f8070f875866ccd4e4"
-    // measurementId kann optional hinzugefügt werden, falls benötigt.
 };
 
 // Initialisiere Firebase App
 const app = initializeApp(firebaseConfig);
 
-// Exportiere die Dienste-Instanzen
+// Exportiere die Dienste-Instanzen (auth wird von Chat u.a. für iframe-Fallback benötigt)
 export const auth = getAuth(app);
 
 // 🔥 Firestore initialisieren

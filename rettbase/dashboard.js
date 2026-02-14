@@ -36,6 +36,7 @@ let userModules = []; // Speichert die für den Benutzer sichtbaren Module
 let menuStructure = null; // Gespeicherte Menüstruktur aus Firestore (settings/globalMenu)
 let isRenderingMenu = false; // Verhindert mehrfaches gleichzeitiges Rendern
 let chatUnreadUnsubscribe = null; // Firestore-Listener für Chat-Unread
+let lastChatUnreadCount = 0; // Für AUTH_DATA an iframe
 
 // 🔒 SESSION-TIMEOUT: Automatische Abmeldung nach 30 Minuten Inaktivität
 let inactivityTimer = null;
@@ -131,16 +132,18 @@ function sendAuthDataToIframe(retryCount = 0) {
     };
     
     // 🔥 NEU: Sende auch die verfügbaren Module UND die sichtbaren Menüpunkte an das iframe
+    const dataToSend = {
+      type: 'AUTH_DATA',
+      data: authDataToSend,
+      modules: userModules,
+      menuItems: visibleMenuItems,
+      chatUnreadCount: lastChatUnreadCount
+    };
     try {
         // ⚡ WICHTIG: Prüfe, ob iframe wirklich bereit ist (nicht nur ob contentWindow existiert)
         // Versuche zu senden - wenn fehlschlägt, versuche erneut
         try {
-            contentFrame.contentWindow.postMessage({
-                type: 'AUTH_DATA',
-                data: authDataToSend,
-                modules: userModules, // Verfügbare Module für Kachelbelegung
-                menuItems: visibleMenuItems // Tatsächlich angezeigte Menüpunkte (für Kachel-Synchronisation)
-            }, '*');
+            contentFrame.contentWindow.postMessage(dataToSend, '*');
             console.log(`✉️ Auth-Daten (Role: ${userAuthData.role}, Company: ${userAuthData.companyId}), ${userModules.length} Module, ${visibleMenuItems.length} Menüpunkte${userAuthData.mitarbeiterData ? ' + Mitarbeiter-Daten' : ''} gesendet.`);
         } catch (postError) {
             // Wenn postMessage fehlschlägt, versuche erneut
@@ -515,11 +518,16 @@ function subscribeToChatUnread(companyId, userId) {
           if (lastFrom && lastFrom !== userId && lastAt > lastReadMs) total += 1;
         }
       });
+      lastChatUnreadCount = total;
+      const badgeText = total > 99 ? "99+" : String(total);
       if (total === 0) {
         if (chatUnreadBadge) chatUnreadBadge.style.display = "none";
         if (chatUnreadIndicator) chatUnreadIndicator.classList.remove("visible");
+        dropdownMenu.querySelectorAll('[data-chat-badge]').forEach(el => {
+          el.textContent = "0";
+          el.classList.remove("visible");
+        });
       } else {
-        const badgeText = total > 99 ? "99+" : String(total);
         if (chatUnreadBadge) {
           chatUnreadBadge.textContent = badgeText;
           chatUnreadBadge.style.display = "flex";
@@ -528,6 +536,16 @@ function subscribeToChatUnread(companyId, userId) {
           chatUnreadCount.textContent = badgeText;
           chatUnreadIndicator.classList.add("visible");
         }
+        dropdownMenu.querySelectorAll('[data-chat-badge]').forEach(el => {
+          el.textContent = badgeText;
+          el.classList.add("visible");
+        });
+      }
+      // An Home-iframe senden für Schnellstart-Badges (auch bei 0)
+      if (contentFrame && contentFrame.contentWindow) {
+        try {
+          contentFrame.contentWindow.postMessage({ type: 'CHAT_UNREAD_UPDATE', count: total }, '*');
+        } catch (_) {}
       }
     });
   } catch (e) {
@@ -1078,8 +1096,10 @@ async function renderMenu() {
                 </svg>
             ` : '';
             
+            const chatBadge = (group.id === 'chat') ? '<span class="menu-chat-badge" data-chat-badge></span>' : '';
             menuItem.innerHTML = `
                 <span class="menu-item-text">${group.label || group.id}</span>
+                ${chatBadge}
                 ${arrowIcon}
             `;
             
@@ -1134,7 +1154,8 @@ async function renderMenu() {
                     subItem.className = 'menu-subitem';
                     subItem.dataset.page = child.id;
                     subItem.dataset.itemType = child.type || 'module';
-                    subItem.textContent = child.label || child.id;
+                    const subChatBadge = (child.id === 'chat') ? '<span class="menu-chat-badge" data-chat-badge></span>' : '';
+                    subItem.innerHTML = `<span>${child.label || child.id}</span>${subChatBadge}`;
                     
                     // Setze URL falls vorhanden
                     if (child.url && child.type === 'custom') {

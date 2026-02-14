@@ -55,5 +55,9 @@ service cloud.firestore {
     match /settings/{document=**} {
       allow read, write: if isLoggedIn();
     }
+
+    match /fcmTokens/{uid} {
+      allow read, write: if isLoggedIn() && request.auth.uid == uid;
+    }
   }
 }

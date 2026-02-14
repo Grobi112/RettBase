@@ -12,7 +12,8 @@ class MenueverwaltungScreen extends StatefulWidget {
   final String companyId;
   final String? userRole;
   final VoidCallback? onBack;
-  final VoidCallback? onMenuSaved;
+  /// Wird nach dem Speichern aufgerufen. Kann async sein – wird awaited.
+  final Future<void> Function()? onMenuSaved;
   final bool hideAppBar;
 
   const MenueverwaltungScreen({
@@ -39,6 +40,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
   bool _loading = true;
   String? _error;
   bool _saving = false;
+  bool _hasUnsavedChanges = false;
 
   @override
   void initState() {
@@ -72,6 +74,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
           _items = items;
           _availableModules = mods;
           _loading = false;
+          _hasUnsavedChanges = false;
         });
       }
     } catch (e) {
@@ -105,8 +108,10 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
           _items = [];
           _saving = false;
         });
-        widget.onMenuSaved?.call();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menü geleert. Sie können jetzt neu anfangen.')));
+        await widget.onMenuSaved?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menü geleert. Sie können jetzt neu anfangen.')));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -125,9 +130,14 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       }
       await _menuService.saveMenuStructure(_selectedBereich, _items);
       if (mounted) {
-        widget.onMenuSaved?.call();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menü gespeichert.')));
-        setState(() => _saving = false);
+        await widget.onMenuSaved?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menü gespeichert.')));
+          setState(() {
+            _saving = false;
+            _hasUnsavedChanges = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -157,6 +167,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         'type': 'heading',
         'children': [],
       };
+      _hasUnsavedChanges = true;
     });
     _save();
     if (mounted) {
@@ -173,6 +184,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         'children': [],
         'order': _items.length,
       });
+      _hasUnsavedChanges = true;
     });
   }
 
@@ -194,6 +206,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       } else {
         _items.add({...newItem, 'order': _items.length});
       }
+      _hasUnsavedChanges = true;
     });
   }
 
@@ -210,6 +223,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         'type': 'custom',
       };
       setState(() {
+        _hasUnsavedChanges = true;
         if (underHeadingIndex != null && _isHeading(underHeadingIndex)) {
           final children = _getChildren(underHeadingIndex);
           if (children.length >= MenueverwaltungService.maxChildrenPerHeading) return;
@@ -231,6 +245,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       } else {
         _items.removeAt(topIndex);
       }
+      _hasUnsavedChanges = true;
     });
   }
 
@@ -248,6 +263,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       );
       if (result != null && mounted) {
         setState(() {
+          _hasUnsavedChanges = true;
           if (childIndex != null) {
             final children = _getChildren(topIndex);
             children[childIndex]['label'] = result;
@@ -268,6 +284,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     );
     if (result != null && mounted) {
       setState(() {
+        _hasUnsavedChanges = true;
         if (childIndex != null) {
           final children = _getChildren(topIndex);
           children[childIndex] = {...children[childIndex], 'label': result['label'], 'url': result['url'] ?? ''};
@@ -277,6 +294,39 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         }
       });
     }
+  }
+
+  Future<void> _handleBack() async {
+    if (_hasUnsavedChanges && widget.userRole == 'superadmin') {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ungespeicherte Änderungen'),
+          content: const Text(
+            'Es gibt ungespeicherte Änderungen am Menü. Möchten Sie speichern, bevor Sie die Menü-Verwaltung verlassen?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'verwerfen'),
+              child: const Text('Verwerfen'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'abbrechen'),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, 'speichern'),
+              child: const Text('Speichern'),
+            ),
+          ],
+        ),
+      );
+      if (choice == 'abbrechen' || !mounted) return;
+      if (choice == 'speichern') {
+        await _save();
+      }
+    }
+    if (mounted) widget.onBack?.call();
   }
 
   /// Alle Modul-IDs die bereits im Menü verwendet werden
@@ -299,7 +349,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
         title: 'Menü-Verwaltung',
-        onBack: widget.onBack ?? () => Navigator.of(context).pop(),
+        onBack: _handleBack,
         actions: [
           if (widget.userRole == 'superadmin') ...[
             IconButton(
@@ -333,7 +383,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       return PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) widget.onBack!();
+          if (!didPop) _handleBack();
         },
         child: scaffold,
       );

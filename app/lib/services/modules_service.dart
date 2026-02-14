@@ -43,12 +43,22 @@ class ModulesService {
     AppModule(id: 'chat', label: 'Chat', url: '', order: 30, roles: _defaultRoles),
     AppModule(id: 'email', label: 'E-Mail', url: '', order: 31, roles: _defaultRoles),
     AppModule(id: 'ssd', label: 'Einsatzprotokoll SSD', url: '', order: 29, roles: _defaultRoles),
+    AppModule(id: 'schichtplannfs', label: 'Schichtplan NFS', url: '', order: 32, roles: _defaultRoles),
   ];
 
   /// Lädt Shortcuts für die Dashboard-Kacheln (6 Slots).
   /// Nutzt kunden/{companyId}/settings/schnellstart falls vorhanden, sonst erste 6 Module.
-  Future<List<AppModule?>> getShortcuts(String companyId, String role, {String? bereich}) async {
-    final modules = await getModulesForCompany(companyId, role, bereich: bereich);
+  /// [menuModuleIds]: Optionale Modul-IDs aus der Menüstruktur – damit auch Menü-Module
+  /// (z.B. Chat) in gespeicherten Slots aufgelöst werden.
+  Future<List<AppModule?>> getShortcuts(
+    String companyId,
+    String role, {
+    String? bereich,
+    List<String>? menuModuleIds,
+  }) async {
+    final modules = menuModuleIds != null
+        ? await getModulesForSchnellstart(companyId, role, menuModuleIds, bereich: bereich)
+        : await getModulesForCompany(companyId, role, bereich: bereich);
     final modById = {for (final m in modules) m.id: m};
 
     final custom = await _getSchnellstartSlots(companyId);
@@ -73,10 +83,41 @@ class ModulesService {
     return list;
   }
 
+  /// Lädt Module für die Schnellstart-Auswahl: Union aus getModulesForCompany und
+  /// Modulen, die im Menü für den Bereich erscheinen (z.B. Chat).
+  /// So kann der Nutzer alle im Menü sichtbaren Module auch im Schnellstart wählen.
+  Future<List<AppModule>> getModulesForSchnellstart(
+    String companyId,
+    String role,
+    List<String> menuModuleIds, {
+    String? bereich,
+  }) async {
+    final modules = await getModulesForCompany(companyId, role, bereich: bereich);
+    final modIds = modules.map((m) => m.id).toSet();
+    final roleLower = role.toLowerCase().trim();
+
+    for (final id in menuModuleIds) {
+      if (id.isEmpty || modIds.contains(id)) continue;
+      AppModule? def;
+      for (final m in defaultNativeModules) {
+        if (m.id == id) { def = m; break; }
+      }
+      if (def != null && def.roles.any((r) => r.toLowerCase() == roleLower)) {
+        modules.add(def);
+        modIds.add(id);
+      }
+    }
+    modules.sort((a, b) => a.order.compareTo(b.order));
+    return modules;
+  }
+
   /// Prüft, ob der Kunde eigene Schnellstart-Slots in Firestore gespeichert hat.
+  /// Leere Slots (alle null) = kein Custom, dann werden alle Module angezeigt.
   Future<bool> hasCustomSchnellstart(String companyId) async {
     final slots = await _getSchnellstartSlots(companyId);
-    return slots != null;
+    if (slots == null) return false;
+    final hasAny = slots.any((s) => s != null && s.toString().trim().isNotEmpty);
+    return hasAny;
   }
 
   /// Lädt gespeicherte Schnellstart-Slots aus Firestore (intern).
@@ -127,9 +168,16 @@ class ModulesService {
       for (final m in defaultNativeModules) {
         // Einsatzprotokoll-SSD nur bei Bereich Schulsanitätsdienst – für alle (auch Admin/Superadmin)
         if (m.id == 'ssd' && bereichResolved != KundenBereich.schulsanitaetsdienst) continue;
+        // Schichtplan NFS: bei Notfallseelsorge immer, bei Admin/Superadmin zur Anzeige im Menü
+        if (m.id == 'schichtplannfs' &&
+            bereichResolved != KundenBereich.notfallseelsorge &&
+            !isAdminCompany &&
+            !isGlobalSuperadmin) continue;
         // SSD bei Schulsanitätsdienst: immer enabled (ohne explizite Freischaltung in kunden/modules)
         final ssdAutoEnabled = m.id == 'ssd' && bereichResolved == KundenBereich.schulsanitaetsdienst;
-        final enabled = ssdAutoEnabled || isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
+        // Schichtplan NFS bei Notfallseelsorge: immer enabled
+        final schichtplannfsAutoEnabled = m.id == 'schichtplannfs' && bereichResolved == KundenBereich.notfallseelsorge;
+        final enabled = ssdAutoEnabled || schichtplannfsAutoEnabled || isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
         if (!enabled) continue;
         final def = allMods[m.id];
         final roles = def?['roles'] as List? ?? m.roles;

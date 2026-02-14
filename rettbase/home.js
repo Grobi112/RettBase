@@ -32,6 +32,7 @@ window.addEventListener("DOMContentLoaded", () => {
   let menuOptions = [];
   let availableModules = []; // Verfügbare Module vom Dashboard
   let visibleMenuItems = []; // Tatsächlich angezeigte Menüpunkte aus dem Hamburger-Menü
+  let lastChatUnreadCount = 0; // Für Chat-Badge auf Kacheln (vom Dashboard)
 
   // Icons für verschiedene Module (kann erweitert werden)
   const icons = {
@@ -48,6 +49,7 @@ window.addEventListener("DOMContentLoaded", () => {
       "E-Mail": `<rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>`,
       "Telefonliste": `<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>`,
       "Einstellungen": `<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>`,
+      Chat: `<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>`,
       Logout: `<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>`,
       Plus: `<circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line>`
   };
@@ -57,6 +59,14 @@ window.addEventListener("DOMContentLoaded", () => {
     return icons[label] || icons.Plus; // Fallback zu Plus-Icon
   }
   
+  // CHAT_UNREAD_UPDATE: Badge auf Chat-Kacheln (vom Dashboard)
+  window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'CHAT_UNREAD_UPDATE' && typeof event.data.count === 'number') {
+      lastChatUnreadCount = event.data.count;
+      updateChatBadgesOnTiles(lastChatUnreadCount);
+    }
+  });
+
   // ✅ Hole die Authentifizierungsdaten vom Parent, bevor irgendetwas passiert
   waitForAuthData().then(async data => {
       userAuthData = data;
@@ -135,7 +145,10 @@ window.addEventListener("DOMContentLoaded", () => {
             visibleMenuItems = event.data.menuItems;
             console.log(`📋 Empfangen: ${visibleMenuItems.length} sichtbare Menüpunkte aus Hamburger-Menü`);
           }
-          
+          if (typeof event.data.chatUnreadCount === 'number') {
+            lastChatUnreadCount = event.data.chatUnreadCount;
+            updateChatBadgesOnTiles(lastChatUnreadCount);
+          }
           updateMenuOptions(); // Aktualisiere Menü-Optionen basierend auf Menüpunkten
           
           // 🔥 NEU: Wenn Kacheln bereits geladen wurden, filtere ungültige Kacheln
@@ -470,9 +483,10 @@ window.addEventListener("DOMContentLoaded", () => {
       grid.appendChild(container);
     }
     
-    // 📧 Aktualisiere E-Mail-Badges nach dem Rendern
+    // 📧 Aktualisiere E-Mail- und Chat-Badges nach dem Rendern
     if (userAuthData && userAuthData.uid) {
       updateEmailBadgesOnTiles();
+      updateChatBadgesOnTiles(lastChatUnreadCount);
     }
   }
 
@@ -737,6 +751,24 @@ window.addEventListener("DOMContentLoaded", () => {
       console.debug("Fehler beim Prüfen ungelesener E-Mails:", error);
       return 0;
     }
+  }
+
+  /**
+   * Aktualisiert den Badge auf Chat-Kacheln (Schnellstart)
+   * @param {number} count - Ungelesene Chat-Nachrichten
+   */
+  function updateChatBadgesOnTiles(count) {
+    const chatTiles = grid.querySelectorAll('.grid-item[data-tile-page*="chat"]');
+    chatTiles.forEach(tileDiv => {
+      const existingBadge = tileDiv.querySelector('.chat-badge');
+      if (existingBadge) existingBadge.remove();
+      if (count > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'chat-badge';
+        badge.textContent = count > 99 ? '99+' : count.toString();
+        tileDiv.appendChild(badge);
+      }
+    });
   }
 
   /**

@@ -10,12 +10,14 @@ import '../services/chat_service.dart';
 /// Natives Chat-Modul – ohne WebView.
 class ChatScreen extends StatefulWidget {
   final String companyId;
+  final String? initialChatId;
   final VoidCallback? onBack;
   final bool hideAppBar;
 
   const ChatScreen({
     super.key,
     required this.companyId,
+    this.initialChatId,
     this.onBack,
     this.hideAppBar = false,
   });
@@ -29,6 +31,15 @@ class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   String? _selectedChatId;
   Future<List<ChatMessage>>? _messagesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialChatId != null && widget.initialChatId!.isNotEmpty) {
+      _selectedChatId = widget.initialChatId;
+      _messagesFuture = _chatService.loadMessages(widget.companyId, widget.initialChatId!);
+    }
+  }
   List<MitarbeiterForChat> _mitarbeiter = [];
   List<Uint8List> _pendingImages = [];
   bool _loadingMitarbeiter = false;
@@ -173,47 +184,74 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  PreferredSizeWidget _buildAppBar(bool isNarrow, VoidCallback onBack) {
+    if (isNarrow && _selectedChatId != null) {
+      return PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: StreamBuilder<List<ChatModel>>(
+          stream: _chatService.streamChats(widget.companyId),
+          builder: (context, chatSnap) {
+            ChatModel? chat;
+            for (final c in chatSnap.data ?? []) {
+              if (c.id == _selectedChatId) {
+                chat = c;
+                break;
+              }
+            }
+            final title = chat != null ? _chatDisplayName(chat) : 'Chat';
+            return AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() => _selectedChatId = null),
+                color: AppTheme.primary,
+              ),
+              title: Text(title, style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 18)),
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.primary,
+              elevation: 1,
+              scrolledUnderElevation: 1,
+            );
+          },
+        ),
+      );
+    }
+    return AppTheme.buildModuleAppBar(
+      title: 'Chat',
+      onBack: onBack,
+      actions: [
+        IconButton(icon: const Icon(Icons.add_comment_outlined), tooltip: 'Neuer Chat', onPressed: _openNewChat),
+        IconButton(icon: const Icon(Icons.group_add_outlined), tooltip: 'Neue Gruppe', onPressed: _openNewGroup),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isNarrow = MediaQuery.sizeOf(context).width < 600;
     final onBack = widget.onBack ?? () => Navigator.of(context).pop();
 
+    // Mobile: WhatsApp-Stil – Chat-Liste (Namen + Badge) immer zuerst, Klick öffnet Konversation
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
-      appBar: AppTheme.buildModuleAppBar(
-        title: 'Chat',
-        onBack: onBack,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_comment_outlined),
-            tooltip: 'Neuer Chat',
-            onPressed: _openNewChat,
-          ),
-          IconButton(
-            icon: const Icon(Icons.group_add_outlined),
-            tooltip: 'Neue Gruppe',
-            onPressed: _openNewGroup,
-          ),
-        ],
-      ),
-      body: Row(
-        children: [
-          // Chat-Liste
-          AnimatedContainer(
-            width: isNarrow ? (_selectedChatId != null ? 0 : double.infinity) : 320,
-            duration: const Duration(milliseconds: 200),
-            child: isNarrow && _selectedChatId != null
-                ? const SizedBox.shrink()
-                : _buildChatList(isNarrow),
-          ),
-          // Nachrichtenbereich
-          Expanded(
-            child: _selectedChatId == null
-                ? _buildNoChatSelected(isNarrow)
-                : _buildMessageView(isNarrow),
-          ),
-        ],
-      ),
+      appBar: _buildAppBar(isNarrow, onBack),
+      body: isNarrow
+          ? _selectedChatId == null
+              ? _buildChatList(isNarrow)
+              : _buildMessageView(isNarrow)
+          : Row(
+              children: [
+                AnimatedContainer(
+                  width: 320,
+                  duration: const Duration(milliseconds: 200),
+                  child: _buildChatList(isNarrow),
+                ),
+                Expanded(
+                  child: _selectedChatId == null
+                      ? _buildNoChatSelected(isNarrow)
+                      : _buildMessageView(isNarrow),
+                ),
+              ],
+            ),
     );
 
     final content = Stack(
@@ -228,7 +266,13 @@ class _ChatScreenState extends State<ChatScreen> {
       return PopScope(
         canPop: false,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) widget.onBack!();
+          if (didPop) return;
+          // Mobile: Erst zur Chat-Liste, dann zum Dashboard
+          if (_selectedChatId != null) {
+            setState(() => _selectedChatId = null);
+          } else {
+            widget.onBack!();
+          }
         },
         child: content,
       );
@@ -315,34 +359,45 @@ class _ChatScreenState extends State<ChatScreen> {
                   return false;
                 },
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppTheme.primary.withOpacity(0.2),
-                    child: Text(
-                      _getInitials(_chatDisplayName(chat)),
-                      style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  title: Row(
+                  contentPadding: EdgeInsets.symmetric(horizontal: isNarrow ? 16 : 16, vertical: 8),
+                  leading: Stack(
+                    clipBehavior: Clip.none,
                     children: [
-                      Expanded(
+                      CircleAvatar(
+                        backgroundColor: AppTheme.primary.withOpacity(0.2),
                         child: Text(
-                          _chatDisplayName(chat),
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal),
+                          _getInitials(_chatDisplayName(chat)),
+                          style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
                         ),
                       ),
                       if (hasUnread)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(color: AppTheme.primary, borderRadius: BorderRadius.circular(10)),
-                          child: Text('${unread > 99 ? "99+" : unread}', style: const TextStyle(color: Colors.white, fontSize: 11)),
+                        Positioned(
+                          top: -2,
+                          right: -2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
+                            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                            child: Center(
+                              child: Text(
+                                '${unread > 99 ? "99+" : unread}',
+                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
                         ),
                     ],
+                  ),
+                  title: Text(
+                    _chatDisplayName(chat),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500, fontSize: 16),
                   ),
                   subtitle: Text(
                     chat.lastMessageText ?? 'Keine Nachrichten',
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    maxLines: 1,
+                    style: TextStyle(fontSize: 14, color: hasUnread ? Colors.grey[800] : Colors.grey[600]),
                   ),
                   trailing: Text(_formatTime(chat.lastMessageAt), style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                   selected: _selectedChatId == chat.id,
@@ -400,24 +455,8 @@ class _ChatScreenState extends State<ChatScreen> {
     return StreamBuilder<List<ChatModel>>(
       stream: _chatService.streamChats(widget.companyId),
       builder: (context, chatSnap) {
-        ChatModel? chat;
-        for (final c in chatSnap.data ?? []) {
-          if (c.id == chatId) { chat = c; break; }
-        }
-        final title = chat != null ? _chatDisplayName(chat) : 'Chat';
-
         return Column(
           children: [
-            if (isNarrow)
-              AppBar(
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: () => setState(() => _selectedChatId = null),
-                ),
-                title: Text(title),
-                backgroundColor: Colors.white,
-                foregroundColor: AppTheme.primary,
-              ),
             Expanded(
               child: FutureBuilder<List<ChatMessage>>(
                 future: _messagesFuture ??= _chatService.loadMessages(widget.companyId, chatId),

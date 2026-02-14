@@ -176,6 +176,31 @@ header img.header-logo {
   transform: rotate(180deg);
 }
 
+/* Chat-Badge im Hamburger-Menü */
+.menu-chat-badge {
+  flex-shrink: 0;
+  margin-left: 8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #ef4444;
+  color: white;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.menu-chat-badge.visible {
+  display: flex;
+}
+.menu-subitem .menu-chat-badge {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
 .menu-group {
   display: flex;
   flex-direction: column;
@@ -208,7 +233,9 @@ header img.header-logo {
   text-decoration: none;
   color: #6b7280;
   font-size: 14px;
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   transition: background-color 0.2s, color 0.2s;
   border-left: 2px solid transparent;
 }

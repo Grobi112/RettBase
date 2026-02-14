@@ -15,10 +15,14 @@ class MenueverwaltungService {
 
   static const int _maxChildrenPerHeading = 6;
 
-  /// Lädt die Menüstruktur für einen Bereich
-  Future<List<Map<String, dynamic>>> loadMenuStructure(String bereich) async {
+  /// Lädt die Menüstruktur für einen Bereich.
+  /// [forceServerRead]: wenn true, liest direkt vom Server (um Cache nach Speichern zu umgehen).
+  Future<List<Map<String, dynamic>>> loadMenuStructure(String bereich, {bool forceServerRead = false}) async {
     if (bereich.isEmpty) return [];
-    final snap = await _menuRef(bereich).get();
+    final options = forceServerRead ? const GetOptions(source: Source.server) : null;
+    final snap = options != null
+        ? await _menuRef(bereich).get(options)
+        : await _menuRef(bereich).get();
     if (!snap.exists) return [];
     final items = snap.data()?['items'];
     if (items is List) {
@@ -27,9 +31,13 @@ class MenueverwaltungService {
     return [];
   }
 
-  /// Lädt Menüstruktur aus altem globalMenu (Abwärtskompatibilität/Migration)
-  Future<List<Map<String, dynamic>>> loadLegacyGlobalMenu() async {
-    final snap = await _db.collection('settings').doc('globalMenu').get();
+  /// Lädt Menüstruktur aus altem globalMenu (Abwärtskompatibilität/Migration).
+  /// [forceServerRead]: wenn true, liest direkt vom Server.
+  Future<List<Map<String, dynamic>>> loadLegacyGlobalMenu({bool forceServerRead = false}) async {
+    final options = forceServerRead ? const GetOptions(source: Source.server) : null;
+    final snap = options != null
+        ? await _db.collection('settings').doc('globalMenu').get(options)
+        : await _db.collection('settings').doc('globalMenu').get();
     if (!snap.exists) return [];
     final items = snap.data()?['items'];
     if (items is List) {

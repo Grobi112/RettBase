@@ -1,0 +1,41 @@
+---
+description: PopUp-Fenster zentriert auf dem Bildschirm anzeigen
+globs: lib/**/*.dart
+alwaysApply: false
+---
+
+# PopUp-Fenster: Zentrierte Darstellung
+
+PopUp-Fenster (Dialoge, Modals, Bottom Sheets als Dialog) werden **in der Mitte des Bildschirms** angezeigt.
+
+## Umsetzung in Flutter
+
+### showGeneralDialog / showDialog
+
+Das PopUp-Element wird mit `Center` oder `Alignment.center` zentriert:
+
+```dart
+// showGeneralDialog – PopUp mittig
+showGeneralDialog<void>(
+  context: context,
+  barrierDismissible: true,
+  pageBuilder: (ctx, _, __) => Center(
+    child: Material(
+      color: Colors.transparent,
+      child: /* Dialog-Inhalt */,
+    ),
+  ),
+)
+
+// showDialog – Alignment über Theme oder direkt
+showDialog(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    // AlertDialog ist standardmäßig zentriert
+  ),
+)
+```
+
+### Align
+
+Bei `showGeneralDialog` das Wrapper-Widget `Center` nutzen, damit der Dialog-Inhalt mittig erscheint.

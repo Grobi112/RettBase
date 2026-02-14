@@ -5,15 +5,14 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth
 import { getFirestore, enableMultiTabIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-storage.js";
 
-// 🔥 Deine Firebase Konfiguration (mit deinen Live-Daten)
+// 🔥 Firebase rettbase-app – einheitlich für alle RettBase-Systeme
 const firebaseConfig = {
-    apiKey: "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA", 
-    authDomain: "rett-fe0fa.firebaseapp.com",
-    projectId: "rett-fe0fa",
-    storageBucket: "rett-fe0fa.firebasestorage.app",
-    messagingSenderId: "740721219821",
-    appId: "1:740721219821:web:a8e7f8070f875866ccd4e4"
-    // measurementId kann optional hinzugefügt werden, falls benötigt.
+    apiKey: "AIzaSyCl67Qcs2Z655Y0507NG6o9WCL4twr65uc",
+    authDomain: "rettbase-app.firebaseapp.com",
+    projectId: "rettbase-app",
+    storageBucket: "rettbase-app.firebasestorage.app",
+    messagingSenderId: "339125193380",
+    appId: "1:339125193380:web:350966b45a875fae8eb431"
 };
 
 // Initialisiere Firebase App

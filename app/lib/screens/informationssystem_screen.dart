@@ -24,6 +24,8 @@ class InformationssystemScreen extends StatefulWidget {
   final VoidCallback? onBack;
   /// Wird aufgerufen, wenn eine Information erstellt, bearbeitet oder gelöscht wurde – z.B. zur Aktualisierung der Dashboard-Container
   final VoidCallback? onInfoChanged;
+  /// Wird aufgerufen, wenn Container-Typen geändert wurden – Dashboard/HomeScreen muss containerSlots neu laden
+  final VoidCallback? onContainerTypesChanged;
 
   const InformationssystemScreen({
     super.key,
@@ -31,6 +33,7 @@ class InformationssystemScreen extends StatefulWidget {
     this.userRole,
     this.onBack,
     this.onInfoChanged,
+    this.onContainerTypesChanged,
   });
 
   @override
@@ -200,7 +203,9 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
                         builder: (_) => InformationssystemEinstellungenScreen(
                           companyId: widget.companyId,
                           onBack: () => Navigator.of(context).pop(),
-                          onSaved: () {},
+                          onSaved: () {
+                            widget.onContainerTypesChanged?.call();
+                          },
                         ),
                       ),
                     );

@@ -120,8 +120,9 @@ body {
 }
 .placeholder { background: #e0e0e0; cursor: pointer; }
 .placeholder svg { stroke: #888; }
-/* 📧 E-Mail-Badge für Kacheln */
-.grid-item .email-badge {
+/* 📧 E-Mail-Badge und Chat-Badge für Kacheln */
+.grid-item .email-badge,
+.grid-item .chat-badge {
   position: absolute;
   top: 4px;
   right: 4px;

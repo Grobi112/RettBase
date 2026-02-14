@@ -1,7 +1,7 @@
 // chat.js – RettBase Chat-Modul
 // 1:1-Chat, Gruppen-Chat, Bilder und Dateien versenden
 
-import { db, storage } from "../../firebase-config.js";
+import { auth, db, storage } from "../../firebase-config.js";
 import {
   collection,
   doc,
@@ -105,14 +105,38 @@ function waitForAuthData() {
       resolve(null);
       return;
     }
+    // Im iframe (z.B. Flutter Web nach auth-callback): postMessage ODER Firebase-Auth-Fallback
     window.parent.postMessage({ type: "IFRAME_READY" }, "*");
     const handler = (e) => {
       if (e.data && e.data.type === "AUTH_DATA") {
         window.removeEventListener("message", handler);
+        clearTimeout(fallbackTimer);
         resolve(e.data.data || e.data);
       }
     };
     window.addEventListener("message", handler);
+    // Fallback: Nach auth-callback ist Firebase Auth schon angemeldet (Flutter Web iframe)
+    const AUTH_FALLBACK_MS = 1500;
+    const fallbackTimer = setTimeout(async () => {
+      const user = auth?.currentUser;
+      if (user) {
+        const host = typeof location !== "undefined" ? location.hostname : "";
+        const m = host.match(/([^.]+)\.rettbase\.de$/);
+        const companyId = m && !["www", "login"].includes(m[1]) ? m[1] : "";
+        if (companyId) {
+          window.removeEventListener("message", handler);
+          const data = {
+            uid: user.uid,
+            email: user.email || "",
+            companyId,
+            role: "user"
+          };
+          resolve(data);
+          return;
+        }
+      }
+      // Kein User oder keine companyId – weiter auf AUTH_DATA warten (Dashboard sendet es)
+    }, AUTH_FALLBACK_MS);
   });
 }
 

@@ -7,7 +7,7 @@ const { simpleParser } = require("mailparser");
 // Initialisiere Admin SDK
 // WICHTIG: admin.firestore() umgeht die Security Rules automatisch
 // Verwende applicationDefault() für Service Account Credentials
-// EXPLIZIT: Projekt-ID setzen, um sicherzustellen, dass auf rett-fe0fa zugegriffen wird
+// EXPLIZIT: Projekt-ID rettbase-app (einheitlich für alle RettBase-Systeme)
 if (!admin.apps.length) {
   try {
     // Prüfe Environment Variables
@@ -17,10 +17,10 @@ if (!admin.apps.length) {
     
     admin.initializeApp({
       credential: admin.credential.applicationDefault(),
-      projectId: "rett-fe0fa", // EXPLIZIT: Projekt-ID setzen
-      databaseURL: "https://rett-fe0fa-default-rtdb.firebaseio.com", // Optional, für Realtime Database
+      projectId: "rettbase-app",
+      databaseURL: "https://rettbase-app-default-rtdb.firebaseio.com",
     });
-    console.log("✅ Admin SDK initialisiert mit Projekt: rett-fe0fa");
+    console.log("✅ Admin SDK initialisiert mit Projekt: rettbase-app");
     console.log(`✅ Admin Apps: ${admin.apps.length}`);
     
     // Prüfe ob Firestore verfügbar ist

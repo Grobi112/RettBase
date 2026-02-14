@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../services/chat_service.dart';
@@ -12,6 +13,7 @@ import '../services/modules_service.dart';
 import '../services/informationen_service.dart';
 import '../services/kundenverwaltung_service.dart';
 import '../services/menueverwaltung_service.dart';
+import '../services/push_notification_service.dart';
 import 'home_screen.dart';
 import 'schichtanmeldung_screen.dart';
 import 'schichtuebersicht_screen.dart';
@@ -40,6 +42,8 @@ import 'kundenverwaltung_screen.dart';
 import 'mitarbeiterverwaltung_screen.dart';
 import 'modulverwaltung_screen.dart';
 import 'menueverwaltung_screen.dart';
+import 'package:app/utils/url_hash_stub.dart'
+    if (dart.library.html) 'package:app/utils/url_hash_web.dart' as url_hash;
 
 /// Natives Dashboard nach Login – HomeScreen mit Modul-Shortcuts.
 class DashboardScreen extends StatefulWidget {
@@ -83,6 +87,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _containerSlotsNotifier = ValueNotifier<List<String?>>([]);
   final _infoItemsNotifier = ValueNotifier<List<Information>>([]);
 
+  bool _pushRequesting = false;
+
+  Future<void> _requestPushPermission() async {
+    if (_pushRequesting) return;
+    final user = _authService.currentUser;
+    if (user == null) return;
+    setState(() => _pushRequesting = true);
+    final permFuture = PushNotificationService.startNotificationPermissionRequestForWeb();
+    if (mounted) Navigator.pop(context);
+    try {
+      if (permFuture != null) {
+        final (success, needsReload) = await PushNotificationService.requestPermissionAndSaveTokenForWeb(
+          _companyId,
+          user.uid,
+          permissionFuture: permFuture,
+        );
+        if (!mounted) return;
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Benachrichtigungen aktiviert')),
+          );
+        } else if (needsReload) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Bitte Seite neu laden und erneut tippen'),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Benachrichtigungen wurden nicht aktiviert')),
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _pushRequesting = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -90,14 +133,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _chatUnreadNotifier.addListener(_onChatUnreadChanged);
   }
 
-  void _onChatUnreadChanged() => setState(() {});
+  void _onChatUnreadChanged() {
+    final count = _chatUnreadNotifier.value;
+    if (kIsWeb) debugPrint('RettBase Badge: _onChatUnreadChanged count=$count');
+    setState(() {});
+    PushNotificationService.updateBadge(count);
+  }
 
   void _startChatUnreadListener() {
     _chatUnreadSub?.cancel();
     final cid = _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
     if (cid.isEmpty) return;
-    _chatUnreadSub = _chatService.streamUnreadCount(cid).listen((count) {
-      if (mounted) _chatUnreadNotifier.value = count;
+    if (kIsWeb) debugPrint('RettBase Badge: starte streamUnreadCount für companyId=$cid');
+    _chatUnreadSub = _chatService.streamUnreadCount(cid).listen(
+      (count) {
+        if (kIsWeb) debugPrint('RettBase Badge: stream emit count=$count');
+        if (mounted) _chatUnreadNotifier.value = count;
+      },
+      onError: (e) {
+        debugPrint('RettBase Badge: stream Fehler: $e');
+        _chatUnreadSub?.cancel();
+        _chatUnreadSub = null;
+        if (mounted) _chatUnreadNotifier.value = 0;
+      },
+    );
+  }
+
+  void _maybeOpenChatFromNotification(String companyId) {
+    final chat = PushNotificationService.initialChatFromNotification;
+    if (chat == null) return;
+    if (chat.$1 != companyId) return;
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _bodyNavigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(companyId: companyId, initialChatId: chat.$2, onBack: _goToHome, hideAppBar: true),
+        ),
+      );
     });
   }
 
@@ -127,6 +200,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
       debugPrint('RettBase Dashboard: authData role=${authData.role} companyId=${authData.companyId} displayName=${authData.displayName} vorname=${authData.vorname}');
       final effectiveCompanyId = authData.companyId.trim().isNotEmpty ? authData.companyId : widget.companyId;
+      // Token im Hintergrund speichern – darf Dashboard-Lade nicht blockieren (getToken kann auf Web hängen)
+      unawaited(PushNotificationService().saveToken(effectiveCompanyId, user.uid));
       var bereich = await _kundenService.getCompanyBereich(effectiveCompanyId);
       final isAdminCompany = (effectiveCompanyId.trim().toLowerCase()) == 'admin';
       if (bereich == null || bereich.isEmpty) {
@@ -176,6 +251,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _containerSlotsNotifier.value = slots;
       _infoItemsNotifier.value = infos;
       _startChatUnreadListener();
+      if (kIsWeb) {
+        final h = url_hash.getInitialHash();
+        PushNotificationService.setInitialChatFromHash(h);
+        if (h != null && h.startsWith('#chat/')) url_hash.clearHash();
+      }
+      _maybeOpenChatFromNotification(effectiveCompanyId);
     } catch (e, st) {
       debugPrint('RettBase Dashboard _load FEHLER: $e');
       debugPrint('RettBase Dashboard _load StackTrace: $st');
@@ -676,25 +757,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return children;
   }
 
+  /// Tab-Titel für Web: zeigt ungelesene Chat-Anzahl (Flutter-eigener Mechanismus).
+  static String _pageTitleFromCount(int count) {
+    if (count <= 0) return 'RettBase – Schulsanitätsdienst';
+    return '(${count > 99 ? 99 : count}) RettBase – Schulsanitätsdienst';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Scaffold(
-        backgroundColor: AppTheme.surfaceBg,
-        body: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: AppTheme.primary),
-              SizedBox(height: 16),
-              Text('Lade Dashboard…'),
-            ],
+      return Title(
+        title: 'RettBase – Schulsanitätsdienst',
+        color: AppTheme.primary,
+        child: Scaffold(
+          backgroundColor: AppTheme.surfaceBg,
+          body: const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: AppTheme.primary),
+                SizedBox(height: 16),
+                Text('Lade Dashboard…'),
+              ],
+            ),
           ),
         ),
       );
     }
 
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       drawer: Drawer(
         child: ListView(
@@ -723,6 +814,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
+            if (kIsWeb &&
+                PushNotificationService.getNotificationPermissionStatusWeb() != 'granted')
+              ListTile(
+                leading: Icon(Icons.notifications_none, color: AppTheme.primary),
+                title: const Text('Benachrichtigungen aktivieren'),
+                subtitle: const Text('Tippen für Chat-Push (Handy)'),
+                onTap: _pushRequesting ? null : _requestPushPermission,
+                trailing: _pushRequesting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+              ),
+            if (kIsWeb && PushNotificationService.getNotificationPermissionStatusWeb() != 'granted')
+              const Divider(height: 1),
             ..._buildDrawerMenuContent(),
             if ((_userRole ?? '').toLowerCase().trim() == 'superadmin' &&
                 (_companyId.trim().toLowerCase()) != 'admin') ...[
@@ -858,6 +960,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           builder: (_) => _buildHomeContent(),
         ),
       ),
+    );
+    return ValueListenableBuilder<int>(
+      valueListenable: _chatUnreadNotifier,
+      builder: (context, count, _) => Title(
+        title: _pageTitleFromCount(count),
+        color: AppTheme.primary,
+        child: scaffold,
+      ),
+      child: scaffold,
     );
   }
 }

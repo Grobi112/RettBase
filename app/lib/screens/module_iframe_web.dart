@@ -44,7 +44,8 @@ class _ModuleAuthBridgeIframeState extends State<_ModuleAuthBridgeIframe> {
         if (mounted) setState(() => _error = 'Nicht angemeldet.');
         return;
       }
-      final idToken = await user.getIdToken();
+      // Force refresh – verhindert "Token ungültig oder abgelaufen"
+      final idToken = await user.getIdToken(true);
       if (idToken == null || idToken.isEmpty) {
         if (mounted) setState(() => _error = 'Token konnte nicht geladen werden.');
         return;

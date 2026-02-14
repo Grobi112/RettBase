@@ -2,6 +2,7 @@
 // Verwaltung der Mitarbeiter im Admin-Backend
 
 import { db, auth } from "../../firebase-config.js";
+import { getAuthData } from "../../auth.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js"; 
 import { 
     collection, 
@@ -17,6 +18,7 @@ import {
     deleteField
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import {
+    onAuthStateChanged,
     createUserWithEmailAndPassword,
     updatePassword,
     signInWithEmailAndPassword,
@@ -276,6 +278,34 @@ window.addEventListener('message', async (event) => {
 if (window.parent) {
     window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
 }
+
+// Fallback: Wenn keine AUTH_DATA vom Parent (z.B. Flutter-WebApp iframe) kommt, direkt aus Firebase Auth laden
+let authDataFallbackScheduled = false;
+async function runAuthFallback(user) {
+    if (currentAuthData || authDataFallbackScheduled || !user) return;
+    authDataFallbackScheduled = true;
+    try {
+        const authData = await getAuthData(user.uid, user.email || '');
+        if (authData && authData.role && authData.companyId) {
+            currentAuthData = authData;
+            console.log("✅ Mitarbeiterverwaltung - Auth-Daten aus Firebase (Fallback):", currentAuthData);
+            updateRoleOptions();
+            if (['superadmin', 'admin', 'leiterssd'].includes(currentAuthData.role)) {
+                await loadMitarbeiter();
+                renderMitarbeiterList();
+            } else {
+                mitarbeiterList.innerHTML = '<p>Sie benötigen entsprechende Rechte (Superadmin, Admin oder LeiterSSD), um Mitarbeiter zu verwalten.</p>';
+                if (createMitarbeiterBtn) createMitarbeiterBtn.style.display = "none";
+            }
+        }
+    } catch (e) {
+        console.warn("Auth-Fallback fehlgeschlagen:", e);
+    }
+}
+setTimeout(() => runAuthFallback(auth.currentUser), 1500);
+onAuthStateChanged(auth, (user) => {
+    if (user && !currentAuthData) setTimeout(() => runAuthFallback(user), 300);
+});
 
 // --- 2. MITARBEITER LADEN ---
 

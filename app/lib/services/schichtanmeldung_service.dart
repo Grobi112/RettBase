@@ -8,14 +8,21 @@ class BereitschaftsTyp {
   final String id;
   final String name;
   final String? beschreibung;
+  /// Farbe als Int (0xFFRRGGBB), null = Standard-Farbe
+  final int? color;
 
-  BereitschaftsTyp({required this.id, required this.name, this.beschreibung});
+  BereitschaftsTyp({required this.id, required this.name, this.beschreibung, this.color});
 
   factory BereitschaftsTyp.fromFirestore(String id, Map<String, dynamic> data) {
+    int? color;
+    final c = data['color'];
+    if (c is int) color = c;
+    if (c is num) color = c.toInt();
     return BereitschaftsTyp(
       id: id,
       name: data['name']?.toString() ?? id,
       beschreibung: data['beschreibung']?.toString(),
+      color: color,
     );
   }
 }
@@ -46,12 +53,20 @@ class Bereitschaft {
 }
 
 /// Modell: Schichtplan-Mitarbeiter (für Zuordnung)
+/// NFS: erweiterte Felder (Personalnummer, Adresse, Ort, Telefon)
 class SchichtplanMitarbeiter {
   final String id;
   final String? vorname;
   final String? nachname;
   final String? email;
   final List<String>? qualifikation;
+  final String? personalnummer;
+  final String? strasse;
+  final String? hausnummer;
+  final String? plz;
+  final String? ort;
+  final String? telefonnummer;
+  final String? role;
 
   SchichtplanMitarbeiter({
     required this.id,
@@ -59,6 +74,13 @@ class SchichtplanMitarbeiter {
     this.nachname,
     this.email,
     this.qualifikation,
+    this.personalnummer,
+    this.strasse,
+    this.hausnummer,
+    this.plz,
+    this.ort,
+    this.telefonnummer,
+    this.role,
   });
 
   String get displayName => '${nachname ?? ''}, ${vorname ?? ''}'.trim();
@@ -73,6 +95,13 @@ class SchichtplanMitarbeiter {
       nachname: data['nachname']?.toString(),
       email: data['email']?.toString(),
       qualifikation: qual,
+      personalnummer: data['personalnummer']?.toString(),
+      strasse: data['strasse']?.toString(),
+      hausnummer: data['hausnummer']?.toString(),
+      plz: data['plz']?.toString(),
+      ort: data['ort']?.toString(),
+      telefonnummer: data['telefonnummer']?.toString(),
+      role: data['role']?.toString(),
     );
   }
 }

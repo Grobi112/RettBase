@@ -4,8 +4,16 @@
       "collectionGroup": "fahrtenbuchEintraege",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "fahrzeugkennung", "order": "ASCENDING" },
-        { "fieldPath": "datum", "order": "DESCENDING" }
+        {"fieldPath": "fahrzeugkennung", "order": "ASCENDING"},
+        {"fieldPath": "datum", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "schichtplanNfsMeldungen",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"}
       ]
     }
   ],

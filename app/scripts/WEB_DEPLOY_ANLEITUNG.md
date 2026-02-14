@@ -38,9 +38,25 @@ Die App liegt dann z.B. unter `rett-fe0fa.web.app` oder Ihrer konfigurierten Dom
 
 ---
 
-## 5. Authorized Domains in Firebase
+## 5. Firebase-Tools aktuell halten
+
+```bash
+npm install -g firebase-tools
+```
+
+---
+
+## 6. Authorized Domains in Firebase
 
 Unter [Firebase Console → Authentication → Authorized domains](https://console.firebase.google.com/project/rett-fe0fa/authentication/settings) müssen alle Domains eingetragen sein, auf denen die WebApp läuft:
 
 - Ihre zentrale Domain (z.B. `app.rettbase.de`, `rett-fe0fa.web.app`)
 - `localhost` für lokale Tests
+
+---
+
+## Hinweise zu Cloud Functions
+
+- **Runtime:** Node.js 20 (Node 22 wird bei 1st-Gen-Functions nicht unterstützt)
+- **firebase-functions:** v5.x mit `require("firebase-functions/v1")` für 1st gen
+- **functions.config():** Nicht verwendet – keine params-Migration erforderlich

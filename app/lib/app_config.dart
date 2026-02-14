@@ -3,6 +3,10 @@
 /// Arbeitet mit Kunden-ID (nicht Subdomain) – URL: kundenId.rettbase.de
 
 class AppConfig {
+  /// VAPID-Key für Web-Push (FCM).
+  /// In Firebase Console: Projekt-Einstellungen → Cloud Messaging → Web-Konfiguration → Schlüsselpaar erzeugen.
+  /// Ohne diesen Key funktionieren Push-Benachrichtigungen auf Web nicht.
+  static const String? fcmWebVapidKey = 'BOry5KP4SOhFgMZXOEAC2L5kttPU47Tuc8VBBCGk3NGqHqumnF1-bfPbwVTxdXD2rntuCt1azw48FejwsunG5u4';
   static const String rootDomain = 'rettbase.de';
 
   /// Basis-URL für die RettBase Web-App (Produktion)

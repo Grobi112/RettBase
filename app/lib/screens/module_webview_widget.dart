@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_config.dart';
@@ -49,13 +51,52 @@ class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
     return '$base$p';
   }
 
-  void _initWebView() {
-    final url = _fullUrl(widget.module.url);
+  /// Auth-Callback-URL für native WebView (Chat etc.) – gleicher Flow wie Web-iframe.
+  Future<String> _buildAuthCallbackUrl() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) setState(() => _error = 'Nicht angemeldet.');
+        return '';
+      }
+      // Force refresh – verhindert "Token ungültig oder abgelaufen"
+      final idToken = await user.getIdToken(true);
+      if (idToken == null || idToken.isEmpty) {
+        if (mounted) setState(() => _error = 'Token konnte nicht geladen werden.');
+        return '';
+      }
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('exchangeToken');
+      final result = await callable.call<Map<String, dynamic>>({'idToken': idToken});
+      final customToken = result.data['customToken'] as String?;
+      if (customToken == null || customToken.isEmpty) {
+        if (mounted) setState(() => _error = 'Auth-Fehler.');
+        return '';
+      }
+      final base = 'https://${widget.companyId}.${AppConfig.rootDomain}';
+      final redirect = '/${widget.module.url.startsWith('/') ? widget.module.url.substring(1) : widget.module.url}';
+      return '$base/auth-callback.html?token=${Uri.encodeComponent(customToken)}&redirect=${Uri.encodeComponent(redirect)}';
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Auth fehlgeschlagen: $e');
+      return '';
+    }
+  }
 
-    final needsAuth = widget.loginEmail != null &&
+  Future<void> _initWebView() async {
+    String url;
+    final needsEmailPassword = widget.loginEmail != null &&
         widget.loginPassword != null &&
         widget.loginEmail!.isNotEmpty &&
         widget.loginPassword!.isNotEmpty;
+
+    if (needsEmailPassword) {
+      url = _fullUrl(widget.module.url);
+    } else if (widget.module.url.isNotEmpty) {
+      url = await _buildAuthCallbackUrl();
+      if (url.isEmpty && mounted) return;
+    } else {
+      url = _fullUrl(widget.module.url);
+    }
+    if (!mounted) return;
 
     final ctrl = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -88,14 +129,14 @@ class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
         ),
       );
 
-    if (needsAuth) {
+    if (needsEmailPassword) {
       final html = _authBridgeHtml(widget.loginEmail!, widget.loginPassword!, url);
       final baseUrl = 'https://${widget.companyId}.${AppConfig.rootDomain}/';
       ctrl.loadHtmlString(html, baseUrl: baseUrl);
     } else {
       ctrl.loadRequest(Uri.parse(url));
     }
-    setState(() => _controller = ctrl);
+    if (mounted) setState(() => _controller = ctrl);
   }
 
   String _authBridgeHtml(String email, String password, String redirectUrl) {

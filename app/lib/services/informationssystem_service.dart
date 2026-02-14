@@ -81,7 +81,9 @@ class InformationssystemService {
     return [];
   }
 
-  /// Container-Typen und Kategorien speichern
+  /// Container-Typen und Kategorien speichern.
+  /// Synchronisiert containerSlots (für HomeScreen/Dashboard): gelöschte Typen werden
+  /// aus den Slots entfernt und durch den ersten verfügbaren Typ ersetzt.
   Future<void> saveContainerTypesAndKategorien(
     String companyId, {
     required List<MapEntry<String, String>> containerTypes,
@@ -89,9 +91,38 @@ class InformationssystemService {
   }) async {
     final typesList = containerTypes.map((e) => {'id': e.key, 'label': e.value}).toList();
     final orderList = containerTypes.map((e) => e.key).toList();
+    final validIds = orderList.toSet();
+
+    // containerSlots für HomeScreen synchronisieren: ungültige Slots ersetzen oder auf null
+    // Bei nur 1 Container-Typ: nur 1 Slot befüllen, Rest null (sonst 2 identische Karten)
+    List<String?> containerSlots = await loadContainerOrder(companyId);
+    final usedIds = <String>{};
+    containerSlots = containerSlots.asMap().entries.map((e) {
+      final slot = e.value;
+      if (slot == null || slot.isEmpty) return null;
+      if (!validIds.contains(slot)) return null; // gelöschter Typ → Slot leeren
+      if (usedIds.contains(slot)) return null;  // doppelten Typ vermeiden
+      usedIds.add(slot);
+      return slot;
+    }).toList();
+    // Ersten leeren Slot mit erstem verfügbaren Typ füllen (wenn noch nicht verwendet)
+    for (var i = 0; i < containerSlots.length && i < 2; i++) {
+      if (containerSlots[i] == null && orderList.isNotEmpty) {
+        final first = orderList.first;
+        if (!usedIds.contains(first)) {
+          containerSlots[i] = first;
+          usedIds.add(first);
+          break; // nur einen zusätzlichen füllen
+        }
+      }
+    }
+    while (containerSlots.length < 2) containerSlots.add(null);
+    containerSlots = containerSlots.take(2).toList();
+
     await _settingsRef(companyId).set({
       'containerTypes': typesList,
       'containerTypeOrder': orderList,
+      'containerSlots': containerSlots,
       'kategorien': kategorien,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));

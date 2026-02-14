@@ -6,6 +6,7 @@ import '../services/modules_service.dart';
 import '../services/auth_data_service.dart';
 import '../services/auth_service.dart';
 import '../services/kundenverwaltung_service.dart';
+import '../services/menueverwaltung_service.dart';
 
 /// Schnellstart-Bearbeitung: 6 Dropdowns für die Dashboard-Kacheln (1–6).
 class SchnellstartScreen extends StatefulWidget {
@@ -29,6 +30,7 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
   final _authService = AuthService();
   final _authDataService = AuthDataService();
   final _kundenService = KundenverwaltungService();
+  final _menuService = MenueverwaltungService();
 
   List<AppModule> _allModules = [];
   List<String?> _slots = [null, null, null, null, null, null];
@@ -56,9 +58,15 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
       );
       final bereich = await _kundenService.getCompanyBereich(widget.companyId)
           ?? KundenBereich.rettungsdienst;
-      final modules = await _modulesService.getModulesForCompany(
+      var menuStructure = await _menuService.loadMenuStructure(bereich);
+      if (menuStructure.isEmpty) {
+        menuStructure = await _menuService.loadLegacyGlobalMenu();
+      }
+      final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
+      final modules = await _modulesService.getModulesForSchnellstart(
         widget.companyId,
         authData.role,
+        menuModuleIds,
         bereich: bereich,
       );
       final slotIds = await _modulesService.getSchnellstartSlotIds(
@@ -114,7 +122,7 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
               padding: const EdgeInsets.all(20),
               children: [
                 Text(
-                  'Wählen Sie für jede Position (1–6) den Menüpunkt, der auf der Hauptseite angezeigt werden soll.',
+                  'Die Hauptseite zeigt standardmäßig alle für Ihre Rolle und Ihren Bereich freigegebenen Module. Hier können Sie optional bis zu 6 Module auswählen – dann wird nur diese Auswahl angezeigt. Zum Zurücksetzen: alle Positionen auf „— Kein Modul —“ setzen und speichern.',
                   style: TextStyle(
                     fontSize: 14,
                     color: AppTheme.textSecondary,
