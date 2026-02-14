@@ -66,6 +66,8 @@ Beim ersten Besuch der WebApp fragt der Browser nach Benachrichtigungs-Berechtig
 
 3. **App steht im Domain-Root:** Wenn die App unter `www.rettbase.de/` liegt, ist `base-href="/"` korrekt (Standard).
 
+4. **Langsames Laden auf Mobile:** Der Standard-Renderer (CanvasKit) lädt ~2 MB WebAssembly – auf mobilen Verbindungen oft langsam. Der GitHub-Workflow nutzt `--web-renderer html` für schnellere Ladezeiten.
+
 ---
 
 **Technisch:** Der `firebase-messaging-sw.js` Service Worker zeigt Push-Nachrichten auch bei geschlossenem Tab. Der VAPID-Key identifiziert deine Web-App gegenüber den Push-Servern.
