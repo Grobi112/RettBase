@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
 import '../theme/app_theme.dart';
 import '../services/login_service.dart';
+import '../services/push_notification_service.dart';
 import 'company_id_screen.dart';
 import 'dashboard_screen.dart';
 
@@ -115,6 +117,9 @@ class _LoginScreenState extends State<LoginScreen> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('rettbase_company_id', effectiveCompanyId!);
       }
+      // Token im Hintergrund speichern – blockiert auf mobilen Browsern oft (SW/getToken) und hält Login auf
+      unawaited(PushNotificationService().saveToken(dashboardCompanyId!, FirebaseAuth.instance.currentUser!.uid));
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => DashboardScreen(companyId: dashboardCompanyId),
@@ -147,6 +152,9 @@ class _LoginScreenState extends State<LoginScreen> {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('rettbase_company_id', effectiveCompanyId!);
           }
+          // Token im Hintergrund – blockiert auf mobilen Browsern sonst oft den Login
+          unawaited(PushNotificationService().saveToken(companyId, userCredential.user!.uid));
+          if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => DashboardScreen(companyId: companyId),
