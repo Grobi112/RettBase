@@ -287,3 +287,25 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 | Einsatzprotokoll Service | `einsatzprotokoll_ssd_service.dart` |
 | Logo/ Splash | `splash_screen.dart`, `img/rettbase_splash.png` |
 
+---
+
+## 19. APK-Update – Deaktiviert (Stand: 2025)
+
+**Aktueller Stand:** APK-In-App-Update ist **entfernt**. Kein Update-Dialog, kein Download-Link im Dashboard, keine App-Update-Karte in Einstellungen.
+
+### Was existiert, aber nicht genutzt wird
+- `lib/services/app_update_service*.dart`, `app_update_types.dart` – Code bleibt, wird nirgends aufgerufen
+- `app_config.dart`: `androidUpdateCheckUrl`, `androidApkDownloadUrl` – ungenutzt
+- `scripts/inject_version.js`, `web/version.json` – für Web-Versionierung, APK-Vergleich aus
+
+### Was zurückgenommen wurde
+- **app_installer_plus** (In-App-Download/Install) – entfernt, hatte XML-Änderungen (FileProvider, Permissions) die Probleme verursachten
+- **Android Launch-Screen** mit Logo – zurück auf weißen Standard (launch_background, colors.xml, launch_splash entfernt)
+- **screenOrientation fullSensor** – zurückgenommen
+- **Update-Link im Dashboard** – entfernt
+- **Einstellungen App-Update-Karte** – entfernt
+
+### Web-App
+- **Update-Banner** „Neue Version verfügbar – Jetzt neu laden“ – aktiv, nutzt `version.json`, Cache-Bypass-Reload
+- **Versionierung:** `version.json` + `inject_version.js` – vor Web-Build manuell oder via `./fw` / `./scripts/build_web.sh`
+
