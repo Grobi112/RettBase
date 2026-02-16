@@ -60,8 +60,18 @@ class MenueverwaltungService {
         }
       }
       item['children'] = children;
-    } else {
-      item['children'] = null; // oder weglassen
+      // Rollen für Oberbegriff: leere Liste oder fehlend = alle dürfen sehen; sonst nur diese Rollen
+      final rolesRaw = item['roles'];
+      if (rolesRaw is List && rolesRaw.isNotEmpty) {
+        item['roles'] = rolesRaw.map((r) => r.toString().toLowerCase()).toList();
+      } else {
+        item['roles'] = <String>[]; // explizit leer = alle sichtbar
+      }
+    } else if (type == 'module') {
+      item['url'] = ''; // Native Module: URL wird nicht verwendet
+    }
+    if (type != 'heading') {
+      item['children'] = null;
     }
     return item;
   }

@@ -14,6 +14,9 @@ import '../services/informationen_service.dart';
 import '../services/kundenverwaltung_service.dart';
 import '../services/menueverwaltung_service.dart';
 import '../services/push_notification_service.dart';
+import '../services/app_update_service.dart';
+import '../app_config.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'home_screen.dart';
 import 'schichtanmeldung_screen.dart';
 import 'schichtuebersicht_screen.dart';
@@ -44,6 +47,8 @@ import 'modulverwaltung_screen.dart';
 import 'menueverwaltung_screen.dart';
 import 'package:app/utils/url_hash_stub.dart'
     if (dart.library.html) 'package:app/utils/url_hash_web.dart' as url_hash;
+import 'package:app/utils/visibility_refresh_stub.dart'
+    if (dart.library.html) 'package:app/utils/visibility_refresh_web.dart' as visibility_refresh;
 
 /// Natives Dashboard nach Login – HomeScreen mit Modul-Shortcuts.
 class DashboardScreen extends StatefulWidget {
@@ -70,6 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   final _chatUnreadNotifier = ValueNotifier<int>(0);
   StreamSubscription<int>? _chatUnreadSub;
+  Timer? _badgePollTimer;
 
   List<AppModule?> _shortcuts = [];
   List<AppModule> _allModules = [];
@@ -95,13 +101,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (user == null) return;
     setState(() => _pushRequesting = true);
     final permFuture = PushNotificationService.startNotificationPermissionRequestForWeb();
+    // Drawer zuerst schließen, damit der Browser-Dialog (oben links) nicht verdeckt ist
     if (mounted) Navigator.pop(context);
     try {
       if (permFuture != null) {
+        // Sofort Hinweis zeigen – der Browser-Dialog erscheint oft unauffällig
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Bitte den Browser-Dialog für Benachrichtigungen beachten – evtl. oben links oder in der Adressleiste'),
+              duration: Duration(seconds: 6),
+            ),
+          );
+        }
         final (success, needsReload) = await PushNotificationService.requestPermissionAndSaveTokenForWeb(
           _companyId,
           user.uid,
           permissionFuture: permFuture,
+        ).timeout(
+          const Duration(seconds: 25),
+          onTimeout: () {
+            debugPrint('RettBase Push: Timeout bei Benachrichtigungs-Berechtigung');
+            return (false, true);
+          },
         );
         if (!mounted) return;
         if (success) {
@@ -111,13 +133,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } else if (needsReload) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Bitte Seite neu laden und erneut tippen'),
-              duration: Duration(seconds: 5),
+              content: Text('Bitte Seite neu laden und erneut tippen. Oder: Browser-Einstellungen → Diese Seite → Benachrichtigungen auf „Erlauben“ setzen.'),
+              duration: Duration(seconds: 8),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Benachrichtigungen wurden nicht aktiviert')),
+            const SnackBar(
+              content: Text('Benachrichtigungen wurden nicht aktiviert. In den Browser-Einstellungen kannst du sie später erlauben.'),
+              duration: Duration(seconds: 5),
+            ),
           );
         }
       }
@@ -131,6 +156,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _load();
     _chatUnreadNotifier.addListener(_onChatUnreadChanged);
+    if (kIsWeb) {
+      visibility_refresh.setOnVisible(() {
+        if (mounted) _restartChatUnreadListener();
+      });
+    }
   }
 
   void _onChatUnreadChanged() {
@@ -140,8 +170,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     PushNotificationService.updateBadge(count);
   }
 
+  void _restartChatUnreadListener() {
+    _chatUnreadSub?.cancel();
+    _chatUnreadSub = null;
+    _startChatUnreadListener();
+  }
+
   void _startChatUnreadListener() {
     _chatUnreadSub?.cancel();
+    _chatUnreadSub = null;
+    _badgePollTimer?.cancel();
+    _badgePollTimer = null;
     final cid = _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
     if (cid.isEmpty) return;
     if (kIsWeb) debugPrint('RettBase Badge: starte streamUnreadCount für companyId=$cid');
@@ -157,6 +196,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) _chatUnreadNotifier.value = 0;
       },
     );
+    if (kIsWeb) {
+      _badgePollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+        if (!mounted || cid.isEmpty) return;
+        final count = await _chatService.getUnreadCount(cid);
+        if (mounted) {
+          _chatUnreadNotifier.value = count;
+        }
+      });
+    }
   }
 
   void _maybeOpenChatFromNotification(String companyId) {
@@ -179,6 +227,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _chatUnreadNotifier.removeListener(_onChatUnreadChanged);
     _chatUnreadNotifier.dispose();
     _chatUnreadSub?.cancel();
+    _badgePollTimer?.cancel();
     _containerSlotsNotifier.dispose();
     _infoItemsNotifier.dispose();
     super.dispose();
@@ -218,12 +267,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
           menuStructure = await _menuService.loadLegacyGlobalMenu(forceServerRead: forceMenuServerRead);
           debugPrint('RettBase Dashboard: loadLegacyGlobalMenu Fallback -> ${menuStructure.length} items');
         }
+        // Admin-Bereich: wenn Menü leer, Fallback auf Notfallseelsorge und Rettungsdienst
+        if (menuStructure.isEmpty && (bereich == KundenBereich.admin || isAdminCompany)) {
+          for (final fallbackBereich in [KundenBereich.notfallseelsorge, KundenBereich.rettungsdienst]) {
+            menuStructure = await _menuService.loadMenuStructure(fallbackBereich, forceServerRead: forceMenuServerRead);
+            if (menuStructure.isNotEmpty) {
+              debugPrint('RettBase Dashboard: Admin-Fallback loadMenuStructure($fallbackBereich) -> ${menuStructure.length} items');
+              break;
+            }
+          }
+        }
       }
+
+      // Menü-Module auch für _allModules ergänzen – sonst erscheinen sie im Drawer nicht
+      // (z.B. Chat unter Notfallseelsorge, wenn noch nicht explizit in kunden/modules freigeschaltet)
+      final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
+      final modIds = allMods.map((m) => m.id).toSet();
+      final roleLower = authData.role.toLowerCase().trim();
+      for (final id in menuModuleIds) {
+        if (id.isEmpty || modIds.contains(id)) continue;
+        for (final m in ModulesService.defaultNativeModules) {
+          if (m.id == id && m.roles.any((r) => r.toLowerCase() == roleLower)) {
+            allMods = [...allMods, m];
+            modIds.add(id);
+            break;
+          }
+        }
+      }
+      allMods.sort((a, b) => a.order.compareTo(b.order));
 
       // Schnellstart: Alle für Rolle und Bereich freigegebenen Module anzeigen.
       // Bei gespeicherter Nutzerauswahl (6 Slots): nur diese anzeigen.
       // menuModuleIds nutzen, damit auch im Menü sichtbare Module (z.B. Chat) in Slots auflösbar sind.
-      final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
       final hasCustomSchnellstart = await _modulesService.hasCustomSchnellstart(effectiveCompanyId);
       final List<AppModule?> shortcuts = hasCustomSchnellstart
           ? await _modulesService.getShortcuts(effectiveCompanyId, authData.role, bereich: bereich, menuModuleIds: menuModuleIds)
@@ -658,6 +733,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _allModules.any((m) => m.id == moduleId);
   }
 
+  /// Prüft ob der Nutzer einen Oberbegriff (Heading) sehen darf.
+  /// Keine Rollen / leere Rollen = alle sichtbar; Rollen gesetzt = nur diese Rollen.
+  bool _userCanSeeHeading(Map<String, dynamic> item) {
+    final roles = item['roles'];
+    if (roles == null || roles is! List) return true;
+    final rolesList = roles.map((r) => r.toString().trim().toLowerCase()).where((r) => r.isNotEmpty).toList();
+    if (rolesList.isEmpty) return true;
+    final userRole = (_userRole ?? '').toLowerCase().trim();
+    if (userRole.isEmpty) return false;
+    return rolesList.any((r) => r == userRole);
+  }
+
   /// Roter Kreis mit ungelesener Chat-Anzahl für Menü-Badge.
   Widget _buildChatBadge() {
     final count = _chatUnreadNotifier.value;
@@ -680,6 +767,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     for (final item in _menuStructure) {
       final type = (item['type'] ?? 'module').toString();
       if (type == 'heading') {
+        if (!_userCanSeeHeading(item)) continue;
         final label = (item['label'] ?? '').toString();
         final rawChildren = item['children'];
         final childItems = rawChildren is List ? rawChildren : <dynamic>[];
@@ -690,7 +778,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (cType == 'module') {
             final modId = (c['id'] ?? '').toString();
             if (modId.isEmpty) continue;
-            // Menüverwaltung ist maßgeblich: Wenn dem Bereich zugeordnet, für alle sichtbar
+            if (!_userHasModuleAccess(modId)) continue;
             final mod = _moduleFromMenuItem(Map<String, dynamic>.from(c));
             childTiles.add(ListTile(
               dense: true,
@@ -730,7 +818,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       } else if (type == 'module') {
         final modId = (item['id'] ?? '').toString();
         if (modId.isEmpty) continue;
-        // Menüverwaltung ist maßgeblich: Wenn dem Bereich zugeordnet, für alle sichtbar
+        if (!_userHasModuleAccess(modId)) continue;
         final mod = _moduleFromMenuItem(item);
         children.add(ListTile(
           leading: Icon(_drawerIconForModule(mod.id)),
@@ -759,15 +847,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Tab-Titel für Web: zeigt ungelesene Chat-Anzahl (Flutter-eigener Mechanismus).
   static String _pageTitleFromCount(int count) {
-    if (count <= 0) return 'RettBase – Schulsanitätsdienst';
-    return '(${count > 99 ? 99 : count}) RettBase – Schulsanitätsdienst';
+    if (count <= 0) return 'RettBase';
+    return '(${count > 99 ? 99 : count}) RettBase';
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return Title(
-        title: 'RettBase – Schulsanitätsdienst',
+        title: 'RettBase',
         color: AppTheme.primary,
         child: Scaffold(
           backgroundColor: AppTheme.surfaceBg,
@@ -801,30 +889,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Image.asset('img/rettbase.png', height: 32, fit: BoxFit.contain),
-                    if (_displayName != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _displayName!,
-                        style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ],
                   ],
                 ),
               ),
             ),
-            if (kIsWeb &&
-                PushNotificationService.getNotificationPermissionStatusWeb() != 'granted')
-              ListTile(
-                leading: Icon(Icons.notifications_none, color: AppTheme.primary),
-                title: const Text('Benachrichtigungen aktivieren'),
-                subtitle: const Text('Tippen für Chat-Push (Handy)'),
-                onTap: _pushRequesting ? null : _requestPushPermission,
-                trailing: _pushRequesting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
-              ),
-            if (kIsWeb && PushNotificationService.getNotificationPermissionStatusWeb() != 'granted')
-              const Divider(height: 1),
             ..._buildDrawerMenuContent(),
             if ((_userRole ?? '').toLowerCase().trim() == 'superadmin' &&
                 (_companyId.trim().toLowerCase()) != 'admin') ...[
@@ -852,7 +920,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _openModule(const AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9));
                 },
               ),
-            const Divider(),
+            if (_userHasModuleAccess('einstellungen')) const Divider(),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('Abmelden'),
@@ -861,6 +929,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _logout();
               },
             ),
+            if (kIsWeb &&
+                PushNotificationService.getNotificationPermissionStatusWeb() != 'granted') ...[
+              const SizedBox(height: 24),
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                leading: Icon(Icons.notifications_none, color: AppTheme.primary, size: 22),
+                title: const Text('Benachrichtigungen aktivieren', style: TextStyle(fontSize: 12)),
+                subtitle: const Text('Tippen für Chat-Push (Handy)', style: TextStyle(fontSize: 10)),
+                onTap: _pushRequesting ? null : _requestPushPermission,
+                trailing: _pushRequesting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+              ),
+            ],
+            if ((AppConfig.androidApkDownloadUrl ?? '').isNotEmpty)
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                leading: const Icon(Icons.download, color: AppTheme.primary, size: 22),
+                title: const Text('Android-App herunterladen', style: TextStyle(fontSize: 12)),
+                subtitle: const Text('APK für Smartphone installieren', style: TextStyle(fontSize: 10)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final url = AppConfig.androidApkDownloadUrl!;
+                  final uri = Uri.parse(url);
+                  if (canCheckAppUpdate) {
+                    await openApkDownloadUrl();
+                  } else if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+              ),
           ],
         ),
       ),

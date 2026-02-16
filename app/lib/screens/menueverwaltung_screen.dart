@@ -8,6 +8,14 @@ import '../services/modules_service.dart';
 
 /// Native Menü-Verwaltung – WordPress-Style: links Einträge hinzufügen, rechts per Ziehen anordnen.
 /// Ziehen nach rechts unter einen Oberbegriff = Unterpunkt (Dropdown).
+/// Alle verfügbaren Rollen für Oberbegriff-Zuordnung (alphabetisch).
+/// Leere Auswahl = alle dürfen sehen; Auswahl = nur diese Rollen.
+const List<String> _allMenuRoles = [
+  'admin', 'fahrzeugbeauftragter', 'geschaeftsfuehrung', 'koordinator', 'leiterssd',
+  'mpg-beauftragter', 'ovd', 'rettungsdienstleitung', 'superadmin', 'supervisor',
+  'user', 'wachleitung',
+];
+
 class MenueverwaltungScreen extends StatefulWidget {
   final String companyId;
   final String? userRole;
@@ -55,6 +63,8 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     });
     try {
       await _modulService.ensureSsdModuleExists();
+      await _modulService.ensureChatModuleExists();
+      await _modulService.ensureSchichtplanNfsModuleExists();
       var items = await _menuService.loadMenuStructure(_selectedBereich);
       // Menü startet leer – keine Legacy-Migration, Nutzer legt alles selbst an
       var mods = await _modulService.getAllModules();
@@ -64,11 +74,15 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       }
       for (final m in ModulesService.defaultNativeModules) {
         if (!mods.containsKey(m.id)) {
-          mods[m.id] = {'id': m.id, 'label': m.label, 'url': m.url ?? ''};
+          mods[m.id] = {'id': m.id, 'label': m.label, 'url': ''};
+        } else {
+          // Native Module: URL aus Firestore ignorieren, immer leer
+          mods[m.id] = {...mods[m.id]!, 'url': ''};
         }
       }
-      // Einsatzprotokoll SSD immer verfügbar
+      // Einsatzprotokoll SSD und Chat immer verfügbar
       mods['ssd'] ??= {'id': 'ssd', 'label': 'Einsatzprotokoll SSD', 'url': ''};
+      mods['chat'] ??= {'id': 'chat', 'label': 'Chat', 'url': ''};
       if (mounted) {
         setState(() {
           _items = items;
@@ -166,6 +180,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         'label': _items[topIndex]['label'] ?? 'Oberbegriff',
         'type': 'heading',
         'children': [],
+        'roles': [],
       };
       _hasUnsavedChanges = true;
     });
@@ -182,6 +197,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         'label': 'Neuer Oberbegriff',
         'type': 'heading',
         'children': [],
+        'roles': [],
         'order': _items.length,
       });
       _hasUnsavedChanges = true;
@@ -194,7 +210,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     final newItem = {
       'id': moduleId,
       'label': m['label'] ?? moduleId,
-      'url': m['url'] ?? '',
+      'url': '', // Native Module: URL wird nicht verwendet, alte WebView-URLs ignorieren
       'type': 'module',
     };
     setState(() {
@@ -249,6 +265,50 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     });
   }
 
+  void _moveTopLevelUp(int index) {
+    if (index <= 0) return;
+    setState(() {
+      final tmp = _items[index];
+      _items[index] = _items[index - 1];
+      _items[index - 1] = tmp;
+      _hasUnsavedChanges = true;
+    });
+  }
+
+  void _moveTopLevelDown(int index) {
+    if (index >= _items.length - 1) return;
+    setState(() {
+      final tmp = _items[index];
+      _items[index] = _items[index + 1];
+      _items[index + 1] = tmp;
+      _hasUnsavedChanges = true;
+    });
+  }
+
+  void _moveChildUp(int headingIndex, int childIndex) {
+    if (childIndex <= 0) return;
+    setState(() {
+      final children = _getChildren(headingIndex);
+      final tmp = children[childIndex];
+      children[childIndex] = children[childIndex - 1];
+      children[childIndex - 1] = tmp;
+      _setChildren(headingIndex, children);
+      _hasUnsavedChanges = true;
+    });
+  }
+
+  void _moveChildDown(int headingIndex, int childIndex) {
+    final children = _getChildren(headingIndex);
+    if (childIndex >= children.length - 1) return;
+    setState(() {
+      final tmp = children[childIndex];
+      children[childIndex] = children[childIndex + 1];
+      children[childIndex + 1] = tmp;
+      _setChildren(headingIndex, children);
+      _hasUnsavedChanges = true;
+    });
+  }
+
   void _editAt(int topIndex, [int? childIndex]) async {
     Map<String, dynamic> item;
     if (childIndex != null) {
@@ -257,40 +317,49 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       item = _items[topIndex];
     }
     if ((item['type'] ?? '') == 'heading') {
-      final result = await showDialog<String>(
+      final rolesRaw = item['roles'];
+      final initialRoles = rolesRaw is List
+          ? rolesRaw.map((r) => r.toString().toLowerCase()).toSet()
+          : <String>{};
+      final result = await showDialog<Map<String, dynamic>>(
         context: context,
-        builder: (ctx) => _HeadingEditDialog(label: (item['label'] ?? '').toString()),
+        builder: (ctx) => _HeadingEditDialog(
+          label: (item['label'] ?? '').toString(),
+          initialRoles: initialRoles,
+          allRoles: _allMenuRoles,
+        ),
       );
       if (result != null && mounted) {
         setState(() {
           _hasUnsavedChanges = true;
-          if (childIndex != null) {
-            final children = _getChildren(topIndex);
-            children[childIndex]['label'] = result;
-            _setChildren(topIndex, children);
-          } else {
-            _items[topIndex]['label'] = result;
-          }
+          final label = result['label']?.toString() ?? '';
+          final roles = result['roles'] is List ? (result['roles'] as List).map((r) => r.toString()).toList() : <String>[];
+          _items[topIndex]['label'] = label;
+          _items[topIndex]['roles'] = roles;
         });
       }
       return;
     }
+    final isModule = (item['type'] ?? '') == 'module';
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => _CustomItemDialog(
         label: (item['label'] ?? '').toString(),
         url: (item['url'] ?? '').toString(),
+        isNativeModule: isModule,
       ),
     );
     if (result != null && mounted) {
       setState(() {
         _hasUnsavedChanges = true;
+        final label = result['label']?.toString() ?? '';
+        final url = isModule ? '' : (result['url'] ?? '');
         if (childIndex != null) {
           final children = _getChildren(topIndex);
-          children[childIndex] = {...children[childIndex], 'label': result['label'], 'url': result['url'] ?? ''};
+          children[childIndex] = {...children[childIndex], 'label': label, 'url': url};
           _setChildren(topIndex, children);
         } else {
-          _items[topIndex] = {..._items[topIndex], 'label': result['label'], 'url': result['url'] ?? ''};
+          _items[topIndex] = {..._items[topIndex], 'label': label, 'url': url};
         }
       });
     }
@@ -596,6 +665,16 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              icon: Icon(Icons.arrow_upward, size: 20, color: topIndex > 0 ? AppTheme.primary : Colors.grey[400]),
+              onPressed: topIndex > 0 ? () => _moveTopLevelUp(topIndex) : null,
+              tooltip: 'Nach oben',
+            ),
+            IconButton(
+              icon: Icon(Icons.arrow_downward, size: 20, color: topIndex < _items.length - 1 ? AppTheme.primary : Colors.grey[400]),
+              onPressed: topIndex < _items.length - 1 ? () => _moveTopLevelDown(topIndex) : null,
+              tooltip: 'Nach unten',
+            ),
             if (children.length < MenueverwaltungService.maxChildrenPerHeading)
               IconButton(icon: const Icon(Icons.add, size: 20), onPressed: () => _showModulePicker(underHeadingIndex: topIndex), tooltip: 'Unterpunkt'),
             IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _editAt(topIndex)),
@@ -611,6 +690,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     final label = (item['label'] ?? item['id'] ?? '').toString();
     final type = (item['type'] ?? 'module').toString();
     final isTopLevel = childIndex == null;
+    final children = isTopLevel ? null : _getChildren(topIndex);
     return Card(
       child: ListTile(
         leading: Icon(type == 'custom' ? Icons.link : Icons.apps, size: 22, color: Colors.grey[600]),
@@ -619,12 +699,34 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (isTopLevel)
+            if (isTopLevel) ...[
+              IconButton(
+                icon: Icon(Icons.arrow_upward, size: 20, color: topIndex > 0 ? AppTheme.primary : Colors.grey[400]),
+                onPressed: topIndex > 0 ? () => _moveTopLevelUp(topIndex) : null,
+                tooltip: 'Nach oben',
+              ),
+              IconButton(
+                icon: Icon(Icons.arrow_downward, size: 20, color: topIndex < _items.length - 1 ? AppTheme.primary : Colors.grey[400]),
+                onPressed: topIndex < _items.length - 1 ? () => _moveTopLevelDown(topIndex) : null,
+                tooltip: 'Nach unten',
+              ),
               IconButton(
                 icon: const Icon(Icons.folder_outlined, size: 20),
                 onPressed: () => _convertToHeading(topIndex),
                 tooltip: 'Zu Oberbegriff machen (Unterpunkte hinzufügen)',
               ),
+            ] else if (children != null) ...[
+              IconButton(
+                icon: Icon(Icons.arrow_upward, size: 20, color: childIndex! > 0 ? AppTheme.primary : Colors.grey[400]),
+                onPressed: childIndex > 0 ? () => _moveChildUp(topIndex, childIndex) : null,
+                tooltip: 'Nach oben',
+              ),
+              IconButton(
+                icon: Icon(Icons.arrow_downward, size: 20, color: childIndex < children.length - 1 ? AppTheme.primary : Colors.grey[400]),
+                onPressed: childIndex < children.length - 1 ? () => _moveChildDown(topIndex, childIndex) : null,
+                tooltip: 'Nach unten',
+              ),
+            ],
             IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _editAt(topIndex, childIndex)),
             IconButton(icon: Icon(Icons.delete, size: 20, color: Colors.red[700]), onPressed: () => _removeAt(topIndex, childIndex)),
           ],
@@ -735,8 +837,14 @@ class _ModulePickerDialogState extends State<_ModulePickerDialog> {
 
 class _HeadingEditDialog extends StatefulWidget {
   final String label;
+  final Set<String> initialRoles;
+  final List<String> allRoles;
 
-  const _HeadingEditDialog({required this.label});
+  const _HeadingEditDialog({
+    required this.label,
+    required this.initialRoles,
+    required this.allRoles,
+  });
 
   @override
   State<_HeadingEditDialog> createState() => _HeadingEditDialogState();
@@ -744,11 +852,28 @@ class _HeadingEditDialog extends StatefulWidget {
 
 class _HeadingEditDialogState extends State<_HeadingEditDialog> {
   late final TextEditingController _ctrl;
+  late final Set<String> _selectedRoles;
+
+  static const _roleLabels = {
+    'admin': 'Admin',
+    'fahrzeugbeauftragter': 'Fahrzeugbeauftragter',
+    'geschaeftsfuehrung': 'Geschäftsführung',
+    'koordinator': 'Koordinator',
+    'leiterssd': 'Leiter SSD',
+    'mpg-beauftragter': 'MPG-Beauftragter',
+    'ovd': 'OVD',
+    'rettungsdienstleitung': 'Rettungsdienstleitung',
+    'superadmin': 'Superadmin',
+    'supervisor': 'Supervisor',
+    'user': 'User',
+    'wachleitung': 'Wachleitung',
+  };
 
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: widget.label);
+    _selectedRoles = Set.from(widget.initialRoles);
   }
 
   @override
@@ -761,16 +886,48 @@ class _HeadingEditDialogState extends State<_HeadingEditDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Oberbegriff bearbeiten'),
-      content: TextField(
-        controller: _ctrl,
-        decoration: const InputDecoration(labelText: 'Bezeichnung'),
-        autofocus: true,
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _ctrl,
+              decoration: const InputDecoration(labelText: 'Bezeichnung'),
+              autofocus: true,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Rollen (leer = alle sichtbar, sonst nur ausgewählte Rollen):',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            ...widget.allRoles.map((r) => CheckboxListTile(
+                  value: _selectedRoles.contains(r),
+                  title: Text(_roleLabels[r] ?? r),
+                  onChanged: (v) {
+                    setState(() {
+                      if (v == true) {
+                        _selectedRoles.add(r);
+                      } else {
+                        _selectedRoles.remove(r);
+                      }
+                    });
+                  },
+                )),
+          ],
+        ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Abbrechen')),
         FilledButton(
           onPressed: () {
-            if (_ctrl.text.trim().isNotEmpty) Navigator.of(context).pop(_ctrl.text.trim());
+            if (_ctrl.text.trim().isNotEmpty) {
+              Navigator.of(context).pop({
+                'label': _ctrl.text.trim(),
+                'roles': _selectedRoles.toList(),
+              });
+            }
           },
           child: const Text('Speichern'),
         ),
@@ -782,8 +939,10 @@ class _HeadingEditDialogState extends State<_HeadingEditDialog> {
 class _CustomItemDialog extends StatefulWidget {
   final String? label;
   final String? url;
+  /// Bei true: Nur Bezeichnung bearbeitbar, URL wird ignoriert (native Module nutzen ID)
+  final bool isNativeModule;
 
-  const _CustomItemDialog({this.label, this.url});
+  const _CustomItemDialog({this.label, this.url, this.isNativeModule = false});
 
   @override
   State<_CustomItemDialog> createState() => _CustomItemDialogState();
@@ -813,10 +972,22 @@ class _CustomItemDialogState extends State<_CustomItemDialog> {
       title: Text(widget.label == null ? 'Benutzerdefinierter Menüpunkt' : 'Menüpunkt bearbeiten'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(controller: _labelCtrl, decoration: const InputDecoration(labelText: 'Bezeichnung')),
-          const SizedBox(height: 12),
-          TextField(controller: _urlCtrl, decoration: const InputDecoration(labelText: 'URL (optional, # = Container)')),
+          if (widget.isNativeModule) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Natives Modul – die URL wird nicht verwendet.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _urlCtrl,
+              decoration: const InputDecoration(labelText: 'URL (optional, # = Container)'),
+            ),
+          ],
         ],
       ),
       actions: [
@@ -826,7 +997,7 @@ class _CustomItemDialogState extends State<_CustomItemDialog> {
             if (_labelCtrl.text.trim().isNotEmpty) {
               Navigator.of(context).pop({
                 'label': _labelCtrl.text.trim(),
-                'url': _urlCtrl.text.trim().isEmpty ? null : _urlCtrl.text.trim(),
+                'url': widget.isNativeModule ? '' : (_urlCtrl.text.trim().isEmpty ? null : _urlCtrl.text.trim()),
               });
             }
           },

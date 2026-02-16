@@ -52,6 +52,8 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
     });
     try {
       await _modulService.ensureSsdModuleExists();
+      await _modulService.ensureChatModuleExists();
+      await _modulService.ensureSchichtplanNfsModuleExists();
       var mods = await _modulService.getAllModules();
       if (mods.isEmpty) {
         final defs = await _kundenService.getAllModuleDefs();
@@ -61,7 +63,9 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
       }
       for (final m in ModulesService.defaultNativeModules) {
         if (!mods.containsKey(m.id)) {
-          mods[m.id] = {'id': m.id, 'label': m.label, 'url': m.url ?? '', 'order': m.order};
+          mods[m.id] = {'id': m.id, 'label': m.label, 'url': '', 'order': m.order};
+        } else {
+          mods[m.id] = {...mods[m.id]!, 'url': ''};
         }
       }
       // Einsatzprotokoll SSD immer anzeigen (Fallback falls Merge übersprungen)

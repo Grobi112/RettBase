@@ -182,12 +182,11 @@ class ModulesService {
         final def = allMods[m.id];
         final roles = def?['roles'] as List? ?? m.roles;
         if (roles.any((r) => r.toString().toLowerCase() == roleLower)) {
-          // Native Module: url immer leer, damit nie alte HTML-URLs aus Firestore geladen werden
-          final forceNative = ['admin', 'kundenverwaltung', 'modulverwaltung', 'menueverwaltung'].contains(m.id);
+          // Alle defaultNativeModules sind native – url immer leer, alte HTML-URLs aus Firestore ignorieren
           result.add(AppModule(
             id: m.id,
             label: def?['label']?.toString() ?? m.label,
-            url: forceNative ? '' : (def?['url']?.toString() ?? m.url),
+            url: '',
             icon: def?['icon']?.toString() ?? m.icon,
             roles: List<String>.from(roles.map((r) => r.toString())),
             order: (def?['order'] as num?)?.toInt() ?? m.order,

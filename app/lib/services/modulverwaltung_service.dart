@@ -30,6 +30,41 @@ class ModulverwaltungService {
     } catch (_) {}
   }
 
+  /// Stellt sicher, dass das Modul Chat in Firestore existiert (für Menü-Verwaltung).
+  Future<void> ensureChatModuleExists() async {
+    try {
+      await _db.collection('settings').doc('modules').set({'_exists': true}, SetOptions(merge: true));
+      await _items.doc('chat').set({
+        'label': 'Chat',
+        'url': '',
+        'icon': 'default',
+        'roles': _ssdRoles,
+        'free': true,
+        'order': 30,
+        'active': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  /// Stellt sicher, dass das Modul Schichtplan NFS in Firestore existiert (für Menü-Verwaltung).
+  Future<void> ensureSchichtplanNfsModuleExists() async {
+    try {
+      await _db.collection('settings').doc('modules').set({'_exists': true}, SetOptions(merge: true));
+      await _items.doc('schichtplannfs').set({
+        'label': 'Schichtplan NFS',
+        'url': '',
+        'icon': 'default',
+        'roles': _ssdRoles,
+        'bereich': 'notfallseelsorge',
+        'free': true,
+        'order': 32,
+        'active': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   /// Lädt alle Modul-Definitionen (ohne orderBy – manche Docs könnten order fehlen)
   Future<Map<String, Map<String, dynamic>>> getAllModules() async {
     try {
