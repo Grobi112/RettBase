@@ -89,7 +89,10 @@ settings/modules/items/{moduleId}
 | `lib/services/kundenverwaltung_service.dart` | getCompanyBereich |
 | `lib/services/modules_service.dart` | getModulesForCompany, bereichs-spezifische Module (SSD, Schichtplan NFS) |
 | `lib/services/menueverwaltung_service.dart` | loadMenuStructure(bereich) |
-| `lib/screens/dashboard_screen.dart` | _load, Menü, Shortcuts, Begrüßung |
+| `lib/screens/dashboard_screen.dart` | _load, Menü, Shortcuts, Drawer (ohne Username, Benachrichtigungen/APK unter Abmelden) |
+| `lib/screens/menueverwaltung_screen.dart` | Menü-Module: URL ausblenden, url: '' |
+| `lib/screens/modulverwaltung_screen.dart` | Modul-URLs beim Laden normalisieren |
+| `lib/services/modulverwaltung_service.dart` | ensureChatModuleExists, ensureSsdModuleExists, ensureSchichtplanNfsModuleExists |
 | `lib/screens/schichtplan_nfs_screen.dart` | Schichtplan NFS (Notfallseelsorge) |
 | `lib/services/schichtplan_nfs_service.dart` | schichtplanNfs* Firestore-Operationen |
 | `functions/index.js` | kundeExists, saveMitarbeiterDoc, saveUsersDoc |
@@ -103,7 +106,37 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 - loadMenuStructure-Anzahl Items
 - Fehler inkl. StackTrace
 
-## 6. Hinweis zu Firestore-Daten
+## 6. Modul-URLs und Chat-Sichtbarkeit (Feb 2026)
+
+### 6.1 Problem
+- Chat (und andere native Flutter-Module) konnten in Firestore noch alte WebView-URLs haben (z.B. `/module/chat/chat.html`)
+- Mit `url.isNotEmpty` öffnete das Dashboard `ModuleWebViewScreen` statt des nativen ChatScreens
+- Chat war im Schnellstart sichtbar (via getModulesForSchnellstart + menuModuleIds), aber **nicht im Hamburger-Menü** – _allModules kam nur aus getModulesForCompany, fehlte bei fehlender expliziter Freischaltung
+
+### 6.2 Lösung: URL immer leer für native Module
+- **ModulesService.getModulesForCompany**: `url: ''` für alle defaultNativeModules (keine def['url'] aus Firestore)
+- **MenueverwaltungService._normalizeItem**: bei `type == 'module'` → `url: ''` beim Laden
+- **MenueverwaltungScreen**: _addModule setzt `url: ''`; _CustomItemDialog blendet URL bei Modulen aus
+- **ModulverwaltungScreen**: _ModulFormScreen speichert immer `url: ''`; beim Laden werden defaultNativeModules mit `url: ''` überschrieben
+- **ModulverwaltungService**: ensureChatModuleExists, ensureSsdModuleExists, **ensureSchichtplanNfsModuleExists** – setzen Firestore-Docs mit `url: ''`
+
+### 6.3 Chat im Hamburger-Menü
+- **Dashboard._load**: Menü-Modul-IDs (menuModuleIds) werden zu allMods ergänzt, wenn sie in defaultNativeModules sind und Rolle passt
+- Dadurch erscheinen Menü-Module (z.B. Chat unter Notfallseelsorge) auch ohne explizite Freischaltung in kunden/{companyId}/modules im Drawer
+
+## 7. Hamburger-Menü / Drawer (Feb 2026)
+
+### 7.1 Layout
+- **Header**: Nur RettBase-Logo, **kein Username** mehr unter dem Logo
+- **Benachrichtigungen aktivieren** und **Android-App herunterladen** stehen **unter „Abmelden“** mit Abstand (SizedBox 24)
+
+### 7.2 Darstellung Benachrichtigungen + Android-App
+- Schriftgrößen: **Titel 12**, **Untertitel 10**
+- Direkt untereinander (kein Zwischenabstand)
+- `dense: true`, `contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0)`
+- Abstand zu „Abmelden“ darüber: 24 px
+
+## 8. Hinweis zu Firestore-Daten
 
 Die **tatsächlichen Inhalte** von Firestore (Dokumente, Werte) sind nicht in diesem Repo. Bei Problemen:
 - Struktur und Pfade aus Code/ diesem Doc ableiten
