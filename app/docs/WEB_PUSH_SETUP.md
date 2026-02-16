@@ -40,9 +40,10 @@ Beim ersten Besuch der WebApp fragt der Browser nach Benachrichtigungs-Berechtig
 | **Chrome Android** | ❌ Nicht unterstützt – Badging API fehlt, kein programmatisches Badge möglich |
 | **Chrome/Edge Desktop** (Windows/macOS) | ✅ Funktioniert bei installierter PWA |
 
-**Safari iOS – Checkliste:**
-- PWA zum Startbildschirm hinzugefügt
-- App vom **Startbildschirm-Icon** öffnen (nicht als Tab in Safari)
+**Safari iOS – Checkliste (Chrome auf iPhone unterstützt Badge NICHT):**
+- **Nur Safari** verwenden – Chrome auf iPhone unterstützt die Badge-API nicht (nutzt WebKit, aber API ist in Chrome nicht verfügbar)
+- In **Safari** app.rettbase.de öffnen → „Zum Home-Bildschirm“ hinzufügen
+- App vom **Startbildschirm-Icon** öffnen (nicht als Tab, nicht aus Chrome)
 - Benachrichtigungen **erlauben** (in Einstellungen oder beim ersten Aufruf)
 - Der „Badge testen“-Button in den App-Einstellungen prüft, ob die API verfügbar ist
 - Bei Problemen: App einmal vollständig schließen und vom Startbildschirm neu öffnen
@@ -51,14 +52,15 @@ Beim ersten Besuch der WebApp fragt der Browser nach Benachrichtigungs-Berechtig
 
 ---
 
-## 6. PWA zeigt weißen Bildschirm
+## 6. PWA zeigt weißen Bildschirm oder lädt sehr langsam
 
 **Mögliche Ursachen und Lösungen:**
 
-1. **Service Worker / Cache:** Alte Version blockiert.  
+1. **Service Worker / Cache:** Alte Version blockiert oder Firestore/Firebase-Skripte laden langsam.  
    - PWA vom Startbildschirm entfernen  
    - Im Browser: Einstellungen → Website-Daten löschen (oder „Site-Daten und -Berechtigungen entfernen“)  
-   - Neu zum Startbildschirm hinzufügen
+   - Neu zum Startbildschirm hinzufügen  
+   - Die App nutzt `firebase-messaging-sw.js` für Push – beim ersten Öffnen nach langer Pause kann das Laden ein paar Sekunden dauern (Firebase-Skripte von gstatic.com). Preload-Links in `index.html` beschleunigen das.
 
 2. **Unterordner-Deployment:** Läuft die App unter einem Unterordner (z.B. `www.rettbase.de/app/`)?  
    - Beim Build: `flutter build web --base-href /app/`  
@@ -67,6 +69,24 @@ Beim ersten Besuch der WebApp fragt der Browser nach Benachrichtigungs-Berechtig
 3. **App steht im Domain-Root:** Wenn die App unter `www.rettbase.de/` liegt, ist `base-href="/"` korrekt (Standard).
 
 4. **Langsames Laden auf Mobile:** Der Standard-Renderer (CanvasKit) lädt ~2 MB WebAssembly – auf mobilen Verbindungen oft langsam. Der GitHub-Workflow nutzt `--web-renderer html` für schnellere Ladezeiten.
+
+---
+
+## 7. Push funktioniert nicht, wenn die App zu / im Hintergrund ist
+
+**Mögliche Ursachen:**
+
+1. **Benachrichtigungs-Berechtigung nicht erteilt:** Ohne Erlaubnis wird kein FCM-Token gespeichert.  
+   - Im **Chat** erscheint ein auffälliger Banner „Push-Benachrichtigungen“ – darauf tippen und „Erlauben“ wählen  
+   - Alternativ: Menü → „Benachrichtigungen aktivieren“
+
+2. **Kein FCM-Token in Firestore:** Die Cloud Function sendet nur an gespeicherte Tokens.  
+   - Im Projektordner ausführen: `cd app/functions && node scripts/check_fcm_tokens.js nfsunna`  
+   - Zeigt, welche Nutzer (uid) einen Token haben – fehlt der Token, hat der Nutzer Push nie aktiviert
+
+3. **Push-Link:** Der Klick-Link in der Benachrichtigung führt zu `app.rettbase.de` (konfigurierbar in `functions/index.js` als `WEB_APP_BASE_URL`). Muss zur tatsächlichen App-URL passen.
+
+4. **Cloud Functions deployed?** Nach Änderungen: `firebase deploy --only functions`
 
 ---
 

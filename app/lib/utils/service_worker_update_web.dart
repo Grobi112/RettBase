@@ -7,8 +7,15 @@ void initServiceWorkerUpdateListener() {
   if (html.window.navigator.serviceWorker == null) return;
 
   html.window.navigator.serviceWorker!.ready.then((registration) {
-    // Bei controllerchange: Neue SW aktiv → Seite neu laden für frische App
     html.window.navigator.serviceWorker!.addEventListener('controllerchange', (_) {
+      final key = 'rettbase_sw_reload';
+      final last = html.window.sessionStorage[key];
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (last != null) {
+        final t = int.tryParse(last) ?? 0;
+        if (now - t < 30000) return;
+      }
+      html.window.sessionStorage[key] = '$now';
       html.window.location.reload();
     });
 

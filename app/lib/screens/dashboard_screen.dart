@@ -14,9 +14,7 @@ import '../services/informationen_service.dart';
 import '../services/kundenverwaltung_service.dart';
 import '../services/menueverwaltung_service.dart';
 import '../services/push_notification_service.dart';
-import '../services/app_update_service.dart';
 import '../app_config.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'home_screen.dart';
 import 'schichtanmeldung_screen.dart';
 import 'schichtuebersicht_screen.dart';
@@ -880,17 +878,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: EdgeInsets.zero,
           children: [
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              width: double.infinity,
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 10,
+                top: MediaQuery.of(context).padding.top,
+                bottom: 16,
+              ),
               decoration: const BoxDecoration(color: AppTheme.headerBg),
-              child: SafeArea(
-                bottom: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset('img/rettbase.png', height: 32, fit: BoxFit.contain),
-                  ],
-                ),
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).padding.top +
+                    (MediaQuery.of(context).size.width < 600 ? 56.0 : 70.0),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Image.asset('img/rettbase.png', height: 32, fit: BoxFit.contain),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                    tooltip: 'Menü schließen',
+                  ),
+                ],
               ),
             ),
             ..._buildDrawerMenuContent(),
@@ -942,24 +951,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 trailing: _pushRequesting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
               ),
             ],
-            if ((AppConfig.androidApkDownloadUrl ?? '').isNotEmpty)
-              ListTile(
-                dense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                leading: const Icon(Icons.download, color: AppTheme.primary, size: 22),
-                title: const Text('Android-App herunterladen', style: TextStyle(fontSize: 12)),
-                subtitle: const Text('APK für Smartphone installieren', style: TextStyle(fontSize: 10)),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final url = AppConfig.androidApkDownloadUrl!;
-                  final uri = Uri.parse(url);
-                  if (canCheckAppUpdate) {
-                    await openApkDownloadUrl();
-                  } else if (await canLaunchUrl(uri)) {
-                    await launchUrl(uri, mode: LaunchMode.externalApplication);
-                  }
-                },
-              ),
           ],
         ),
       ),

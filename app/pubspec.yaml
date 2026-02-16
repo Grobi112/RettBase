@@ -24,7 +24,7 @@ executables:
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ^3.8.1
@@ -64,6 +64,7 @@ dependencies:
   pointer_interceptor: ^0.10.1+2
   flutter_signature_pad: ^3.0.1
   google_fonts: ^6.2.1
+  package_info_plus: ^8.0.2
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +76,14 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+
+# flutter_app_badger: Original archviert, pub.dev ohne namespace + compileSdk 29 (lStar-Fehler)
+# sarj33t-prakash-Fork hat namespace + compileSdk 31
+dependency_overrides:
+  flutter_app_badger:
+    git:
+      url: https://github.com/sarj33t-prakash/flutter_app_badger.git
+      ref: main
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

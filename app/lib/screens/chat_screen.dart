@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../models/chat.dart';
 import '../services/chat_service.dart';
+import '../services/push_notification_service.dart';
+import '../utils/visibility_refresh_stub.dart'
+    if (dart.library.html) '../utils/visibility_refresh_web.dart' as visibility_refresh;
 
 /// Natives Chat-Modul – ohne WebView.
 class ChatScreen extends StatefulWidget {
@@ -26,19 +31,58 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _chatService = ChatService();
   final _messageController = TextEditingController();
   String? _selectedChatId;
   Future<List<ChatMessage>>? _messagesFuture;
+  bool _pushRequesting = false;
+  Timer? _refreshTimer;
+  void Function()? _visibilityCallback;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    if (kIsWeb) _setupVisibilityRefresh();
     if (widget.initialChatId != null && widget.initialChatId!.isNotEmpty) {
       _selectedChatId = widget.initialChatId;
-      _messagesFuture = _chatService.loadMessages(widget.companyId, widget.initialChatId!);
+      _refreshMessages();
+      _startRefreshTimer();
     }
+  }
+
+  void _setupVisibilityRefresh() {
+    if (!kIsWeb) return;
+    _visibilityCallback = () {
+      if (_selectedChatId != null && mounted) _refreshMessages();
+    };
+    visibility_refresh.setOnVisible(_visibilityCallback!);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _selectedChatId != null && mounted) {
+      _refreshMessages();
+    }
+  }
+
+  void _refreshMessages() {
+    if (_selectedChatId == null) return;
+    _messagesFuture = _chatService.loadMessages(widget.companyId, _selectedChatId!);
+    if (mounted) setState(() {});
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (_selectedChatId != null && mounted) _refreshMessages();
+    });
+  }
+
+  void _stopRefreshTimer() {
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
   }
   List<MitarbeiterForChat> _mitarbeiter = [];
   List<Uint8List> _pendingImages = [];
@@ -50,6 +94,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    if (_visibilityCallback != null) visibility_refresh.removeOnVisible(_visibilityCallback!);
+    WidgetsBinding.instance.removeObserver(this);
+    _stopRefreshTimer();
     _messageController.dispose();
     _groupNameController.dispose();
     super.dispose();
@@ -116,7 +163,8 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _showNewChatModal = false;
         _selectedChatId = chatId;
-        _messagesFuture = _chatService.loadMessages(widget.companyId, chatId);
+        _refreshMessages();
+        _startRefreshTimer();
       });
     }
   }
@@ -137,7 +185,8 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           _showNewGroupModal = false;
           _selectedChatId = chatId;
-          _messagesFuture = _chatService.loadMessages(widget.companyId, chatId);
+          _refreshMessages();
+          _startRefreshTimer();
         });
       }
     } catch (e) {
@@ -175,13 +224,83 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (mounted) setState(() {
         _pendingImages = [];
-        _messagesFuture = _chatService.loadMessages(widget.companyId, _selectedChatId!);
+        _refreshMessages();
       });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Senden fehlgeschlagen: $e')));
       }
     }
+  }
+
+  Future<void> _requestPushPermission() async {
+    if (_pushRequesting) return;
+    final uid = _chatService.userId;
+    if (uid == null) return;
+    setState(() => _pushRequesting = true);
+    final permFuture = PushNotificationService.startNotificationPermissionRequestForWeb();
+    try {
+      final (success, needsReload) = await PushNotificationService.requestPermissionAndSaveTokenForWeb(
+        widget.companyId,
+        uid,
+        permissionFuture: permFuture,
+      );
+      if (!mounted) return;
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Benachrichtigungen aktiviert – du wirst bei neuen Nachrichten informiert')),
+        );
+        setState(() {});
+      } else if (needsReload) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Seite bitte neu laden, damit Benachrichtigungen funktionieren')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Benachrichtigungen wurden nicht aktiviert')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pushRequesting = false);
+    }
+  }
+
+  Widget _buildPushBanner() {
+    if (!kIsWeb) return const SizedBox.shrink();
+    if (PushNotificationService.getNotificationPermissionStatusWeb() == 'granted') return const SizedBox.shrink();
+    if (_chatService.userId == null) return const SizedBox.shrink();
+    return Material(
+      color: AppTheme.primary.withOpacity(0.15),
+      child: SafeArea(
+        bottom: false,
+        child: InkWell(
+          onTap: _pushRequesting ? null : _requestPushPermission,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Icon(Icons.notifications_active, color: AppTheme.primary, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Push-Benachrichtigungen', style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primary)),
+                      Text('Bei neuen Nachrichten informiert werden – auch wenn die App geschlossen ist', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                    ],
+                  ),
+                ),
+                if (_pushRequesting)
+                  const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.primary),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   PreferredSizeWidget _buildAppBar(bool isNarrow, VoidCallback onBack) {
@@ -202,7 +321,10 @@ class _ChatScreenState extends State<ChatScreen> {
             return AppBar(
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () => setState(() => _selectedChatId = null),
+                onPressed: () => setState(() {
+                  _selectedChatId = null;
+                  _stopRefreshTimer();
+                }),
                 color: AppTheme.primary,
               ),
               title: Text(title, style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 18)),
@@ -234,24 +356,33 @@ class _ChatScreenState extends State<ChatScreen> {
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: _buildAppBar(isNarrow, onBack),
-      body: isNarrow
-          ? _selectedChatId == null
-              ? _buildChatList(isNarrow)
-              : _buildMessageView(isNarrow)
-          : Row(
-              children: [
-                AnimatedContainer(
-                  width: 320,
-                  duration: const Duration(milliseconds: 200),
-                  child: _buildChatList(isNarrow),
-                ),
-                Expanded(
-                  child: _selectedChatId == null
-                      ? _buildNoChatSelected(isNarrow)
-                      : _buildMessageView(isNarrow),
-                ),
-              ],
-            ),
+      body: Column(
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildPushBanner(),
+          Expanded(
+            child: isNarrow
+                ? _selectedChatId == null
+                    ? _buildChatList(isNarrow)
+                    : _buildMessageView(isNarrow)
+                : Row(
+                    children: [
+                      AnimatedContainer(
+                        width: 320,
+                        duration: const Duration(milliseconds: 200),
+                        child: _buildChatList(isNarrow),
+                      ),
+                      Expanded(
+                        child: _selectedChatId == null
+                            ? _buildNoChatSelected(isNarrow)
+                            : _buildMessageView(isNarrow),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
     );
 
     final content = Stack(
@@ -269,7 +400,10 @@ class _ChatScreenState extends State<ChatScreen> {
           if (didPop) return;
           // Mobile: Erst zur Chat-Liste, dann zum Dashboard
           if (_selectedChatId != null) {
-            setState(() => _selectedChatId = null);
+            setState(() {
+              _selectedChatId = null;
+              _stopRefreshTimer();
+            });
           } else {
             widget.onBack!();
           }
@@ -353,7 +487,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                   if (confirm == true) {
                     await _chatService.deleteChatForMe(widget.companyId, chat.id);
-                    if (mounted && _selectedChatId == chat.id) setState(() => _selectedChatId = null);
+                    if (mounted && _selectedChatId == chat.id) setState(() {
+                      _selectedChatId = null;
+                      _stopRefreshTimer();
+                    });
                     return true;
                   }
                   return false;
@@ -402,10 +539,13 @@ class _ChatScreenState extends State<ChatScreen> {
                   trailing: Text(_formatTime(chat.lastMessageAt), style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                   selected: _selectedChatId == chat.id,
                   selectedTileColor: AppTheme.primary.withOpacity(0.08),
-                  onTap: () => setState(() {
-                    _selectedChatId = chat.id;
-                    _messagesFuture = _chatService.loadMessages(widget.companyId, chat.id);
-                  }),
+                  onTap: () {
+                    setState(() {
+                      _selectedChatId = chat.id;
+                      _refreshMessages();
+                      _startRefreshTimer();
+                    });
+                  },
                 ),
               );
             },
@@ -459,7 +599,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Expanded(
               child: FutureBuilder<List<ChatMessage>>(
-                future: _messagesFuture ??= _chatService.loadMessages(widget.companyId, chatId),
+                future: _messagesFuture ?? _chatService.loadMessages(widget.companyId, chatId),
                 builder: (context, snap) {
                   if (snap.hasError) {
                     return Center(

@@ -1,0 +1,11 @@
+#!/bin/bash
+# Wrapper: Bei "flutter build web" wird vorher automatisch die Version erhöht.
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+if [ "$1" = "build" ] && [ "$2" = "web" ]; then
+  echo "Version erhöhen (version.json, pubspec, index.html)..."
+  node "$ROOT/scripts/inject_version.js"
+fi
+# Dieses Verzeichnis aus PATH entfernen, damit echtes Flutter (nicht dieser Wrapper) gefunden wird
+PATH_NO_SELF="$(echo ":$PATH:" | sed "s|:$ROOT:|:|g" | sed "s|:\.:|:|g" | sed 's/^://;s/:$//')"
+REAL_FLUTTER="$(env PATH="$PATH_NO_SELF" command -v flutter)"
+exec "$REAL_FLUTTER" "$@"

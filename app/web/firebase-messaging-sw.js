@@ -3,6 +3,18 @@
 self.addEventListener('install',function(){self.skipWaiting();});
 self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim());});
 
+// Native push-Listener für Badge (Workaround für Firebase #8416: setAppBadge in onBackgroundMessage funktioniert nicht zuverlässig).
+self.addEventListener('push', function(event) {
+  if (!event.data || !(self.navigator && typeof self.navigator.setAppBadge === 'function')) return;
+  try {
+    var payload = event.data.json();
+    var data = payload.data || (payload.message && payload.message.data) || payload;
+    var totalUnread = parseInt(data.totalUnread || data.badge || '1', 10) || 1;
+    var p = self.navigator.setAppBadge(Math.min(99, totalUnread)).catch(function() {});
+    event.waitUntil(p);
+  } catch (e) {}
+});
+
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
@@ -88,8 +100,8 @@ self.addEventListener('notificationclick', function(event) {
   const data = event.notification.data || {};
   const companyId = data.companyId || '';
   const chatId = data.chatId || '';
-  const url = self.location.origin + self.location.pathname;
-  const targetUrl = chatId ? (url + (url.endsWith('/') ? '' : '/') + '#chat/' + companyId + '/' + chatId) : url;
+  const baseUrl = self.location.origin + '/';
+  const targetUrl = chatId ? (baseUrl + '#chat/' + companyId + '/' + chatId) : baseUrl;
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
       for (var i = 0; i < clientList.length; i++) {

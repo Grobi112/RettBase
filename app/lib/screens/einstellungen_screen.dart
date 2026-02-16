@@ -259,7 +259,7 @@ class _PushNotificationCardState extends State<_PushNotificationCard> {
                                   SnackBar(
                                     content: Text(ok
                                         ? 'Badge auf 5 gesetzt. App minimieren und PWA-Icon prüfen.'
-                                        : 'Badge-API nicht verfügbar. Safari: Benachrichtigungen erlauben. Chrome Android: nicht unterstützt.'),
+                                        : 'Badge-API nicht verfügbar. Chrome auf iPhone: Safari verwenden + zum Startbildschirm hinzufügen. Andere: Benachrichtigungen erlauben.'),
                                     duration: const Duration(seconds: 5),
                                   ),
                                 );

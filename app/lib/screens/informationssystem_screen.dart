@@ -57,6 +57,11 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
     'superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'leiterssd', 'wachleitung',
   };
 
+  /// Nur diese Rollen dürfen Einstellungen (Zahnrad) vornehmen – andere können ggf. Informationen einpflegen.
+  static const _settingsAllowedRoles = {
+    'superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -105,6 +110,9 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
 
   bool get _canDelete =>
       widget.userRole != null && _deleteAllowedRoles.contains((widget.userRole ?? '').toLowerCase().trim());
+
+  bool get _canAccessSettings =>
+      widget.userRole != null && _settingsAllowedRoles.contains((widget.userRole ?? '').toLowerCase().trim());
 
   void _openAnlegen(String defaultTyp) async {
     final user = _authService.currentUser;
@@ -194,24 +202,25 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
         actions: _loading || _tabController == null
             ? null
             : [
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined),
-                  tooltip: 'Einstellungen',
-                  onPressed: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => InformationssystemEinstellungenScreen(
-                          companyId: widget.companyId,
-                          onBack: () => Navigator.of(context).pop(),
-                          onSaved: () {
-                            widget.onContainerTypesChanged?.call();
-                          },
+                if (_canAccessSettings)
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined),
+                    tooltip: 'Einstellungen',
+                    onPressed: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => InformationssystemEinstellungenScreen(
+                            companyId: widget.companyId,
+                            onBack: () => Navigator.of(context).pop(),
+                            onSaved: () {
+                              widget.onContainerTypesChanged?.call();
+                            },
+                          ),
                         ),
-                      ),
-                    );
-                    if (mounted) _load();
-                  },
-                ),
+                      );
+                      if (mounted) _load();
+                    },
+                  ),
                 ListenableBuilder(
                   listenable: _tabController!,
                   builder: (ctx, _) {

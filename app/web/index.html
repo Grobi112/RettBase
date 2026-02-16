@@ -20,6 +20,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="RettBase – WebApp für Einsätze, Wachbuch, Checklisten und mehr.">
+  <meta name="rettbase-version" content="1.0.1.2">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -33,20 +34,31 @@
   <title>RettBase</title>
   <link rel="manifest" href="manifest.json">
 </head>
-<body>
+<body style="margin:0;background:#1E1F26;min-height:100vh">
+  <div id="flutter-init-loader" style="position:fixed;inset:0;background:#1E1F26;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999">
+    <img src="img/rettbase_splash.png" alt="RettBase" style="height:120px;width:auto">
+    <div style="width:240px;height:8px;background:rgba(255,255,255,0.15);border-radius:4px;margin-top:32px;overflow:hidden">
+      <div style="width:40%;height:100%;background:linear-gradient(90deg,#0ea5e94d,#0ea5e9,#fff,#0ea5e9,#0ea5e94d);border-radius:4px;animation:shimmer 1.8s ease-in-out infinite"></div>
+    </div>
+  </div>
+  <style>
+    @keyframes shimmer{0%,100%{transform:translateX(-100%)}50%{transform:translateX(250%)}}
+  </style>
   <script>
     (function(){
       if(!('serviceWorker' in navigator)) return;
-      navigator.serviceWorker.register('/firebase-messaging-sw.js',{scope:'/'});
-      // Flutter-SW-Registrierung abfangen – er würde sonst firebase-messaging-sw ersetzen
-      // und hätte keinen Badge-Handler. postMessage(setBadge) käme nie an.
       var _reg=navigator.serviceWorker.register.bind(navigator.serviceWorker);
       navigator.serviceWorker.register=function(url,opts){
-        if(typeof url==='string'&&url.indexOf('flutter_service_worker')>=0)
-          return navigator.serviceWorker.ready.then(function(reg){return reg;});
+        if(typeof url==='string'&&url.indexOf('flutter_service_worker')>=0){
+          if(navigator.serviceWorker.controller){
+            return navigator.serviceWorker.ready.then(function(r){return r;});
+          }
+          return _reg(url,opts);
+        }
         return _reg(url,opts);
       };
     })();
+    window.addEventListener('flutter-first-frame',function(){var e=document.getElementById('flutter-init-loader');if(e)e.remove()});
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

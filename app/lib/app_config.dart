@@ -9,6 +9,13 @@ class AppConfig {
   static const String? fcmWebVapidKey = 'BOry5KP4SOhFgMZXOEAC2L5kttPU47Tuc8VBBCGk3NGqHqumnF1-bfPbwVTxdXD2rntuCt1azw48FejwsunG5u4';
   static const String rootDomain = 'rettbase.de';
 
+  /// Android APK: URL zur version.json für In-App-Updates.
+  static const String? androidUpdateCheckUrl = 'https://app.rettbase.de/version.json';
+
+  /// Android APK: Direkter Download-Link (unabhängig von version.json).
+  /// Trage hier die URL ein, die im Browser den APK-Download startet.
+  static const String? androidApkDownloadUrl = 'https://app.rettbase.de/apk/app-release.apk';
+
   /// Basis-URL für die RettBase Web-App (Produktion)
   /// [kundenId] Kunden-ID, z.B. 'admin' → https://admin.rettbase.de
   static String getBaseUrl(String kundenId) {

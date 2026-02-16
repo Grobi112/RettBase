@@ -82,6 +82,44 @@ class ChatService {
     });
   }
 
+  /// Einmaliges Lesen der Ungelesen-Anzahl (für Badge-Polling, robust auf Web).
+  Future<int> getUnreadCount(String companyId) async {
+    final uid = userId;
+    if (uid == null) return 0;
+    try {
+      final snap = await _db
+          .collection('kunden')
+          .doc(companyId)
+          .collection('chats')
+          .where('participants', arrayContains: uid)
+          .get();
+      var total = 0;
+      for (final d in snap.docs) {
+        final data = d.data();
+        if ((data['deletedBy'] as List?)?.contains(uid) == true) continue;
+        var unread = (data['unreadCount'] is Map ? (data['unreadCount'] as Map)[uid] : null);
+        if (unread is int) total += unread;
+        else if (unread == null || unread == 0) {
+          final lastFrom = data['lastMessageFrom'];
+          final lastAt = data['lastMessageAt'];
+          if (lastFrom != null && lastFrom != uid && lastAt != null) {
+            final lastRead = (data['lastReadAt'] is Map ? (data['lastReadAt'] as Map)[uid] : null);
+            DateTime? lastReadAt;
+            if (lastRead != null) {
+              if (lastRead is Timestamp) lastReadAt = lastRead.toDate();
+              else if (lastRead is DateTime) lastReadAt = lastRead;
+            }
+            final msgAt = lastAt is Timestamp ? lastAt.toDate() : (lastAt is DateTime ? lastAt : null);
+            if (msgAt != null && (lastReadAt == null || msgAt.isAfter(lastReadAt))) total += 1;
+          }
+        }
+      }
+      return total;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   /// Gesamtzahl ungelesener Nachrichten für Badge-Anzeige (Menü, Schnellstart).
   Stream<int> streamUnreadCount(String companyId) {
     return streamChats(companyId).map((chats) {

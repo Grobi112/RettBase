@@ -6,6 +6,12 @@ admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || "rett-fe0fa" });
 
 const db = admin.firestore();
 
+/** Basis-URL der Web-App für Push-Klick-Links (zentral gehostet, z.B. app.rettbase.de). */
+const WEB_APP_BASE_URL = "https://app.rettbase.de";
+
+/** Push-Benachrichtigungen (und Badge bei geschlossener App – SW setzt Badge beim Push-Empfang). */
+const PUSH_ENABLED = true;
+
 /** Tauscht Auth gegen Custom-Token für iframe-Auth-Bridge.
  *  Nutzt context.auth (automatisch vom Callable-Client) – robuster als manuelles idToken.
  *  Fallback: idToken aus data (für Clients, die ihn explizit senden).
@@ -313,7 +319,7 @@ async function getTotalUnreadForUser(companyId, uid, currentChatId) {
 }
 
 async function sendChatPush(token, title, body, companyId, chatId, extraData = {}) {
-  if (!token) return;
+  if (!PUSH_ENABLED || !token) return;
   const data = { type: "chat", companyId, chatId, badge: "1", ...extraData };
   await admin.messaging().send({
     token,
@@ -323,7 +329,7 @@ async function sendChatPush(token, title, body, companyId, chatId, extraData = {
     apns: { payload: { aps: { sound: "default" } }, fcmOptions: {} },
     webpush: {
       notification: { title, body },
-      fcmOptions: { link: `https://${companyId}.rettbase.de/#chat/${companyId}/${chatId}` },
+      fcmOptions: { link: `${WEB_APP_BASE_URL}/#chat/${companyId}/${chatId}` },
     },
   });
 }
@@ -351,6 +357,7 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
       const text = (msg.text || "").toString().trim().slice(0, 80);
       const body = text ? `${senderName}: ${text}` : `${senderName} hat eine Nachricht gesendet`;
 
+      if (!PUSH_ENABLED) return;
       for (const uid of recipients) {
         try {
           const token = await getFcmToken(companyId, uid);
@@ -379,7 +386,7 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
                 title: totalUnread === 1 ? "Neue Chat-Nachricht" : totalUnread + " ungelesene Nachrichten",
                 body: totalUnread === 1 ? body : "Neueste: " + body,
               },
-              fcmOptions: { link: `https://${companyId}.rettbase.de/#chat/${companyId}/${chatId}` },
+              fcmOptions: { link: `${WEB_APP_BASE_URL}/#chat/${companyId}/${chatId}` },
             },
           };
           await admin.messaging().send(payload);
@@ -405,6 +412,7 @@ exports.onNewGroupChat = functions.region("europe-west1").firestore
     const groupName = (chat.name || "Neue Gruppe").toString().trim();
     const recipients = participants.filter((p) => p !== createdBy);
     if (recipients.length === 0) return;
+    if (!PUSH_ENABLED) return;
     try {
       for (const uid of recipients) {
         try {
