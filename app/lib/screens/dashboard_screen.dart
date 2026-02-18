@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../theme/app_theme.dart';
 import '../services/chat_service.dart';
 import '../models/app_module.dart';
@@ -240,12 +241,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
     debugPrint('RettBase Dashboard _load: uid=${user.uid} email=${user.email} widget.companyId=${widget.companyId}');
     try {
+      try {
+        await FirebaseFunctions.instanceFor(region: 'europe-west1')
+            .httpsCallable('ensureUsersDoc')
+            .call({'companyId': widget.companyId});
+      } catch (_) {}
       final authData = await _authDataService.getAuthData(
         user.uid,
         user.email ?? '',
         widget.companyId,
       );
       debugPrint('RettBase Dashboard: authData role=${authData.role} companyId=${authData.companyId} displayName=${authData.displayName} vorname=${authData.vorname}');
+      if (authData.role == 'guest' && authData.uid != null) {
+        debugPrint('RettBase Dashboard: Nutzer nicht in Mitarbeiterverwaltung -> Abmelden');
+        await _authService.logout();
+        if (!mounted) return;
+        _goToLogin();
+        return;
+      }
       final effectiveCompanyId = authData.companyId.trim().isNotEmpty ? authData.companyId : widget.companyId;
       // Token im Hintergrund speichern – darf Dashboard-Lade nicht blockieren (getToken kann auf Web hängen)
       unawaited(PushNotificationService().saveToken(effectiveCompanyId, user.uid));

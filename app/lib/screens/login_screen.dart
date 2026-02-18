@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
 import '../theme/app_theme.dart';
@@ -117,7 +118,10 @@ class _LoginScreenState extends State<LoginScreen> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('rettbase_company_id', effectiveCompanyId!);
       }
-      // Token im Hintergrund speichern – blockiert auf mobilen Browsern oft (SW/getToken) und hält Login auf
+      await FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('ensureUsersDoc')
+          .call({'companyId': dashboardCompanyId});
+      if (!mounted) return;
       unawaited(PushNotificationService().saveToken(dashboardCompanyId!, FirebaseAuth.instance.currentUser!.uid));
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -152,7 +156,10 @@ class _LoginScreenState extends State<LoginScreen> {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('rettbase_company_id', effectiveCompanyId!);
           }
-          // Token im Hintergrund – blockiert auf mobilen Browsern sonst oft den Login
+          await FirebaseFunctions.instanceFor(region: 'europe-west1')
+              .httpsCallable('ensureUsersDoc')
+              .call({'companyId': companyId});
+          if (!mounted) return;
           unawaited(PushNotificationService().saveToken(companyId, userCredential.user!.uid));
           if (!mounted) return;
           Navigator.of(context).pushReplacement(
@@ -246,13 +253,24 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     if (email == null || email.isEmpty) return;
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      final info = await _loginService.resolveLoginInfo(email, widget.companyId);
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: info.email);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('E-Mail zum Zurücksetzen wurde gesendet.'),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red.shade700,
           ),
         );
       }

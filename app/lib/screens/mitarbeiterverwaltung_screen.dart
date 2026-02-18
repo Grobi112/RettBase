@@ -300,6 +300,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
     if (result == true && passCtrl.text.length >= 6) {
       try {
         await _functions.httpsCallable('updateMitarbeiterPassword').call({
+          'companyId': widget.companyId,
           'uid': m.uid,
           'email': email,
           'newPassword': passCtrl.text,
@@ -668,6 +669,7 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
       if (isCreate) {
         if (emailForAuth != null && _passwordCtrl.text.length >= 6) {
           final result = await functions.httpsCallable('createAuthUser').call({
+            'companyId': widget.companyId,
             'email': emailForAuth,
             'password': _passwordCtrl.text,
           });
@@ -675,6 +677,7 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
         } else if (pseudoEmail != null) {
           final tempPass = _passwordCtrl.text.length >= 6 ? _passwordCtrl.text : 'RettBase${DateTime.now().millisecondsSinceEpoch}';
           final result = await functions.httpsCallable('createAuthUser').call({
+            'companyId': widget.companyId,
             'email': pseudoEmail,
             'password': tempPass,
           });

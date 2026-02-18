@@ -24,6 +24,7 @@
 - Sucht per `kundenId` **und** `subdomain`, merged alle gefundenen Docs
 - `_pickBestDocId`: bevorzugt Doc mit **anderer** ID als Suchbegriff (Umbenennungsfall)
 - Rückgabe: `{ exists, docId }` – docId = Firestore-Dokument-ID
+- **Rate-Limit:** max. 15 Aufrufe/Minute pro IP (Schutz vor Enumerations-Angriffen)
 
 ### App-Start (main.dart)
 - Bei geladenem Cache: `kundeExists(companyId)` aufrufen
@@ -33,10 +34,12 @@
 - Fallback: Mitarbeiter nicht gefunden → `kundeExists` → Suche mit docId erneut
 - Verwendet `pseudoEmail` aus Mitarbeiter-Doc, falls vorhanden
 - Rückgabe: `effectiveCompanyId` (docId, wo Mitarbeiter gefunden wurde)
+- **Pflicht:** Login nur wenn Nutzer in Mitarbeiterverwaltung (E-Mail wirft sonst Exception) – siehe §20
 
 ### LoginScreen
 - Übergibt `effectiveCompanyId` ans Dashboard
 - Aktualisiert SharedPreferences bei abweichender Company-ID
+- Ruft nach Login `ensureUsersDoc` auf (für Firestore-Zugriffsregeln)
 
 ### AuthDataService
 - Suche nach `personalnummer` als Fallback (zusätzlich zu uid, email, pseudoEmail)
@@ -163,7 +166,7 @@
 | Dashboard | `dashboard_screen.dart`, `home_screen.dart` |
 | Module | `modules_service.dart`, `menueverwaltung_service.dart`, `kundenverwaltung_service.dart` |
 | Chat | `chat_screen.dart`, `chat_service.dart`, `models/chat.dart` |
-| Cloud Functions | `functions/index.js` (kundeExists, saveMitarbeiterDoc, saveUsersDoc) |
+| Cloud Functions | `functions/index.js` (kundeExists, ensureUsersDoc, createAuthUser, updateMitarbeiterPassword, saveMitarbeiterDoc, saveUsersDoc, createMitarbeiterDoc) |
 
 ---
 
@@ -308,4 +311,45 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 ### Web-App
 - **Update-Banner** „Neue Version verfügbar – Jetzt neu laden“ – aktiv, nutzt `version.json`, Cache-Bypass-Reload
 - **Versionierung:** `version.json` + `inject_version.js` – vor Web-Build manuell oder via `./fw` / `./scripts/build_web.sh`
+
+---
+
+## 20. Sicherheitsmaßnahmen (Feb 2026)
+
+### Login nur mit Mitarbeiterverwaltung
+- **LoginService:** E-Mail-Login wirft Exception, wenn Nutzer nicht in `mitarbeiter` oder deaktiviert
+- **AuthDataService:** Kein Mitarb.-Treffer → `role: 'guest'` statt `role: 'user'`
+- **Dashboard:** Bei `role == 'guest'` und `uid != null` → Sign-out, Weiterleitung zu Login
+- **Superadmin 112@admin.rettbase.de** weiterhin ohne Mitarb.-Eintrag möglich
+
+### Passwort vergessen
+- Nur wenn E-Mail/Personalnummer in Mitarbeiterverwaltung gefunden → `sendPasswordResetEmail`
+- Nutzt `resolveLoginInfo` zur Prüfung (inkl. Pseudo-E-Mail bei PN-Login)
+
+### kundeExists Rate-Limit
+- Max. 15 Aufrufe/Minute pro Client-IP (Schutz vor Enumerations-Angriffen)
+- Bei Überschreitung: `resource-exhausted` → „Zu viele Anfragen“
+- CompanyIdScreen zeigt spezifische Meldung für `resource-exhausted`
+
+### Cloud Functions mit Rollenprüfung
+- `_requireAdminRole(context, companyId)`: Prüft Admin/Superadmin/LeiterSSD
+- **createAuthUser, updateMitarbeiterPassword:** benötigen `companyId` im Request; nur Admin/Superadmin/LeiterSSD
+- **saveUsersDoc, saveMitarbeiterDoc, createMitarbeiterDoc:** ebenfalls Rollenprüfung
+
+### Firestore-Regeln kundenspezifisch
+- `canAccessCompany(kundenId)`: Zugriff nur wenn `kunden/{kundenId}/users/{uid}` existiert ODER Superadmin
+- `isSuperadmin()`: admin@rettbase.de, 112@admin.rettbase.de
+- `belongsToCompany(kundenId)`: `exists(users/uid)`
+- `kunden/{kundenId}/**`: read/write nur mit `canAccessCompany` (mitarbeiter read: if true bleibt für Login-Suche)
+- **settings/** weiterhin `isLoggedIn()` (globale Konfig)
+
+### ensureUsersDoc (Cloud Function)
+- Stellt users-Dokument für Firestore-Zugriffsregeln her
+- Aufruf: LoginScreen nach erfolgreichem Login, Dashboard zu Beginn von _load
+- Verifiziert Nutzer in mitarbeiter; Superadmin: sofort erstellen
+- Ohne users-Doc: Firestore-Regeln würden Zugriff verweigern
+
+### Offen (Stand: Feb 2026)
+- **Punkt 1:** Mitarbeiter `allow read: if true` – öffentlich lesbar für Login-Suche; ggf. Cloud Function für Lookup statt direkter Firestore-Lesezugriff
+- **Punkt 4:** loadKunden ohne Admin-Rollenprüfung
 

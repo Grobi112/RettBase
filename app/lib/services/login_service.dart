@@ -60,15 +60,17 @@ class LoginService {
       }
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data();
-        if (data['active'] != false && data['status'] != false) {
-          final docPseudo = data['pseudoEmail']?.toString();
-          if (docPseudo != null && docPseudo.isNotEmpty) {
-            final path = 'kunden/$searchCompanyId/mitarbeiter/${snapshot.docs.first.id}';
-            return _result(docPseudo, path, searchCompanyId);
-          }
+        if (data['active'] == false || data['status'] == false) {
+          throw Exception('Benutzer ist deaktiviert.');
         }
+        final docPseudo = data['pseudoEmail']?.toString();
+        if (docPseudo != null && docPseudo.isNotEmpty) {
+          final path = 'kunden/$searchCompanyId/mitarbeiter/${snapshot.docs.first.id}';
+          return _result(docPseudo, path, searchCompanyId);
+        }
+        return _result(input, 'kunden/$searchCompanyId/mitarbeiter/${snapshot.docs.first.id}', searchCompanyId);
       }
-      return _result(input, null, null);
+      throw Exception('Benutzer mit E-Mail-Adresse "$input" nicht in der Mitarbeiterverwaltung gefunden.');
     }
 
 

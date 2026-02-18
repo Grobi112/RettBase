@@ -76,6 +76,15 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
           builder: (_) => LoginScreen(companyId: docId),
         ),
       );
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.code == 'resource-exhausted'
+              ? 'Zu viele Anfragen. Bitte später erneut versuchen.'
+              : 'Kunde konnte nicht überprüft werden. Bitte prüfen Sie Ihre Verbindung.';
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {

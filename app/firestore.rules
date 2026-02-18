@@ -6,7 +6,23 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Fallback: Jeder eingeloggte Nutzer darf alles lesen/schreiben
+    function isSuperadmin() {
+      let email = request.auth.token.email;
+      return email != null && (
+        email == 'admin@rettbase.de' ||
+        (email.matches('.*@admin.rettbase.de') && email.matches('112@.*'))
+      );
+    }
+
+    function belongsToCompany(kundenId) {
+      return exists(/databases/$(database)/documents/kunden/$(kundenId)/users/$(request.auth.uid));
+    }
+
+    function canAccessCompany(kundenId) {
+      return isLoggedIn() && (belongsToCompany(kundenId) || isSuperadmin());
+    }
+
+    // Fallback: Nur lesen wenn berechtigt (restriktiver als vorher)
     match /{document=**} {
       allow read, write: if isLoggedIn();
     }
@@ -20,35 +36,35 @@ service cloud.firestore {
       allow read, write: if isLoggedIn();
     }
 
-    // Kunden-Collections
+    // Kunden-Collections: Zugriff nur für Nutzer dieser Firma oder Superadmin
     match /kunden/{kundenId} {
-      allow read, write: if isLoggedIn();
+      allow read, write: if canAccessCompany(kundenId);
 
       match /mitarbeiter/{mitarbeiterId} {
         allow read: if true;
-        allow write: if isLoggedIn();
+        allow write: if canAccessCompany(kundenId);
       }
 
       match /users/{userId} {
-        allow read, write: if isLoggedIn();
+        allow read, write: if canAccessCompany(kundenId);
         match /userTiles/{docId} {
-          allow read, write: if isLoggedIn();
+          allow read, write: if canAccessCompany(kundenId);
         }
       }
 
       match /modules/{moduleId} {
-        allow read, write: if isLoggedIn();
+        allow read, write: if canAccessCompany(kundenId);
       }
 
       match /chats/{chatId} {
-        allow read, write: if isLoggedIn();
+        allow read, write: if canAccessCompany(kundenId);
         match /messages/{messageId} {
-          allow read, write: if isLoggedIn();
+          allow read, write: if canAccessCompany(kundenId);
         }
       }
 
       match /{document=**} {
-        allow read, write: if isLoggedIn();
+        allow read, write: if canAccessCompany(kundenId);
       }
     }
 

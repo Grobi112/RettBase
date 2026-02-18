@@ -230,8 +230,8 @@ class AuthDataService {
     }
 
     final nameFromEmail = _nameFromEmail(email);
-    debugPrint('RettBase getAuthData: kein Mitarb.-Treffer unter $cid, Fallback role=user displayName=$nameFromEmail');
-    return AuthData(role: 'user', companyId: cid, uid: uid, displayName: nameFromEmail.isNotEmpty ? nameFromEmail : 'Benutzer', vorname: null);
+    debugPrint('RettBase getAuthData: kein Mitarb.-Treffer unter $cid -> role=guest (nicht berechtigt, Sign-out)');
+    return AuthData(role: 'guest', companyId: cid, uid: uid, displayName: nameFromEmail.isNotEmpty ? nameFromEmail : 'Benutzer', vorname: null);
   }
 
   String _nameFromEmail(String email) {

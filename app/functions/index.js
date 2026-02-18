@@ -6,6 +6,28 @@ admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || "rett-fe0fa" });
 
 const db = admin.firestore();
 
+/** Rate-Limit für kundeExists: pro Client maximal 15 Aufrufe/Minute (Schutz vor Enumerations-Angriffen). */
+const _kundeExistsRateLimit = new Map();
+const KUNDE_EXISTS_MAX_PER_MINUTE = 15;
+
+function _checkKundeExistsRateLimit(context) {
+  const now = Date.now();
+  const windowMs = 60000;
+  const ip = context?.rawRequest?.ip
+    || (context?.rawRequest?.headers && (context.rawRequest.headers["x-forwarded-for"] || "").split(",")[0]?.trim())
+    || context?.rawRequest?.connection?.remoteAddress
+    || "unknown";
+  let entry = _kundeExistsRateLimit.get(ip);
+  if (!entry || now - entry.windowStart > windowMs) {
+    entry = { count: 0, windowStart: now };
+    _kundeExistsRateLimit.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > KUNDE_EXISTS_MAX_PER_MINUTE) {
+    throw new functions.https.HttpsError("resource-exhausted", "Zu viele Anfragen. Bitte später erneut versuchen.");
+  }
+}
+
 /** Basis-URL der Web-App für Push-Klick-Links (zentral gehostet, z.B. app.rettbase.de). */
 const WEB_APP_BASE_URL = "https://app.rettbase.de";
 
@@ -46,6 +68,34 @@ exports.exchangeToken = functions.region("europe-west1").https.onCall(async (dat
   }
 });
 
+/** Prüft ob der Aufrufer Admin/Superadmin/LeiterSSD ist (für createAuthUser, updateMitarbeiterPassword). */
+async function _requireAdminRole(context, companyId) {
+  if (!context?.auth?.uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
+  }
+  const uid = context.auth.uid;
+  const email = (context.auth.token?.email || "").toString().toLowerCase();
+  const adminRoles = ["superadmin", "admin", "leiterssd"];
+  const isGlobalSuperadmin = email === "admin@rettbase.de" || (email.startsWith("admin@") && email.includes("rettbase"));
+  const is112Admin = companyId === "admin" && (email === "112@admin.rettbase.de" || (email.startsWith("112@admin") && email.includes("rettbase")));
+  if (isGlobalSuperadmin || is112Admin) return;
+  const usersSnap = await db.collection("kunden").doc(String(companyId)).collection("users").doc(uid).get();
+  if (usersSnap.exists) {
+    const role = (usersSnap.data()?.role || "").toString().toLowerCase();
+    if (adminRoles.includes(role)) return;
+  }
+  const mitarbeiterSnap = await db.collection("kunden").doc(String(companyId)).collection("mitarbeiter").where("uid", "==", uid).limit(1).get();
+  if (!mitarbeiterSnap.empty) {
+    const role = (mitarbeiterSnap.docs[0].data()?.role || "").toString().toLowerCase();
+    if (adminRoles.includes(role)) return;
+  }
+  if (companyId === "admin") {
+    const adminMitarbeiter = await db.collection("kunden").doc("admin").collection("mitarbeiter").where("personalnummer", "==", "112").limit(1).get();
+    if (!adminMitarbeiter.empty && adminMitarbeiter.docs[0].data()?.uid === uid) return;
+  }
+  throw new functions.https.HttpsError("permission-denied", "Nur Admin, Superadmin oder LeiterSSD können diese Aktion ausführen.");
+}
+
 /** Erstellt einen Firebase Auth Nutzer (Admin-Funktion).
  *  Wird von der Mitgliederverwaltung aufgerufen – Admin bleibt eingeloggt.
  */
@@ -53,6 +103,11 @@ exports.createAuthUser = functions.region("europe-west1").https.onCall(async (da
   if (!context?.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
   }
+  const companyId = (data?.companyId || "").trim();
+  if (!companyId) {
+    throw new functions.https.HttpsError("invalid-argument", "companyId erforderlich");
+  }
+  await _requireAdminRole(context, companyId);
   const { email, password } = data;
   if (!email || typeof email !== "string" || !password || typeof password !== "string") {
     throw new functions.https.HttpsError("invalid-argument", "email und password erforderlich");
@@ -78,6 +133,11 @@ exports.updateMitarbeiterPassword = functions.region("europe-west1").https.onCal
   if (!context?.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
   }
+  const companyId = (data?.companyId || "").trim();
+  if (!companyId) {
+    throw new functions.https.HttpsError("invalid-argument", "companyId erforderlich");
+  }
+  await _requireAdminRole(context, companyId);
   const { uid, email, newPassword } = data;
   if (!newPassword || newPassword.length < 6) {
     throw new functions.https.HttpsError("invalid-argument", "newPassword (mind. 6 Zeichen) erforderlich");
@@ -124,8 +184,10 @@ function toPlainObject(obj) {
 
 /** Prüft ob eine Kunden-ID existiert (ohne Auth, für Eingabe beim Start).
  *  Sucht kundenId + subdomain zusammen (keg hat subdomain kkg, evtl. kein kundenId),
- *  bevorzugt Doc mit anderer ID (Umbenennung), dann per Document-ID. */
-exports.kundeExists = functions.region("europe-west1").https.onCall(async (data) => {
+ *  bevorzugt Doc mit anderer ID (Umbenennung), dann per Document-ID.
+ *  Rate-Limit: max 15 Aufrufe/Minute pro Client (Schutz vor Enumerations-Angriffen). */
+exports.kundeExists = functions.region("europe-west1").https.onCall(async (data, context) => {
+  _checkKundeExistsRateLimit(context);
   const companyId = data?.companyId;
   if (!companyId || typeof companyId !== "string") {
     return { exists: false };
@@ -219,13 +281,14 @@ function sanitizeForFirestore(obj) {
   return out;
 }
 
-/** Schreibt Mitarbeiter-Dokument (umgeht Firestore-Regeln für Web-App). */
+/** Schreibt Mitarbeiter-Dokument (umgeht Firestore-Regeln für Web-App). Nur Admin/Superadmin/LeiterSSD. */
 exports.saveMitarbeiterDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
   try {
     if (!context?.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
     }
     const { companyId, docId, data: docData } = data || {};
+    if (companyId) await _requireAdminRole(context, companyId);
     if (!companyId || !docId || !docData || typeof docData !== "object") {
       throw new functions.https.HttpsError("invalid-argument", "companyId, docId und data erforderlich");
     }
@@ -241,13 +304,50 @@ exports.saveMitarbeiterDoc = functions.region("europe-west1").https.onCall(async
   }
 });
 
-/** Schreibt users-Dokument (umgeht Firestore-Regeln für Web-App). */
+/** Stellt sicher, dass users-Dokument existiert (für Firestore-Zugriffsregeln nach Login).
+ *  Prüft, ob Aufrufer in mitarbeiter der Firma ist; erstellt users-Doc falls nötig. */
+exports.ensureUsersDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
+  if (!context?.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
+  }
+  const companyId = (data?.companyId || "").trim();
+  if (!companyId) {
+    throw new functions.https.HttpsError("invalid-argument", "companyId erforderlich");
+  }
+  const uid = context.auth.uid;
+  const email = (context.auth.token?.email || "").toString();
+  const isSuperadmin = email === "admin@rettbase.de" || (email.startsWith("112@admin") && email.includes("rettbase"));
+  if (isSuperadmin) {
+    const ref = db.collection("kunden").doc(companyId).collection("users").doc(uid);
+    await ref.set({ companyId, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return { success: true };
+  }
+  const byUid = await db.collection("kunden").doc(companyId).collection("mitarbeiter").where("uid", "==", uid).limit(1).get();
+  if (byUid.empty) {
+    const userDoc = await db.collection("kunden").doc(companyId).collection("users").doc(uid).get();
+    if (userDoc.exists) return { success: true };
+    throw new functions.https.HttpsError("permission-denied", "Nutzer ist kein Mitarbeiter dieser Firma");
+  }
+  const m = byUid.docs[0].data();
+  const ref = db.collection("kunden").doc(companyId).collection("users").doc(uid);
+  await ref.set({
+    companyId,
+    email: m.email || email,
+    role: (m.role || "user").toString().toLowerCase(),
+    mitarbeiterDocId: byUid.docs[0].id,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  return { success: true };
+});
+
+/** Schreibt users-Dokument (umgeht Firestore-Regeln für Web-App). Nur Admin/Superadmin/LeiterSSD. */
 exports.saveUsersDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
   try {
     if (!context?.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
     }
     const { companyId, uid, data: docData } = data || {};
+    if (companyId) await _requireAdminRole(context, companyId);
     if (!companyId || !uid || !docData || typeof docData !== "object") {
       throw new functions.https.HttpsError("invalid-argument", "companyId, uid und data erforderlich");
     }
@@ -433,13 +533,14 @@ exports.onNewGroupChat = functions.region("europe-west1").firestore
     }
   });
 
-/** Erstellt neues Mitarbeiter-Dokument (für Neuanlage). */
+/** Erstellt neues Mitarbeiter-Dokument (für Neuanlage). Nur Admin/Superadmin/LeiterSSD. */
 exports.createMitarbeiterDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
   try {
     if (!context?.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
     }
     const { companyId, data: docData } = data || {};
+    if (companyId) await _requireAdminRole(context, companyId);
     if (!companyId || !docData || typeof docData !== "object") {
       throw new functions.https.HttpsError("invalid-argument", "companyId und data erforderlich");
     }
