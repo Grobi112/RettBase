@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,7 +29,7 @@ void main() async {
   sw_update.initServiceWorkerUpdateListener();
 
   if (kIsWeb) {
-    initWebVersionCheck(_showWebUpdateBanner);
+    initWebVersionCheck(_reloadWeb);  // Automatisch neu laden bei neuer Version (kein Banner)
   }
 
   try {
@@ -36,6 +37,7 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     debugPrint('RettBase Firebase: project=${Firebase.app().options.projectId}');
+    await _initAppCheck();
     unawaited(PushNotificationService.initialize());
   } catch (e) {
     debugPrint('Firebase Init Fehler: $e');
@@ -50,29 +52,25 @@ void main() async {
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 
-void _showWebUpdateBanner() {
-  final ctx = _navigatorKey.currentContext;
-  if (ctx == null || !ctx.mounted) return;
-  ScaffoldMessenger.of(ctx).clearMaterialBanners();
-  ScaffoldMessenger.of(ctx).showMaterialBanner(
-    MaterialBanner(
-      content: const Text('Neue Version verfügbar'),
-      backgroundColor: AppTheme.primary,
-      contentTextStyle: const TextStyle(color: Colors.white),
-      actions: [
-        TextButton(
-          onPressed: () {
-            ScaffoldMessenger.of(ctx).clearMaterialBanners();
-            if (ctx.mounted) _reloadWeb();
-          },
-          child: const Text('Jetzt neu laden', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-        ),
-      ],
-    ),
-  );
-}
-
 void _reloadWeb() => rw.reload();
+
+/// App Check aktivieren – schützt Cloud Functions (kundeExists, resolveLoginInfo) vor Enumerations-Angriffen.
+/// Firebase Console: App Check Enforcement für Cloud Functions aktivieren, wenn bereit.
+Future<void> _initAppCheck() async {
+  try {
+    final webKey = AppConfig.appCheckRecaptchaSiteKey;
+    await FirebaseAppCheck.instance.activate(
+      webProvider: (kIsWeb && webKey != null && webKey.isNotEmpty)
+          ? ReCaptchaV3Provider(webKey)
+          : null,
+      androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+      appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
+    );
+    debugPrint('RettBase App Check: aktiv');
+  } catch (e) {
+    debugPrint('RettBase App Check Init Fehler: $e');
+  }
+}
 
 class RettBaseApp extends StatelessWidget {
   const RettBaseApp({super.key});

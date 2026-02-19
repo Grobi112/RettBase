@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,15 +17,11 @@ import 'module_iframe_web.dart' if (dart.library.io) 'module_iframe_stub.dart' a
 class ModuleWebViewWidget extends StatefulWidget {
   final AppModule module;
   final String companyId;
-  final String? loginEmail;
-  final String? loginPassword;
 
   const ModuleWebViewWidget({
     super.key,
     required this.module,
     required this.companyId,
-    this.loginEmail,
-    this.loginPassword,
   });
 
   @override
@@ -83,14 +78,7 @@ class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
 
   Future<void> _initWebView() async {
     String url;
-    final needsEmailPassword = widget.loginEmail != null &&
-        widget.loginPassword != null &&
-        widget.loginEmail!.isNotEmpty &&
-        widget.loginPassword!.isNotEmpty;
-
-    if (needsEmailPassword) {
-      url = _fullUrl(widget.module.url);
-    } else if (widget.module.url.isNotEmpty) {
+    if (widget.module.url.isNotEmpty) {
       url = await _buildAuthCallbackUrl();
       if (url.isEmpty && mounted) return;
     } else {
@@ -129,30 +117,8 @@ class _ModuleWebViewWidgetState extends State<ModuleWebViewWidget> {
         ),
       );
 
-    if (needsEmailPassword) {
-      final html = _authBridgeHtml(widget.loginEmail!, widget.loginPassword!, url);
-      final baseUrl = 'https://${widget.companyId}.${AppConfig.rootDomain}/';
-      ctrl.loadHtmlString(html, baseUrl: baseUrl);
-    } else {
-      ctrl.loadRequest(Uri.parse(url));
-    }
+    ctrl.loadRequest(Uri.parse(url));
     if (mounted) setState(() => _controller = ctrl);
-  }
-
-  String _authBridgeHtml(String email, String password, String redirectUrl) {
-    final e = jsonEncode(email);
-    final p = jsonEncode(password);
-    final r = jsonEncode(redirectUrl);
-    return '''
-<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif">
-<div id="msg">Melde an…</div>
-<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
-<script>
-firebase.initializeApp({apiKey:"AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA",authDomain:"rett-fe0fa.firebaseapp.com",projectId:"rett-fe0fa",storageBucket:"rett-fe0fa.firebasestorage.app",messagingSenderId:"740721219821",appId:"1:740721219821:web:a8e7f8070f875866ccd4e4"});
-firebase.auth().signInWithEmailAndPassword($e,$p).then(function(){window.location.replace($r);}).catch(function(err){document.getElementById("msg").innerHTML="<p style=color:red>Fehler: "+(err.message||err.code)+"</p>";});
-</script></body></html>''';
   }
 
   @override

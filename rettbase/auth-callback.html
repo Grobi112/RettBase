@@ -23,12 +23,16 @@
     const token = params.get('token');
     const redirect = params.get('redirect') || '/';
     if (!token) {
-      document.getElementById('msg').innerHTML = '<span style="color:red">Fehler: Token fehlt.</span>';
+      var el = document.getElementById('msg');
+      el.textContent = 'Fehler: Token fehlt.';
+      el.style.color = 'red';
     } else {
       firebase.auth().signInWithCustomToken(token)
         .then(function() { window.location.replace(redirect); })
         .catch(function(err) {
-          document.getElementById('msg').innerHTML = '<span style="color:red">Anmeldung fehlgeschlagen: ' + (err.message || err.code) + '</span>';
+          var el = document.getElementById('msg');
+          el.textContent = 'Anmeldung fehlgeschlagen: ' + (err.message || err.code || 'Unbekannter Fehler');
+          el.style.color = 'red';
         });
     }
   </script>

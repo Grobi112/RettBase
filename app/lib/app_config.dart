@@ -3,6 +3,17 @@
 /// Arbeitet mit Kunden-ID (nicht Subdomain) – URL: kundenId.rettbase.de
 
 class AppConfig {
+  /// reCAPTCHA v3 Site-Key für Firebase App Check (Web).
+  /// Aktuell nicht verwendet – kundeExists/resolveLoginInfo sind durch Rate-Limit (5/min) geschützt.
+  /// Falls App Check gewünscht: Key in _appCheckRecaptchaSiteKeyConst eintragen.
+  static String? get appCheckRecaptchaSiteKey {
+    const envKey = String.fromEnvironment('RETTBASE_APP_CHECK_SITE_KEY', defaultValue: '');
+    if (envKey.isNotEmpty) return envKey;
+    return _appCheckRecaptchaSiteKeyConst;
+  }
+
+  static const String? _appCheckRecaptchaSiteKeyConst = null;
+
   /// VAPID-Key für Web-Push (FCM).
   /// In Firebase Console: Projekt-Einstellungen → Cloud Messaging → Web-Konfiguration → Schlüsselpaar erzeugen.
   /// Ohne diesen Key funktionieren Push-Benachrichtigungen auf Web nicht.

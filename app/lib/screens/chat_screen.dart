@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../models/chat.dart';
 import '../services/chat_service.dart';
-import '../services/push_notification_service.dart';
 import '../utils/visibility_refresh_stub.dart'
     if (dart.library.html) '../utils/visibility_refresh_web.dart' as visibility_refresh;
 
@@ -36,7 +35,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _messageController = TextEditingController();
   String? _selectedChatId;
   Future<List<ChatMessage>>? _messagesFuture;
-  bool _pushRequesting = false;
   Timer? _refreshTimer;
   void Function()? _visibilityCallback;
 
@@ -233,76 +231,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _requestPushPermission() async {
-    if (_pushRequesting) return;
-    final uid = _chatService.userId;
-    if (uid == null) return;
-    setState(() => _pushRequesting = true);
-    final permFuture = PushNotificationService.startNotificationPermissionRequestForWeb();
-    try {
-      final (success, needsReload) = await PushNotificationService.requestPermissionAndSaveTokenForWeb(
-        widget.companyId,
-        uid,
-        permissionFuture: permFuture,
-      );
-      if (!mounted) return;
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Benachrichtigungen aktiviert – du wirst bei neuen Nachrichten informiert')),
-        );
-        setState(() {});
-      } else if (needsReload) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Seite bitte neu laden, damit Benachrichtigungen funktionieren')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Benachrichtigungen wurden nicht aktiviert')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _pushRequesting = false);
-    }
-  }
-
-  Widget _buildPushBanner() {
-    if (!kIsWeb) return const SizedBox.shrink();
-    if (PushNotificationService.getNotificationPermissionStatusWeb() == 'granted') return const SizedBox.shrink();
-    if (_chatService.userId == null) return const SizedBox.shrink();
-    return Material(
-      color: AppTheme.primary.withOpacity(0.15),
-      child: SafeArea(
-        bottom: false,
-        child: InkWell(
-          onTap: _pushRequesting ? null : _requestPushPermission,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(Icons.notifications_active, color: AppTheme.primary, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Push-Benachrichtigungen', style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primary)),
-                      Text('Bei neuen Nachrichten informiert werden – auch wenn die App geschlossen ist', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-                    ],
-                  ),
-                ),
-                if (_pushRequesting)
-                  const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                else
-                  Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.primary),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   PreferredSizeWidget _buildAppBar(bool isNarrow, VoidCallback onBack) {
     if (isNarrow && _selectedChatId != null) {
       return PreferredSize(
@@ -360,7 +288,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         mainAxisSize: MainAxisSize.max,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildPushBanner(),
           Expanded(
             child: isNarrow
                 ? _selectedChatId == null

@@ -1,33 +1,51 @@
 // Firebase Storage Security Rules
-// Authentifizierte Benutzer dürfen auf kunden-spezifische Pfade zugreifen.
+// Zugriff nur für authentifizierte Nutzer; Company-Prüfung über Custom Claims (companyId, superadmin).
+// ensureUsersDoc setzt diese Claims nach Login/Dashboard-Load.
 
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    function canAccessCompany(companyId) {
+      return request.auth != null && (
+        request.auth.token.superadmin == true ||
+        (request.auth.token.companyId != null && request.auth.token.companyId == companyId)
+      );
+    }
+
+    // Profil-Fotos: Nutzer darf nur eigene Dateien (fileName = {uid}.{ext}) lesen/schreiben + Company
     match /kunden/{companyId}/profile-images/{fileName} {
-      allow read, write: if request.auth != null;
+      allow read, write: if canAccessCompany(companyId)
+        && fileName.matches(request.auth.uid + '\\..*');
     }
 
     match /kunden/{companyId}/email-attachments/{emailId}/{fileName} {
-      allow read, write: if request.auth != null;
+      allow read, write: if canAccessCompany(companyId);
     }
 
     match /kunden/{companyId}/chat-attachments/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if canAccessCompany(companyId);
     }
 
     match /kunden/{companyId}/maengel-attachments/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if canAccessCompany(companyId);
     }
 
     match /kunden/{companyId}/unfallbericht-attachments/{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if canAccessCompany(companyId);
     }
 
     // Einsatzprotokoll Schulsanitätsdienst: Körper-Skizze, Unterschriften
     match /kunden/{companyId}/einsatzprotokoll-ssd/{docId}/{fileName} {
-      allow read, write: if request.auth != null;
+      allow read, write: if canAccessCompany(companyId);
+    }
+
+    match /kunden/{companyId}/dokumente/{allPaths=**} {
+      allow read, write: if canAccessCompany(companyId);
+    }
+
+    match /kunden/{companyId}/uebergriffsmeldung-attachments/{allPaths=**} {
+      allow read, write: if canAccessCompany(companyId);
     }
 
     match /{allPaths=**} {

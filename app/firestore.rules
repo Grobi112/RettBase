@@ -22,27 +22,17 @@ service cloud.firestore {
       return isLoggedIn() && (belongsToCompany(kundenId) || isSuperadmin());
     }
 
-    // Fallback: Nur lesen wenn berechtigt (restriktiver als vorher)
-    match /{document=**} {
-      allow read, write: if isLoggedIn();
-    }
-
-    // Collection-Group-Queries (für getAuthData)
-    match /{path=**}/mitarbeiter/{mitarbeiterId} {
-      allow read: if true;
-      allow write: if isLoggedIn();
-    }
-    match /{path=**}/users/{userId} {
-      allow read, write: if isLoggedIn();
-    }
+    // Kein Fallback-Regel – nicht abgedeckte Pfade werden verweigert.
+    // (Vorher: match /{document=**} allow read, write: if isLoggedIn() – zu permissiv)
+    // Collection-Group-Regeln für mitarbeiter/users entfernt – waren zu permissiv (jeder Nutzer konnte fremde Firmen lesen).
+    // getAuthData nutzt direkte Collection-Pfade, keine collectionGroup-Queries.
 
     // Kunden-Collections: Zugriff nur für Nutzer dieser Firma oder Superadmin
     match /kunden/{kundenId} {
       allow read, write: if canAccessCompany(kundenId);
 
       match /mitarbeiter/{mitarbeiterId} {
-        allow read: if true;
-        allow write: if canAccessCompany(kundenId);
+        allow read, write: if canAccessCompany(kundenId);
       }
 
       match /users/{userId} {
@@ -69,7 +59,8 @@ service cloud.firestore {
     }
 
     match /settings/{document=**} {
-      allow read, write: if isLoggedIn();
+      allow read: if isLoggedIn();
+      allow write: if isSuperadmin();
     }
 
     match /fcmTokens/{uid} {

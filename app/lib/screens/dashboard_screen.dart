@@ -85,70 +85,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _userRole;
   /// Effektive Company-ID für Firestore (authData.companyId oder widget.companyId)
   String _effectiveCompanyId = '';
+  /// Bereich des Kunden (z.B. schulsanitaetsdienst) für bereichsspezifische UI
+  String? _bereich;
   bool _loading = true;
 
   String get _companyId => _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
 
   final _containerSlotsNotifier = ValueNotifier<List<String?>>([]);
   final _infoItemsNotifier = ValueNotifier<List<Information>>([]);
-
-  bool _pushRequesting = false;
-
-  Future<void> _requestPushPermission() async {
-    if (_pushRequesting) return;
-    final user = _authService.currentUser;
-    if (user == null) return;
-    setState(() => _pushRequesting = true);
-    final permFuture = PushNotificationService.startNotificationPermissionRequestForWeb();
-    // Drawer zuerst schließen, damit der Browser-Dialog (oben links) nicht verdeckt ist
-    if (mounted) Navigator.pop(context);
-    try {
-      if (permFuture != null) {
-        // Sofort Hinweis zeigen – der Browser-Dialog erscheint oft unauffällig
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Bitte den Browser-Dialog für Benachrichtigungen beachten – evtl. oben links oder in der Adressleiste'),
-              duration: Duration(seconds: 6),
-            ),
-          );
-        }
-        final (success, needsReload) = await PushNotificationService.requestPermissionAndSaveTokenForWeb(
-          _companyId,
-          user.uid,
-          permissionFuture: permFuture,
-        ).timeout(
-          const Duration(seconds: 25),
-          onTimeout: () {
-            debugPrint('RettBase Push: Timeout bei Benachrichtigungs-Berechtigung');
-            return (false, true);
-          },
-        );
-        if (!mounted) return;
-        if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Benachrichtigungen aktiviert')),
-          );
-        } else if (needsReload) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Bitte Seite neu laden und erneut tippen. Oder: Browser-Einstellungen → Diese Seite → Benachrichtigungen auf „Erlauben“ setzen.'),
-              duration: Duration(seconds: 8),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Benachrichtigungen wurden nicht aktiviert. In den Browser-Einstellungen kannst du sie später erlauben.'),
-              duration: Duration(seconds: 5),
-            ),
-          );
-        }
-      }
-    } finally {
-      if (mounted) setState(() => _pushRequesting = false);
-    }
-  }
 
   @override
   void initState() {
@@ -245,6 +189,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         await FirebaseFunctions.instanceFor(region: 'europe-west1')
             .httpsCallable('ensureUsersDoc')
             .call({'companyId': widget.companyId});
+        await user.getIdToken(true);
       } catch (_) {}
       final authData = await _authDataService.getAuthData(
         user.uid,
@@ -329,6 +274,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _vorname = authData.vorname;
         _userRole = authData.role;
         _effectiveCompanyId = effectiveCompanyId;
+        _bereich = bereich;
         _allModules = allMods;
         _shortcuts = shortcuts;
         _menuStructure = menuStructure;
@@ -512,6 +458,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'einstellungen':
         screen = EinstellungenScreen(
           companyId: _companyId,
+          bereich: _bereich,
           onBack: onBack,
           onInformationssystemSaved: _load,
           hideAppBar: true,
@@ -951,19 +898,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _logout();
               },
             ),
-            if (kIsWeb &&
-                PushNotificationService.getNotificationPermissionStatusWeb() != 'granted') ...[
-              const SizedBox(height: 24),
-              ListTile(
-                dense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                leading: Icon(Icons.notifications_none, color: AppTheme.primary, size: 22),
-                title: const Text('Benachrichtigungen aktivieren', style: TextStyle(fontSize: 12)),
-                subtitle: const Text('Tippen für Chat-Push (Handy)', style: TextStyle(fontSize: 10)),
-                onTap: _pushRequesting ? null : _requestPushPermission,
-                trailing: _pushRequesting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
-              ),
-            ],
           ],
         ),
       ),

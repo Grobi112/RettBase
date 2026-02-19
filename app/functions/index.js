@@ -2,13 +2,16 @@ const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
 
 // Projekt explizit für Auth-Konsistenz (rett-fe0fa = Flutter-App + alle Module)
-admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || "rett-fe0fa" });
+admin.initializeApp({
+  projectId: process.env.GCLOUD_PROJECT || "rett-fe0fa",
+  storageBucket: "rett-fe0fa.firebasestorage.app",
+});
 
 const db = admin.firestore();
 
-/** Rate-Limit für kundeExists: pro Client maximal 15 Aufrufe/Minute (Schutz vor Enumerations-Angriffen). */
+/** Rate-Limit für kundeExists und resolveLoginInfo: pro Client maximal 5 Aufrufe/Minute (Schutz vor Enumerations-Angriffen). */
 const _kundeExistsRateLimit = new Map();
-const KUNDE_EXISTS_MAX_PER_MINUTE = 15;
+const KUNDE_EXISTS_MAX_PER_MINUTE = 5;
 
 function _checkKundeExistsRateLimit(context) {
   const now = Date.now();
@@ -119,8 +122,9 @@ exports.createAuthUser = functions.region("europe-west1").https.onCall(async (da
     const userRecord = await admin.auth().createUser({ email: email.trim(), password });
     return { uid: userRecord.uid };
   } catch (e) {
-    if (e.code === "auth/email-already-in-use") {
-      throw new functions.https.HttpsError("already-exists", "E-Mail bereits registriert");
+    const code = e.code || e.errorInfo?.code || "";
+    if (code === "auth/email-already-in-use" || code === "auth/email-already-exists") {
+      throw new functions.https.HttpsError("already-exists", "E-Mail bereits registriert. Nutzen Sie „Passwort setzen“ bei bestehendem Mitglied.");
     }
     throw new functions.https.HttpsError("internal", e.message);
   }
@@ -157,6 +161,15 @@ exports.updateMitarbeiterPassword = functions.region("europe-west1").https.onCal
   if (!targetUid) {
     throw new functions.https.HttpsError("invalid-argument", "uid oder email erforderlich");
   }
+  const cid = (await _resolveToDocId(companyId)) || companyId.toLowerCase();
+  const [userInCompany, mitarbeiterSnap] = await Promise.all([
+    db.collection("kunden").doc(cid).collection("users").doc(targetUid).get(),
+    db.collection("kunden").doc(cid).collection("mitarbeiter").where("uid", "==", targetUid).limit(1).get(),
+  ]);
+  const isInCompany = userInCompany.exists || !mitarbeiterSnap.empty;
+  if (!isInCompany) {
+    throw new functions.https.HttpsError("permission-denied", "Nutzer gehört nicht zu dieser Firma – Passwort-Änderung nicht erlaubt.");
+  }
   try {
     await admin.auth().updateUser(targetUid, { password: newPassword });
     return { success: true, uid: targetUid };
@@ -182,10 +195,76 @@ function toPlainObject(obj) {
   return obj;
 }
 
+const ROOT_DOMAIN = "rettbase.de";
+
+/** Login-Lookup ohne Auth. Rate-Limit wie kundeExists. Ersetzt direkten Firestore-Zugriff durch Client
+ *  (mitarbeiter war allow read: if true – DSGVO/Sicherheitsrisiko). */
+exports.resolveLoginInfo = functions.region("europe-west1").https.onCall(async (data, context) => {
+  _checkKundeExistsRateLimit(context);
+  const { companyId: companyIdParam, emailOrPersonalnummer } = data || {};
+  const input = (emailOrPersonalnummer || "").toString().trim();
+  if (!input) {
+    throw new functions.https.HttpsError("invalid-argument", "Bitte Benutzerkennung eingeben.");
+  }
+  const normalizedCompanyId = (companyIdParam || "").trim().toLowerCase();
+  if (!normalizedCompanyId) {
+    throw new functions.https.HttpsError("invalid-argument", "companyId erforderlich");
+  }
+
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
+  const isGlobalSuperadmin = (s) => {
+    const e = s.trim().toLowerCase();
+    return e === "admin@rettbase.de" || e === "admin@rettbase" || (e.startsWith("admin@") && e.includes("rettbase"));
+  };
+
+  if (isGlobalSuperadmin(input)) {
+    return { email: "admin@rettbase.de", mitarbeiterDocPath: null, effectiveCompanyId: normalizedCompanyId };
+  }
+  if (normalizedCompanyId === "admin" && input.trim() === "112") {
+    return { email: "112@admin." + ROOT_DOMAIN, mitarbeiterDocPath: null, effectiveCompanyId: "admin" };
+  }
+
+  const companyId = (await _resolveToDocId(normalizedCompanyId)) || normalizedCompanyId;
+  const mitarbeiterRef = db.collection("kunden").doc(companyId).collection("mitarbeiter");
+
+  let snapshot;
+  if (isEmail) {
+    snapshot = await mitarbeiterRef.where("email", "==", input.trim()).limit(1).get();
+  } else {
+    snapshot = await mitarbeiterRef.where("personalnummer", "==", input).limit(1).get();
+    if (snapshot.empty && /^\d+$/.test(input)) {
+      snapshot = await mitarbeiterRef.where("personalnummer", "==", parseInt(input, 10)).limit(1).get();
+    }
+  }
+
+  if (snapshot.empty) {
+    const msg = isEmail ? `Benutzer mit E-Mail-Adresse "${input}" nicht in der Mitarbeiterverwaltung gefunden.` : `Benutzer mit Personalnummer "${input}" nicht gefunden.`;
+    throw new functions.https.HttpsError("not-found", msg);
+  }
+  const doc = snapshot.docs[0];
+  const mData = doc.data();
+  if (mData.active === false || mData.status === false) {
+    throw new functions.https.HttpsError("failed-precondition", "Benutzer ist deaktiviert.");
+  }
+  const docPseudo = (mData.pseudoEmail || "").toString().trim();
+  const realEmail = (mData.email || "").toString().trim();
+  const isPseudo = realEmail && realEmail.endsWith("." + ROOT_DOMAIN);
+  let email;
+  if (realEmail && !isPseudo) {
+    email = realEmail;
+  } else if (docPseudo) {
+    email = docPseudo;
+  } else {
+    email = input + "@" + companyId + "." + ROOT_DOMAIN;
+  }
+  const path = "kunden/" + companyId + "/mitarbeiter/" + doc.id;
+  return { email, mitarbeiterDocPath: path, effectiveCompanyId: companyId };
+});
+
 /** Prüft ob eine Kunden-ID existiert (ohne Auth, für Eingabe beim Start).
  *  Sucht kundenId + subdomain zusammen (keg hat subdomain kkg, evtl. kein kundenId),
  *  bevorzugt Doc mit anderer ID (Umbenennung), dann per Document-ID.
- *  Rate-Limit: max 15 Aufrufe/Minute pro Client (Schutz vor Enumerations-Angriffen). */
+ *  Rate-Limit: max 5 Aufrufe/Minute pro Client (Schutz vor Enumerations-Angriffen). */
 exports.kundeExists = functions.region("europe-west1").https.onCall(async (data, context) => {
   _checkKundeExistsRateLimit(context);
   const companyId = data?.companyId;
@@ -226,6 +305,30 @@ exports.kundeExists = functions.region("europe-west1").https.onCall(async (data,
   }
 });
 
+async function _resolveToDocId(companyId) {
+  if (!companyId || typeof companyId !== "string") return null;
+  const id = String(companyId).trim().toLowerCase();
+  if (!id) return null;
+  try {
+    const seen = new Set();
+    const allDocs = [];
+    const byKundenId = await db.collection("kunden").where("kundenId", "==", id).limit(5).get();
+    byKundenId.docs.forEach((d) => {
+      if (!seen.has(d.id)) { seen.add(d.id); allDocs.push(d); }
+    });
+    const bySubdomain = await db.collection("kunden").where("subdomain", "==", id).limit(5).get();
+    bySubdomain.docs.forEach((d) => {
+      if (!seen.has(d.id)) { seen.add(d.id); allDocs.push(d); }
+    });
+    if (allDocs.length > 0) return _pickBestDocId(allDocs, id);
+    const doc = await db.collection("kunden").doc(id).get();
+    return doc.exists ? doc.id : null;
+  } catch (e) {
+    console.warn("_resolveToDocId Fehler:", e.message);
+    return null;
+  }
+}
+
 function _pickBestDocId(docs, searchId) {
   if (!docs || docs.length === 0) return null;
   const withDifferentId = docs.filter((d) => d.id !== searchId);
@@ -235,16 +338,28 @@ function _pickBestDocId(docs, searchId) {
   return docs[0].id;
 }
 
-/** Lädt alle Kunden (Firmen) – umgeht Firestore-Regeln für Web-App.
- *  Projekt: rett-fe0fa, Collection: kunden. */
+/** Prüft ob der Aufrufer Superadmin ist (für loadKunden, Kundenverwaltung). */
+async function _requireSuperadminRole(context) {
+  if (!context?.auth?.uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
+  }
+  const uid = context.auth.uid;
+  const email = (context.auth.token?.email || "").toString().toLowerCase();
+  if (email === "admin@rettbase.de" || (email.startsWith("admin@") && email.includes("rettbase"))) return;
+  if (email === "112@admin." + ROOT_DOMAIN || (email.startsWith("112@admin") && email.includes(ROOT_DOMAIN))) return;
+  const adminUser = await db.collection("kunden").doc("admin").collection("users").doc(uid).get();
+  if (adminUser.exists && (adminUser.data()?.role || "").toString().toLowerCase() === "superadmin") return;
+  const mitSnap = await db.collection("kunden").doc("admin").collection("mitarbeiter").where("uid", "==", uid).limit(1).get();
+  if (!mitSnap.empty && (mitSnap.docs[0].data()?.role || "").toString().toLowerCase() === "superadmin") return;
+  throw new functions.https.HttpsError("permission-denied", "Nur Superadmin kann die Kundenverwaltung nutzen.");
+}
+
+/** Lädt alle Kunden (Firmen) – nur für Superadmin. Projekt: rett-fe0fa, Collection: kunden. */
 exports.loadKunden = functions.region("europe-west1").https.onCall(async (data, context) => {
   const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "(unknown)";
   console.log("loadKunden: Projekt=", projectId, "Collection=kunden");
   try {
-    if (!context?.auth) {
-      console.warn("loadKunden: Nicht authentifiziert (uid fehlt)");
-      throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
-    }
+    await _requireSuperadminRole(context);
     const snap = await db.collection("kunden").get();
     const list = snap.docs.map((d) => toPlainObject({ id: d.id, ...d.data() }));
     list.sort((a, b) => (a.name || "").toLowerCase().localeCompare((b.name || "").toLowerCase()));
@@ -305,40 +420,79 @@ exports.saveMitarbeiterDoc = functions.region("europe-west1").https.onCall(async
 });
 
 /** Stellt sicher, dass users-Dokument existiert (für Firestore-Zugriffsregeln nach Login).
- *  Prüft, ob Aufrufer in mitarbeiter der Firma ist; erstellt users-Doc falls nötig. */
+ *  Prüft, ob Aufrufer in mitarbeiter der Firma ist; erstellt users-Doc falls nötig.
+ *  Löst kundenId → docId auf (z.B. kkg-luenen → keg-luenen). */
 exports.ensureUsersDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
   if (!context?.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
   }
-  const companyId = (data?.companyId || "").trim();
-  if (!companyId) {
+  const inputCompanyId = (data?.companyId || "").trim();
+  if (!inputCompanyId) {
     throw new functions.https.HttpsError("invalid-argument", "companyId erforderlich");
   }
+  const companyId = (await _resolveToDocId(inputCompanyId)) || inputCompanyId.toLowerCase();
   const uid = context.auth.uid;
   const email = (context.auth.token?.email || "").toString();
-  const isSuperadmin = email === "admin@rettbase.de" || (email.startsWith("112@admin") && email.includes("rettbase"));
-  if (isSuperadmin) {
-    const ref = db.collection("kunden").doc(companyId).collection("users").doc(uid);
-    await ref.set({ companyId, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-    return { success: true };
+  const isGlobalSuperadmin = email === "admin@rettbase.de" || (email.startsWith("admin@") && email.includes("rettbase"));
+  const is112Admin = email.startsWith("112@admin") && email.includes("rettbase");
+  let isAdminCompanySuperadmin = false;
+  if (!isGlobalSuperadmin && !is112Admin) {
+    const adminUser = await db.collection("kunden").doc("admin").collection("users").doc(uid).get();
+    if (adminUser.exists && (adminUser.data()?.role || "").toString().toLowerCase() === "superadmin") isAdminCompanySuperadmin = true;
+    if (!isAdminCompanySuperadmin) {
+      const byUidAdmin = await db.collection("kunden").doc("admin").collection("mitarbeiter").where("uid", "==", uid).limit(1).get();
+      if (!byUidAdmin.empty && (byUidAdmin.docs[0].data()?.role || "").toString().toLowerCase() === "superadmin") isAdminCompanySuperadmin = true;
+    }
   }
-  const byUid = await db.collection("kunden").doc(companyId).collection("mitarbeiter").where("uid", "==", uid).limit(1).get();
-  if (byUid.empty) {
-    const userDoc = await db.collection("kunden").doc(companyId).collection("users").doc(uid).get();
-    if (userDoc.exists) return { success: true };
-    throw new functions.https.HttpsError("permission-denied", "Nutzer ist kein Mitarbeiter dieser Firma");
-  }
-  const m = byUid.docs[0].data();
   const ref = db.collection("kunden").doc(companyId).collection("users").doc(uid);
-  await ref.set({
-    companyId,
-    email: m.email || email,
-    role: (m.role || "user").toString().toLowerCase(),
-    mitarbeiterDocId: byUid.docs[0].id,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
+  const isSuperadminUser = isGlobalSuperadmin || is112Admin || isAdminCompanySuperadmin;
+
+  if (isSuperadminUser) {
+    await ref.set({ companyId, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  } else {
+    const byUid = await db.collection("kunden").doc(companyId).collection("mitarbeiter").where("uid", "==", uid).limit(1).get();
+    if (byUid.empty) {
+      const userDoc = await db.collection("kunden").doc(companyId).collection("users").doc(uid).get();
+      if (userDoc.exists) {
+        await _setStorageClaims(uid, companyId, false);
+        return { success: true };
+      }
+      throw new functions.https.HttpsError("permission-denied", "Nutzer ist kein Mitarbeiter dieser Firma");
+    }
+    const m = byUid.docs[0].data();
+    await ref.set({
+      companyId,
+      email: m.email || email,
+      role: (m.role || "user").toString().toLowerCase(),
+      mitarbeiterDocId: byUid.docs[0].id,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
+
+  await _setStorageClaims(uid, companyId, isSuperadminUser);
   return { success: true };
 });
+
+/** Setzt Custom Claims für Storage-Regeln (companyId / superadmin). Nur bei Änderung, um Token-Invalidierung zu vermeiden. */
+async function _setStorageClaims(uid, companyId, isSuperadmin) {
+  try {
+    const user = await admin.auth().getUser(uid);
+    const existing = user.customClaims || {};
+    const needSuperadmin = !!isSuperadmin;
+    const needCompanyId = String(companyId || "");
+    if (existing.companyId === needCompanyId && !!existing.superadmin === needSuperadmin) return;
+    const next = { ...existing };
+    if (needSuperadmin) {
+      next.superadmin = true;
+    } else {
+      delete next.superadmin;
+    }
+    next.companyId = needCompanyId;
+    await admin.auth().setCustomUserClaims(uid, next);
+  } catch (e) {
+    console.warn("_setStorageClaims Fehler:", e.message);
+  }
+}
 
 /** Schreibt users-Dokument (umgeht Firestore-Regeln für Web-App). Nur Admin/Superadmin/LeiterSSD. */
 exports.saveUsersDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
@@ -532,6 +686,103 @@ exports.onNewGroupChat = functions.region("europe-west1").firestore
       console.error("onNewGroupChat Fehler:", e);
     }
   });
+
+/** Vollständige Löschung eines Mitglieds (DSGVO). Entfernt alle personenbezogenen Daten:
+ *  - Firebase Auth Nutzer
+ *  - Firestore: mitarbeiter, users, userTiles, fcmTokens
+ *  - Storage: Profil-Fotos
+ *  - Schichtplan-NFS/Schichtplan-Mitarbeiter (per E-Mail-Match)
+ *  Nur Admin/Superadmin/LeiterSSD. */
+exports.deleteMitarbeiterFull = functions.region("europe-west1").https.onCall(async (data, context) => {
+  try {
+    if (!context?.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
+    }
+    const { companyId: companyIdParam, mitarbeiterId, uid: inputUid, fromUsersOnly, email: inputEmail } = data || {};
+    const rawCompanyId = (companyIdParam || "").trim();
+    if (!rawCompanyId) {
+      throw new functions.https.HttpsError("invalid-argument", "companyId erforderlich");
+    }
+    const companyId = (await _resolveToDocId(rawCompanyId)) || rawCompanyId.toLowerCase();
+    await _requireAdminRole(context, companyId);
+
+    let uid = inputUid ? String(inputUid).trim() : null;
+    let email = inputEmail ? String(inputEmail).trim().toLowerCase() : null;
+    const usersRef = db.collection("kunden").doc(companyId).collection("users");
+    const mitarbeiterRef = db.collection("kunden").doc(companyId).collection("mitarbeiter");
+
+    if (fromUsersOnly && uid) {
+      await _deleteUserData(db, companyId, uid, email);
+      await usersRef.doc(uid).delete();
+      return { success: true };
+    }
+
+    const mid = (mitarbeiterId || "").trim();
+    if (!mid) {
+      throw new functions.https.HttpsError("invalid-argument", "mitarbeiterId erforderlich");
+    }
+    let mitarbeiterSnap = await mitarbeiterRef.doc(mid).get();
+    let byUid = null;
+    if (!mitarbeiterSnap.exists) {
+      byUid = await mitarbeiterRef.where("uid", "==", mid).limit(1).get();
+      if (byUid.empty) {
+        throw new functions.https.HttpsError("not-found", "Mitglied nicht gefunden.");
+      }
+    }
+    const mData = mitarbeiterSnap.exists ? mitarbeiterSnap.data() : byUid.docs[0].data();
+    const actualMid = mitarbeiterSnap.exists ? mid : byUid.docs[0].id;
+    uid = uid || mData?.uid?.toString() || null;
+    email = email || mData?.email?.toString()?.trim().toLowerCase() || mData?.pseudoEmail?.toString()?.trim().toLowerCase() || null;
+
+    if (uid) {
+      await _deleteUserData(db, companyId, uid, email);
+      await usersRef.doc(uid).delete();
+    }
+    await mitarbeiterRef.doc(actualMid).delete();
+    const pseudoEmail = mData?.pseudoEmail?.toString()?.trim().toLowerCase();
+    const emailsToMatch = [email, pseudoEmail].filter(Boolean);
+    const seenPaths = new Set();
+    const toDelete = [];
+    for (const em of [...new Set(emailsToMatch)]) {
+      const nfsSnap = await db.collection("kunden").doc(companyId).collection("schichtplanNfsMitarbeiter").where("email", "==", em).get();
+      nfsSnap.docs.forEach((d) => { if (!seenPaths.has(d.ref.path)) { seenPaths.add(d.ref.path); toDelete.push(d.ref); } });
+      const schichtSnap = await db.collection("kunden").doc(companyId).collection("schichtplanMitarbeiter").where("email", "==", em).get();
+      schichtSnap.docs.forEach((d) => { if (!seenPaths.has(d.ref.path)) { seenPaths.add(d.ref.path); toDelete.push(d.ref); } });
+    }
+    const byIdRef = db.collection("kunden").doc(companyId).collection("schichtplanMitarbeiter").doc(actualMid);
+    const byId = await byIdRef.get();
+    if (byId.exists && !seenPaths.has(byIdRef.path)) toDelete.push(byIdRef);
+    if (toDelete.length > 0) {
+      const batch = db.batch();
+      toDelete.forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
+    return { success: true };
+  } catch (e) {
+    if (e instanceof functions.https.HttpsError) throw e;
+    console.error("deleteMitarbeiterFull Fehler:", e.message || e);
+    throw new functions.https.HttpsError("internal", e.message || String(e));
+  }
+});
+
+async function _deleteUserData(db, companyId, uid, _email) {
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (e) {
+    if (e.code !== "auth/user-not-found") console.warn("deleteMitarbeiterFull auth.deleteUser:", e.message);
+  }
+  await db.collection("fcmTokens").doc(uid).delete().catch(() => {});
+  const userTilesRef = db.collection("kunden").doc(companyId).collection("users").doc(uid).collection("userTiles");
+  const tilesSnap = await userTilesRef.get();
+  if (!tilesSnap.empty) {
+    const batch = db.batch();
+    tilesSnap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+  const bucket = admin.storage().bucket("rett-fe0fa.firebasestorage.app");
+  const [files] = await bucket.getFiles({ prefix: `kunden/${companyId}/profile-images/${uid}` }).catch(() => [[],[],null]);
+  await Promise.all((files || []).map((f) => f.delete().catch(() => {})));
+}
 
 /** Erstellt neues Mitarbeiter-Dokument (für Neuanlage). Nur Admin/Superadmin/LeiterSSD. */
 exports.createMitarbeiterDoc = functions.region("europe-west1").https.onCall(async (data, context) => {

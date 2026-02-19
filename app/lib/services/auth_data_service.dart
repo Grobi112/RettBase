@@ -14,7 +14,8 @@ class AuthDataService {
         (e.startsWith('admin@') && e.contains('rettbase'));
   }
 
-  /// Personalnummer 112 = Superadmin NUR bei Kunde Admin
+  /// Personalnummer 112 = Superadmin bei Kunde Admin (Login nur mit companyId=admin).
+  /// Admin-Superadmins (users/mitarbeiter in admin mit role superadmin) haben uneingeschränkten Zugriff auf jede Company.
   static bool _isAdminOnlySuperadmin(String companyId, String email) {
     if (companyId.trim().toLowerCase() != 'admin') return false;
     final e = email.trim().toLowerCase();
@@ -227,6 +228,30 @@ class AuthDataService {
           }
         } catch (_) {}
       }
+    }
+
+    // Admin-Superadmins (users oder mitarbeiter in admin mit role superadmin): uneingeschränkter Zugriff auf jede Company
+    if (cid != 'admin') {
+      try {
+        final adminUser = await _db.doc('kunden/admin/users/$uid').get();
+        if (adminUser.exists) {
+          final role = (adminUser.data()?['role'] ?? '').toString().toLowerCase();
+          if (role == 'superadmin') {
+            final d = adminUser.data() ?? {};
+            final dn = _formatName(d['vorname'], d['nachname']) ?? d['displayName']?.toString() ?? _nameFromEmail(email);
+            return AuthData(role: 'superadmin', companyId: cid, uid: uid, displayName: dn, vorname: (d['vorname'] ?? '').toString().trim().isNotEmpty ? (d['vorname'] ?? '').toString().trim() : null);
+          }
+        }
+        final byUid = await _db.collection('kunden/admin/mitarbeiter').where('uid', isEqualTo: uid).limit(1).get();
+        if (byUid.docs.isNotEmpty) {
+          final m = byUid.docs.first.data();
+          final role = (m['role'] ?? '').toString().toLowerCase();
+          if (role == 'superadmin') {
+            final dn = _formatName(m['vorname'], m['nachname']) ?? _nameFromEmail(email);
+            return AuthData(role: 'superadmin', companyId: cid, uid: uid, displayName: dn ?? 'Superadmin', vorname: (m['vorname'] ?? '').toString().trim().isNotEmpty ? (m['vorname'] ?? '').toString().trim() : null);
+          }
+        }
+      } catch (_) {}
     }
 
     final nameFromEmail = _nameFromEmail(email);

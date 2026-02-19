@@ -1,7 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../app_config.dart';
@@ -10,6 +11,7 @@ import 'company_id_screen.dart';
 import 'login_screen.dart';
 
 /// Zeigt die RettBase-Webseite in einer WebView (Android/iOS).
+/// Nutzt Custom-Token statt Passwort (kein Klartext-Passwort in HTML).
 /// Auf der Web-Plattform wird die URL im Browser geöffnet (WebView wird dort nicht unterstützt).
 class WebViewScreen extends StatefulWidget {
   final String companyId;
@@ -39,42 +41,37 @@ class _WebViewScreenState extends State<WebViewScreen> {
     else _isLoading = false;
   }
 
-  String _buildAuthBridgeHtml(String email, String password, String companyId) {
-    final escapedEmail = jsonEncode(email);
-    final escapedPassword = jsonEncode(password);
-    final redirectUrl = 'https://$companyId.${AppConfig.rootDomain}/dashboard.html';
-    return '''
-<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;background:#f5f5f5">
-<div id="msg" style="text-align:center;padding:24px">Melde an…</div>
-<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/11.0.1/firebase-auth-compat.js"></script>
-<script>
-var config = {
-  apiKey: "AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA",
-  authDomain: "rett-fe0fa.firebaseapp.com",
-  projectId: "rett-fe0fa",
-  storageBucket: "rett-fe0fa.firebasestorage.app",
-  messagingSenderId: "740721219821",
-  appId: "1:740721219821:web:a8e7f8070f875866ccd4e4"
-};
-firebase.initializeApp(config);
-var auth = firebase.auth();
-auth.signInWithEmailAndPassword($escapedEmail, $escapedPassword)
-  .then(function() {
-    window.location.replace("$redirectUrl");
-  })
-  .catch(function(err) {
-    document.getElementById("msg").innerHTML = "<p style='color:red'>Fehler: " + (err.message || err.code) + "</p>";
-  });
-</script>
-</body>
-</html>''';
+  /// Holt Custom-Token über exchangeToken; bei Credentials zuerst Anmeldung in Flutter.
+  Future<String?> _getAuthCallbackUrl() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null &&
+          widget.loginEmail != null &&
+          widget.loginPassword != null &&
+          widget.loginEmail!.isNotEmpty &&
+          widget.loginPassword!.isNotEmpty) {
+        final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          widget.loginEmail!,
+          widget.loginPassword!,
+        );
+        user = cred.user;
+      }
+      if (user == null) return null;
+      final idToken = await user.getIdToken(true);
+      if (idToken == null || idToken.isEmpty) return null;
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('exchangeToken');
+      final result = await callable.call<Map<String, dynamic>>({'idToken': idToken});
+      final customToken = result.data['customToken'] as String?;
+      if (customToken == null || customToken.isEmpty) return null;
+      final base = 'https://${widget.companyId}.${AppConfig.rootDomain}';
+      final redirect = '/dashboard.html';
+      return '$base/auth-callback.html?token=${Uri.encodeComponent(customToken)}&redirect=${Uri.encodeComponent(redirect)}';
+    } catch (_) {
+      return null;
+    }
   }
 
-  void _initWebView() {
+  Future<void> _initWebView() async {
     final ctrl = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
@@ -115,22 +112,27 @@ auth.signInWithEmailAndPassword($escapedEmail, $escapedPassword)
         ),
       );
 
-    if (widget.loginEmail != null &&
+    final needsAuth = widget.loginEmail != null &&
         widget.loginPassword != null &&
         widget.loginEmail!.isNotEmpty &&
-        widget.loginPassword!.isNotEmpty) {
-      final html = _buildAuthBridgeHtml(
-        widget.loginEmail!,
-        widget.loginPassword!,
-        widget.companyId,
-      );
-      final baseUrl = 'https://${widget.companyId}.${AppConfig.rootDomain}/';
-      ctrl.loadHtmlString(html, baseUrl: baseUrl);
+        widget.loginPassword!.isNotEmpty ||
+        FirebaseAuth.instance.currentUser != null;
+    String url;
+    if (needsAuth) {
+      final authUrl = await _getAuthCallbackUrl();
+      if (authUrl == null && mounted) {
+        setState(() {
+          _controller = ctrl;
+          _errorMessage = 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.';
+        });
+        return;
+      }
+      url = authUrl ?? AppConfig.getBaseUrl(widget.companyId);
     } else {
-      final url = AppConfig.getBaseUrl(widget.companyId);
-      ctrl.loadRequest(Uri.parse(url));
+      url = AppConfig.getBaseUrl(widget.companyId);
     }
-    setState(() => _controller = ctrl);
+    ctrl.loadRequest(Uri.parse(url));
+    if (mounted) setState(() => _controller = ctrl);
   }
 
   @override

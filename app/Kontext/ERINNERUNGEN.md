@@ -52,10 +52,12 @@
 ### getCompanyBereich
 - Fallback per `kundenId`/`subdomain` auch wenn Doc existiert aber `bereich` fehlt
 
-### Einzige Login-Logik (Web + Native identisch)
-- **Superadmin:** `112@admin.rettbase.de` – Nutzer existiert in rett-fe0fa
-- **Andere Kunden:** E-Mail oder Personalnummer → Suche in `kunden/{companyId}/mitarbeiter`, Anmeldung mit echter E-Mail oder Pseudo-E-Mail `{personalnummer}@{companyId}.rettbase.de`
-- Bei Login-Fehler auf Web: Authorized Domains / API-Key prüfen, nicht „Nutzer anlegen“
+### Login-Regeln (Web + Native identisch)
+- **Regel:** Nur Mitglieder in der Mitgliederverwaltung (`kunden/{companyId}/mitarbeiter`) können sich einloggen.
+- **Ausnahme 1:** `admin@rettbase.de` – Globaler Superadmin, Login ohne Mitarbeitereintrag, Zugriff überall.
+- **Ausnahme 2:** Company „admin“ + Personalnummer 112 → Superadmin (`112@admin.rettbase.de`). Nur bei Company „admin“.
+- **Admin-Superadmins** (users oder mitarbeiter in admin mit role superadmin) haben uneingeschränkten Zugriff auf jede Company, auch ohne dort in Mitgliederverwaltung zu stehen.
+- Andere Kunden: E-Mail oder PN → Suche in mitarbeiter, Anmeldung mit echter E-Mail oder Pseudo-E-Mail
 
 ### Kritische Patterns
 - **Shortcuts:** `List<AppModule?>.from(filtered)` verwenden, **NICHT** `.cast<AppModule?>()` – sonst schlägt `add(null)` fehl
@@ -166,7 +168,7 @@
 | Dashboard | `dashboard_screen.dart`, `home_screen.dart` |
 | Module | `modules_service.dart`, `menueverwaltung_service.dart`, `kundenverwaltung_service.dart` |
 | Chat | `chat_screen.dart`, `chat_service.dart`, `models/chat.dart` |
-| Cloud Functions | `functions/index.js` (kundeExists, ensureUsersDoc, createAuthUser, updateMitarbeiterPassword, saveMitarbeiterDoc, saveUsersDoc, createMitarbeiterDoc) |
+| Cloud Functions | `functions/index.js` (kundeExists, **resolveLoginInfo**, ensureUsersDoc, createAuthUser, updateMitarbeiterPassword, saveMitarbeiterDoc, saveUsersDoc, createMitarbeiterDoc, deleteMitarbeiterFull, loadKunden) |
 
 ---
 
@@ -308,9 +310,11 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 - **Update-Link im Dashboard** – entfernt
 - **Einstellungen App-Update-Karte** – entfernt
 
-### Web-App
-- **Update-Banner** „Neue Version verfügbar – Jetzt neu laden“ – aktiv, nutzt `version.json`, Cache-Bypass-Reload
+### Web-App (Stand Feb 2026)
+- **Kein Update-Banner mehr** – bei neuer Version (version.json) wird die Seite **automatisch** neu geladen
+- **version.json-Check:** periodisch + bei Tab-Fokus; bei Abweichung → sofortiger Reload (Cache-Bypass)
 - **Versionierung:** `version.json` + `inject_version.js` – vor Web-Build manuell oder via `./fw` / `./scripts/build_web.sh`
+- **Cache-Leerung beim Aufruf:** firebase.json headers + index.html Meta-Tags für index.html, JS, manifest, version.json
 
 ---
 
@@ -327,7 +331,7 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 - Nutzt `resolveLoginInfo` zur Prüfung (inkl. Pseudo-E-Mail bei PN-Login)
 
 ### kundeExists Rate-Limit
-- Max. 15 Aufrufe/Minute pro Client-IP (Schutz vor Enumerations-Angriffen)
+- Max. 5 Aufrufe/Minute pro Client-IP (Schutz vor Enumerations-Angriffen)
 - Bei Überschreitung: `resource-exhausted` → „Zu viele Anfragen“
 - CompanyIdScreen zeigt spezifische Meldung für `resource-exhausted`
 
@@ -335,6 +339,14 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 - `_requireAdminRole(context, companyId)`: Prüft Admin/Superadmin/LeiterSSD
 - **createAuthUser, updateMitarbeiterPassword:** benötigen `companyId` im Request; nur Admin/Superadmin/LeiterSSD
 - **saveUsersDoc, saveMitarbeiterDoc, createMitarbeiterDoc:** ebenfalls Rollenprüfung
+- **deleteMitarbeiterFull:** DSGVO-vollständige Löschung – siehe unten
+
+### DSGVO-vollständige Mitgliedslöschung (deleteMitarbeiterFull)
+- **Mitgliederverwaltung → Löschen** ruft `deleteMitarbeiterFull` auf (Cloud Function)
+- **Cloud Function** entfernt alle **Kerndaten**: Auth, mitarbeiter, users, userTiles, fcmTokens, Profil-Fotos, Schichtplan-Einträge
+- **Erstellte Dokumente** (Einsatzprotokolle, Chats, Meldungen) behalten `createdBy`/Name – für Historie/Nachvollziehbarkeit gewollt
+- **Storage-Bucket:** `admin.initializeApp` mit `storageBucket`; `bucket("rett-fe0fa.firebasestorage.app")` explizit – sonst Fehler beim Löschen
+- Nur Admin/Superadmin/LeiterSSD
 
 ### Firestore-Regeln kundenspezifisch
 - `canAccessCompany(kundenId)`: Zugriff nur wenn `kunden/{kundenId}/users/{uid}` existiert ODER Superadmin
@@ -349,7 +361,29 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 - Verifiziert Nutzer in mitarbeiter; Superadmin: sofort erstellen
 - Ohne users-Doc: Firestore-Regeln würden Zugriff verweigern
 
-### Offen (Stand: Feb 2026)
-- **Punkt 1:** Mitarbeiter `allow read: if true` – öffentlich lesbar für Login-Suche; ggf. Cloud Function für Lookup statt direkter Firestore-Lesezugriff
-- **Punkt 4:** loadKunden ohne Admin-Rollenprüfung
+### Sicherheit (Feb 2026)
+- **Erledigt:** Firestore Fallback entfernt; mitarbeiter über Cloud Function resolveLoginInfo; Storage Profil nur für eigene UID; loadKunden nur Superadmin
+- **Erledigt (Punkt 1–3):** Collection-Group-Regeln entfernt (waren zu permissiv); Storage: Company-Prüfung per Custom Claims (companyId, superadmin) – ensureUsersDoc setzt diese; Settings: Schreibzugriff nur noch für isSuperadmin(); Lesezugriff weiterhin für alle eingeloggten Nutzer. Token-Refresh nach ensureUsersDoc (getIdToken(true)) für gültige Claims bei Storage-Zugriff.
+- **Erledigt (Punkt 4–5):** App Check **nicht verwendet** – Rate-Limit (5/min) reicht. API-Keys: docs/SICHERHEIT_API_KEYS_APP_CHECK.md, docs/SICHERHEIT_SETUP_RUNBOOK.md
+- **Sicherheitsaudit:** docs/SICHERHEITSAUDIT.md; Storage-Regeln: `dokumente`, `uebergriffsmeldung-attachments` ergänzt
+
+---
+
+## 21. Einstellungen – bereichsspezifisch (Feb 2026)
+
+### Schulsanitätsdienst
+- **Schicht- und Standortverwaltung** in Einstellungen ausgeblendet (bereich == schulsanitaetsdienst)
+- Dashboard übergibt `_bereich` an EinstellungenScreen
+
+### Chat-Benachrichtigungen – entfernt
+- **Komplett entfernt:** Einstellungen-Karte, Dashboard-Drawer-Eintrag, Chat-Push-Banner
+- Kein UI mehr zum Aktivieren/Prüfen von Push-Benachrichtigungen
+
+---
+
+## 22. Firebase-Passwort-Reset-E-Mail
+
+- **Firebase Console** → Authentication → Templates → Passwort zurücksetzen
+- **Deutsche Vorlage** mit Link „Passwort jetzt zurücksetzen“ (Bold, zentriert, 14px)
+- Platzhalter: %APP_NAME%, %EMAIL%, %LINK%
 

@@ -122,6 +122,8 @@ class _LoginScreenState extends State<LoginScreen> {
           .httpsCallable('ensureUsersDoc')
           .call({'companyId': dashboardCompanyId});
       if (!mounted) return;
+      await FirebaseAuth.instance.currentUser?.getIdToken(true);
+      if (!mounted) return;
       unawaited(PushNotificationService().saveToken(dashboardCompanyId!, FirebaseAuth.instance.currentUser!.uid));
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -159,6 +161,8 @@ class _LoginScreenState extends State<LoginScreen> {
           await FirebaseFunctions.instanceFor(region: 'europe-west1')
               .httpsCallable('ensureUsersDoc')
               .call({'companyId': companyId});
+          if (!mounted) return;
+          await userCredential.user?.getIdToken(true);
           if (!mounted) return;
           unawaited(PushNotificationService().saveToken(companyId, userCredential.user!.uid));
           if (!mounted) return;

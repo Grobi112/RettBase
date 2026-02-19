@@ -157,6 +157,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
           vertraege: _vertraege,
           fuehrerscheinklassen: _fuehrerscheinklassen,
           existingPersonalnummern: _allMitarbeiter
+              .where((e) => e.active)
               .map((e) => e.personalnummer)
               .whereType<String>()
               .where((s) => s.isNotEmpty)
@@ -188,7 +189,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
           vertraege: _vertraege,
           fuehrerscheinklassen: _fuehrerscheinklassen,
           existingPersonalnummern: _allMitarbeiter
-              .where((e) => e.id != m.id)
+              .where((e) => e.id != m.id && e.active)
               .map((e) => e.personalnummer)
               .whereType<String>()
               .where((s) => s.isNotEmpty)
@@ -235,16 +236,21 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
     );
     if (ok == true) {
       try {
-        if (m.fromUsersOnly && m.uid != null) {
-          await _service.deleteUsersDoc(widget.companyId, m.uid!);
+        final data = <String, dynamic>{'companyId': widget.companyId};
+        if (m.fromUsersOnly) {
+          data['fromUsersOnly'] = true;
+          if (m.uid != null) data['uid'] = m.uid;
         } else {
-          await _service.deleteMitarbeiter(widget.companyId, m.id);
-          if (m.uid != null) {
-            await _service.deleteUsersDoc(widget.companyId, m.uid!);
-          }
+          data['mitarbeiterId'] = m.id;
+          if (m.uid != null) data['uid'] = m.uid;
         }
+        final loginEmail = m.email != null && m.email!.isNotEmpty && !m.email!.endsWith('.${AppConfig.rootDomain}')
+            ? m.email
+            : (m.pseudoEmail ?? '');
+        if (loginEmail != null && loginEmail.isNotEmpty) data['email'] = loginEmail;
+        await _functions.httpsCallable('deleteMitarbeiterFull').call(data);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mitarbeiter gelöscht.')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Mitglied vollständig gelöscht (DSGVO).')));
           _load();
         }
       } catch (e) {
@@ -258,23 +264,34 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
   }
 
   Future<void> _resetPassword(Mitarbeiter m) async {
-    final email = m.email;
-    if (email == null || email.isEmpty || email.endsWith('.${AppConfig.rootDomain}')) {
+    final hasUid = m.uid != null && m.uid!.isNotEmpty;
+    final loginEmail = (m.email != null && m.email!.isNotEmpty && !m.email!.endsWith('.${AppConfig.rootDomain}'))
+        ? m.email
+        : (m.pseudoEmail ?? (m.personalnummer != null && m.personalnummer!.isNotEmpty
+            ? '${m.personalnummer}@${widget.companyId}.${AppConfig.rootDomain}'
+            : null));
+    if (!hasUid && (loginEmail == null || loginEmail.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwort zurücksetzen nur bei echter E-Mail möglich.')),
+        const SnackBar(
+          content: Text('Passwort setzen erst möglich, wenn der Mitarbeiter sich mindestens einmal angemeldet hat.'),
+        ),
       );
       return;
     }
+    final displayLabel = m.displayName;
+    final identifier = loginEmail ?? (m.personalnummer != null ? 'PN ${m.personalnummer}' : '');
     final passCtrl = TextEditingController();
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Passwort zurücksetzen'),
+        title: const Text('Passwort setzen'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Neues Passwort für ${m.displayName} ($email):'),
+            Text(identifier.isNotEmpty
+                ? 'Neues Passwort für $displayLabel ($identifier):'
+                : 'Neues Passwort für $displayLabel:'),
             const SizedBox(height: 12),
             TextField(
               controller: passCtrl,
@@ -302,7 +319,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
         await _functions.httpsCallable('updateMitarbeiterPassword').call({
           'companyId': widget.companyId,
           'uid': m.uid,
-          'email': email,
+          'email': loginEmail,
           'newPassword': passCtrl.text,
         });
         if (mounted) {
@@ -493,11 +510,13 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
                           onPressed: () => _toggleActive(m),
                           tooltip: m.active ? 'Deaktivieren' : 'Aktivieren',
                         ),
-                        if (m.email != null && !m.email!.endsWith('.${AppConfig.rootDomain}'))
+                        if ((m.uid != null && m.uid!.isNotEmpty) ||
+                            (m.pseudoEmail != null && m.pseudoEmail!.isNotEmpty) ||
+                            (m.email != null && m.email!.isNotEmpty && !m.email!.endsWith('.${AppConfig.rootDomain}')))
                           IconButton(
                             icon: const Icon(Icons.lock_reset),
                             onPressed: () => _resetPassword(m),
-                            tooltip: 'Passwort zurücksetzen',
+                            tooltip: 'Passwort setzen',
                           ),
                         IconButton(
                           icon: const Icon(Icons.edit),
@@ -775,6 +794,16 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
           });
         }
         if (mounted) Navigator.of(context).pop(mitarbeiter);
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        final msg = e.code == 'already-exists'
+            ? (e.message ?? 'E-Mail bereits registriert. Nutzen Sie „Passwort setzen“ bei bestehendem Mitglied.')
+            : 'Fehler: ${e.message ?? e.code}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: Colors.red),
+        );
       }
     } catch (e) {
       if (mounted) {

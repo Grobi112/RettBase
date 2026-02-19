@@ -10,7 +10,7 @@ String _getClientVersion() {
   return (meta?.getAttribute('content') ?? '').trim();
 }
 
-/// Web: Prüft periodisch version.json, zeigt bei neuer Version Reload-Hinweis.
+/// Web: Prüft periodisch version.json; bei neuer Version wird die Seite automatisch neu geladen.
 /// Vergleicht die in index.html eingebettete Version mit der Server-Version.
 void initWebVersionCheck(void Function() onUpdateAvailable) {
   // Lokale Entwicklung (localhost): CORS verhindert Abruf von app.rettbase.de – überspringen
