@@ -15,6 +15,7 @@ import '../utils/visibility_refresh_stub.dart'
 class ChatScreen extends StatefulWidget {
   final String companyId;
   final String? initialChatId;
+  final String? title;
   final VoidCallback? onBack;
   final bool hideAppBar;
 
@@ -22,6 +23,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.companyId,
     this.initialChatId,
+    this.title,
     this.onBack,
     this.hideAppBar = false,
   });
@@ -266,7 +268,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     }
     return AppTheme.buildModuleAppBar(
-      title: 'Chat',
+      title: widget.title ?? 'Chat',
       onBack: onBack,
       actions: [
         IconButton(icon: const Icon(Icons.add_comment_outlined), tooltip: 'Neuer Chat', onPressed: _openNewChat),

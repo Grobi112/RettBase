@@ -8,10 +8,12 @@ import 'wachbuch_uebersicht_screen.dart';
 /// Wachbuch – analog Einsatztagebuch-OVD
 class WachbuchScreen extends StatefulWidget {
   final String companyId;
+  final String? title;
   final VoidCallback onBack;
 
   const WachbuchScreen({
     required this.companyId,
+    this.title,
     required this.onBack,
   });
 
@@ -119,7 +121,7 @@ class _WachbuchScreenState extends State<WachbuchScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Wachbuch',
+        title: widget.title ?? 'Wachbuch',
         onBack: widget.onBack,
         actions: [
           PopupMenuButton<String>(

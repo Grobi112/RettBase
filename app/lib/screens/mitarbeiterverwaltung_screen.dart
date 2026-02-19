@@ -15,6 +15,7 @@ class MitarbeiterverwaltungScreen extends StatefulWidget {
   final String? userRole;
   final VoidCallback? onBack;
   final bool hideAppBar;
+  final String? title;
 
   const MitarbeiterverwaltungScreen({
     super.key,
@@ -22,6 +23,7 @@ class MitarbeiterverwaltungScreen extends StatefulWidget {
     this.userRole,
     this.onBack,
     this.hideAppBar = false,
+    this.title,
   });
 
   @override
@@ -340,7 +342,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Mitgliederverwaltung',
+        title: widget.title ?? 'Mitgliederverwaltung',
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         actions: [
           if (widget.userRole != null && ['superadmin', 'admin', 'leiterssd'].contains(widget.userRole!))

@@ -77,6 +77,7 @@
 |-------|---------|-----------------|
 | **SSD (Einsatzprotokoll)** | `schulsanitaetsdienst` | – |
 | **Schichtplan NFS** | `notfallseelsorge` | `schichtplanNfsStandorte`, `schichtplanNfsBereitschaftsTypen`, `schichtplanNfsMitarbeiter`, `schichtplanNfsBereitschaften/{dayId}/bereitschaften` |
+| **TelefonlisteNFS** | `notfallseelsorge` | Daten aus Mitgliederverwaltung (`kunden/{companyId}/mitarbeiter`). Rechte: Admin/Koordinator/Superadmin bearbeiten, User nur lesen + Nummer antippen zum Anrufen. User pflegen ihre Daten über das Profil. |
 
 - **Neue bereichs-spezifische Module:** Gleiches Muster in `getModulesForCompany` (Bereichs-Check + Auto-Enabled)
 
@@ -121,6 +122,11 @@
 - **loadMenuStructure(bereich)** aus `settings/menus/items/{bereich}`
 - **Fallback:** `loadLegacyGlobalMenu()` wenn bereichs-Menü leer
 - DisplayName-Fallback aus E-Mail-Prefix
+
+### Benutzerdefinierte Menü-Titel (Feb 2026)
+- **Menü-Titel:** In der Menüverwaltung kann pro Modul ein eigener Titel gesetzt werden (z.B. „Telefonliste“ statt „TelefonlisteNFS“)
+- **Anzeige:** Dieser Titel wird überall verwendet: Hamburger-Menü, Schnellstart, Schnellstart-Dropdown, **AppBar-Titel** der Modul-Screens
+- **Technik:** `MenueverwaltungService.extractModuleLabelsFromMenu()` extrahiert Modul-ID → Label; `_moduleFromMenuItem()` nutzt `item['label']`; alle Modul-Screens haben optionalen Parameter `title`, Dashboard übergibt `mod.label`
 
 ---
 

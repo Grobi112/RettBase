@@ -1,59 +1,46 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
 import '../models/mitarbeiter_model.dart';
 import '../services/mitarbeiter_service.dart';
 
-/// Telefonliste – gleiche Datenbank (kunden/{companyId}/mitarbeiter), gleiche Funktion und Rollen wie Web
-/// Bearbeiten (voll): Admin, Rettungsdienstleitung, Geschäftsführung, Wachleitung
-/// OVD: nur Telefonnummer bearbeiten
-/// Eingeloggter User: voller Zugriff auf eigenes Profil
-class TelefonlisteScreen extends StatefulWidget {
+/// Telefonliste NFS – nur für Notfallseelsorge.
+/// Daten wie bei der regulären Telefonliste aus der Mitgliederverwaltung (kunden/{companyId}/mitarbeiter).
+/// Felder: Nachname, Vorname, Wohnort, Telefonnummer.
+/// Admin, Koordinator, Superadmin: bearbeiten.
+/// User: nur lesen, Telefonnummer anklicken zum Anrufen. Daten werden über das Profil aktualisiert.
+class TelefonlisteNfsScreen extends StatefulWidget {
   final String companyId;
   final String userRole;
-  final String? currentUserUid;
   /// Menü-Titel; falls gesetzt, wird dieser in der AppBar angezeigt.
   final String? title;
   final VoidCallback onBack;
 
-  const TelefonlisteScreen({
+  const TelefonlisteNfsScreen({
     super.key,
     required this.companyId,
     required this.userRole,
-    this.currentUserUid,
     this.title,
     required this.onBack,
   });
 
   @override
-  State<TelefonlisteScreen> createState() => _TelefonlisteScreenState();
+  State<TelefonlisteNfsScreen> createState() => _TelefonlisteNfsScreenState();
 }
 
-class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
+class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
   final _service = MitarbeiterService();
   final _functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
   final _searchController = TextEditingController();
 
-  static const _editAllRoles = ['superadmin', 'admin', 'rettungsdienstleitung', 'leiterssd', 'geschaeftsfuehrung', 'wachleitung', 'koordinator'];
-  static const _editPhoneOnlyRoles = ['ovd'];
-  static const _qualifikationen = ['RH', 'RS', 'RA', 'NFS'];
-  /// Alle Führerscheinklassen in Deutschland (wie Unfallbericht)
-  static const _fuehrerscheinklassen = ['A', 'A1', 'A2', 'AM', 'B', 'BE', 'C', 'CE', 'C1', 'C1E', 'D', 'DE', 'D1', 'D1E', 'L', 'T'];
+  static const _editRoles = ['superadmin', 'admin', 'koordinator'];
 
-  bool get _canEditAllByRole =>
-      _editAllRoles.any((r) => widget.userRole.toLowerCase().trim() == r);
-
-  bool get _canEditPhoneOnlyByRole =>
-      _editPhoneOnlyRoles.any((r) => widget.userRole.toLowerCase().trim() == r);
-
-  bool _isOwnProfile(Mitarbeiter m) {
-    final uid = widget.currentUserUid;
-    if (uid == null || uid.isEmpty) return false;
-    return m.uid == uid || m.id == uid;
-  }
+  bool get _canEdit =>
+      _editRoles.any((r) => widget.userRole.toLowerCase().trim() == r);
 
   @override
   void initState() {
@@ -67,7 +54,6 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
     super.dispose();
   }
 
-  /// Konvertiert Updates für Cloud Function (Timestamp->millis, {__delete:true} bleibt)
   Map<String, dynamic> _prepareForCloudFunction(Map<String, dynamic> updates) {
     final out = <String, dynamic>{};
     for (final e in updates.entries) {
@@ -86,9 +72,9 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
     if (q.isEmpty) return active;
     return active.where((m) {
       final name = '${m.nachname ?? ''} ${m.vorname ?? ''}'.toLowerCase();
-      final qualis = (m.qualifikation ?? []).join(' ').toLowerCase();
-      final tel = (m.telefon ?? '').toLowerCase();
-      return name.contains(q) || qualis.contains(q) || tel.contains(q);
+      final ort = (m.ort ?? '').toLowerCase();
+      final tel = (m.telefon ?? m.handynummer ?? '').toLowerCase();
+      return name.contains(q) || ort.contains(q) || tel.contains(q);
     }).toList();
   }
 
@@ -107,9 +93,7 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
   }
 
   void _openEdit(Mitarbeiter m) {
-    final isOwn = _isOwnProfile(m);
-    final canEditAll = _canEditAllByRole || isOwn;
-    final canEditPhoneOnly = _canEditPhoneOnlyByRole && !isOwn;
+    if (!_canEdit) return;
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -122,28 +106,27 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
           color: Colors.transparent,
           child: _EditSheet(
             mitarbeiter: m,
-            canEditAll: canEditAll,
-            canEditPhoneOnly: canEditPhoneOnly,
-            qualifikationen: _qualifikationen,
-        fuehrerscheinklassen: _fuehrerscheinklassen,
-            onSave: (updates) async {
-              final data = _prepareForCloudFunction(updates);
+            onSave: (data) async {
+              final prepared = _prepareForCloudFunction(data);
               await _functions.httpsCallable('saveMitarbeiterDoc').call({
                 'companyId': widget.companyId,
                 'docId': m.id,
-                'data': data,
+                'data': prepared,
               });
               if (ctx.mounted) Navigator.of(ctx).pop();
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Mitarbeiter aktualisiert.')),
-              );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Mitarbeiter aktualisiert.')),
+                );
+              }
             },
             onCancel: () => Navigator.of(ctx).pop(),
           ),
         ),
       ),
       transitionBuilder: (ctx, animation, _, child) => SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+        position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+            .animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
         child: child,
       ),
     );
@@ -219,22 +202,20 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
         child: LayoutBuilder(
           builder: (_, constraints) {
-            final narrow = constraints.maxWidth < 600;
-            if (narrow) {
+            if (constraints.maxWidth < 500) {
               return const Row(
                 children: [
-                  Expanded(flex: 4, child: Text('Name')),
-                  Expanded(flex: 3, child: Center(child: Text('Qual.'))),
-                  Expanded(flex: 1, child: Center(child: Text('FS'))),
-                  Expanded(flex: 2, child: Center(child: Text('Telefonnummer'))),
+                  Expanded(flex: 3, child: Text('Name')),
+                  Expanded(flex: 2, child: Center(child: Text('Wohnort'))),
+                  Expanded(flex: 2, child: Center(child: Text('Telefon'))),
                 ],
               );
             }
             return const Row(
               children: [
-                Expanded(flex: 4, child: Text('Nachname, Vorname')),
-                Expanded(flex: 4, child: Center(child: Text('Qualifikation'))),
-                Expanded(flex: 2, child: Center(child: Text('Führerschein'))),
+                Expanded(flex: 3, child: Text('Nachname')),
+                Expanded(flex: 3, child: Center(child: Text('Vorname'))),
+                Expanded(flex: 3, child: Center(child: Text('Wohnort'))),
                 Expanded(flex: 2, child: Center(child: Text('Telefonnummer'))),
               ],
             );
@@ -245,10 +226,10 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
   }
 
   Widget _buildRow(Mitarbeiter m) {
-    final name = m.displayName;
-    final qualis = (m.qualifikation ?? []).join(' / ');
-    final fs = m.fuehrerschein ?? '';
-    final tel = m.telefon ?? '';
+    final nachname = m.nachname ?? '';
+    final vorname = m.vorname ?? '';
+    final wohnort = _wohnort(m);
+    final tel = m.telefon ?? m.handynummer ?? '';
 
     Widget _phoneLink(String text) {
       final display = text.trim().isEmpty ? '' : text;
@@ -272,8 +253,8 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
       );
     }
 
-    final canEditThis = _canEditAllByRole || _canEditPhoneOnlyByRole || _isOwnProfile(m);
-    final editArea = canEditThis ? () => _openEdit(m) : null;
+    final canEdit = _canEdit;
+    final onTap = canEdit ? () => _openEdit(m) : null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -286,18 +267,24 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   InkWell(
-                    onTap: editArea,
+                    onTap: onTap,
                     borderRadius: BorderRadius.circular(8),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                          if (qualis.isNotEmpty || fs.isNotEmpty)
+                          Text(
+                            m.displayName,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                          ),
+                          if (wohnort.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
-                              child: Text('$qualis${fs.isNotEmpty ? ' · $fs' : ''}', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                              child: Text(
+                                wohnort,
+                                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                              ),
                             ),
                         ],
                       ),
@@ -311,9 +298,43 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(flex: 4, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(name, style: const TextStyle(fontSize: 14))))),
-                Expanded(flex: 4, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(qualis, style: TextStyle(fontSize: 14, color: Colors.grey[700])))))),
-                Expanded(flex: 2, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(fs, style: TextStyle(fontSize: 14, color: Colors.grey[700])))))),
+                Expanded(
+                  flex: 3,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(nachname, style: const TextStyle(fontSize: 14)),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(vorname, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: InkWell(
+                    onTap: onTap,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(wohnort, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+                      ),
+                    ),
+                  ),
+                ),
                 Expanded(flex: 2, child: _phoneLink(tel)),
               ],
             );
@@ -322,23 +343,24 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
       ),
     );
   }
+
+  String _wohnort(Mitarbeiter m) {
+    final plz = m.plz?.trim() ?? '';
+    final ort = m.ort?.trim() ?? '';
+    if (plz.isNotEmpty && ort.isNotEmpty) return '$plz $ort';
+    if (ort.isNotEmpty) return ort;
+    if (plz.isNotEmpty) return plz;
+    return '';
+  }
 }
 
 class _EditSheet extends StatefulWidget {
   final Mitarbeiter mitarbeiter;
-  final bool canEditAll;
-  final bool canEditPhoneOnly;
-  final List<String> qualifikationen;
-  final List<String> fuehrerscheinklassen;
-  final Future<void> Function(Map<String, dynamic> updates) onSave;
+  final Future<void> Function(Map<String, dynamic> data) onSave;
   final VoidCallback onCancel;
 
   const _EditSheet({
     required this.mitarbeiter,
-    required this.canEditAll,
-    required this.canEditPhoneOnly,
-    required this.qualifikationen,
-    required this.fuehrerscheinklassen,
     required this.onSave,
     required this.onCancel,
   });
@@ -350,59 +372,72 @@ class _EditSheet extends StatefulWidget {
 class _EditSheetState extends State<_EditSheet> {
   late final TextEditingController _nachnameCtrl;
   late final TextEditingController _vornameCtrl;
+  late final TextEditingController _wohnortCtrl;
   late final TextEditingController _telefonCtrl;
-  String? _qualifikation;
-  late String _fuehrerschein;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _nachnameCtrl = TextEditingController(text: widget.mitarbeiter.nachname ?? '');
-    _vornameCtrl = TextEditingController(text: widget.mitarbeiter.vorname ?? '');
-    _telefonCtrl = TextEditingController(text: widget.mitarbeiter.telefon ?? widget.mitarbeiter.handynummer ?? '');
-    final q = widget.mitarbeiter.qualifikation;
-    _qualifikation = q != null && q.isNotEmpty ? q.first : null;
-    if (_qualifikation != null && !widget.qualifikationen.contains(_qualifikation)) {
-      _qualifikation = null;
-    }
-    final fs = widget.mitarbeiter.fuehrerschein ?? '';
-    _fuehrerschein = widget.fuehrerscheinklassen.contains(fs) ? fs : widget.fuehrerscheinklassen.first;
+    final m = widget.mitarbeiter;
+    _nachnameCtrl = TextEditingController(text: m.nachname ?? '');
+    _vornameCtrl = TextEditingController(text: m.vorname ?? '');
+    _wohnortCtrl = TextEditingController(text: _wohnort(m));
+    _telefonCtrl = TextEditingController(text: m.telefon ?? m.handynummer ?? '');
+  }
+
+  String _wohnort(Mitarbeiter m) {
+    final plz = m.plz?.trim() ?? '';
+    final ort = m.ort?.trim() ?? '';
+    if (plz.isNotEmpty && ort.isNotEmpty) return '$plz $ort';
+    if (ort.isNotEmpty) return ort;
+    if (plz.isNotEmpty) return plz;
+    return '';
   }
 
   @override
   void dispose() {
     _nachnameCtrl.dispose();
     _vornameCtrl.dispose();
+    _wohnortCtrl.dispose();
     _telefonCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    final nachname = _nachnameCtrl.text.trim();
+    final vorname = _vornameCtrl.text.trim();
+    if (nachname.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nachname ist erforderlich.')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
-      final updates = <String, dynamic>{};
-
-      if (widget.canEditAll) {
-        final nachname = _nachnameCtrl.text.trim();
-        final vorname = _vornameCtrl.text.trim();
-        if (nachname.isNotEmpty) updates['nachname'] = nachname;
-        if (vorname.isNotEmpty) updates['vorname'] = vorname;
-        updates['fuehrerschein'] = _fuehrerschein;
-        if (nachname.isNotEmpty || vorname.isNotEmpty) {
-          updates['name'] = '$vorname $nachname'.trim();
+      final wohnort = _wohnortCtrl.text.trim();
+      final updates = <String, dynamic>{
+        'nachname': nachname,
+        'vorname': vorname,
+        'name': '$nachname, $vorname'.trim(),
+        'handynummer': {'__delete': true},
+        'handy': {'__delete': true},
+      };
+      if (wohnort.isNotEmpty) {
+        final parts = wohnort.split(RegExp(r'\s+'));
+        if (parts.length >= 2 && RegExp(r'^\d{5}$').hasMatch(parts.first)) {
+          updates['plz'] = parts.first;
+          updates['ort'] = parts.sublist(1).join(' ');
+        } else {
+          updates['ort'] = wohnort;
         }
-        if (_qualifikation != null) {
-          updates['qualifikation'] = [_qualifikation];
-        }
+      } else {
+        updates['plz'] = {'__delete': true};
+        updates['ort'] = {'__delete': true};
       }
-
-      final telefon = _telefonCtrl.text.trim();
-      updates['telefon'] = telefon.isNotEmpty ? telefon : null;
-      updates['telefonnummer'] = telefon.isNotEmpty ? telefon : null;
-      updates['handynummer'] = {'__delete': true};
-      updates['handy'] = {'__delete': true};
-
+      final tel = _telefonCtrl.text.trim();
+      updates['telefon'] = tel.isNotEmpty ? tel : null;
+      updates['telefonnummer'] = tel.isNotEmpty ? tel : null;
       await widget.onSave(updates);
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -430,46 +465,36 @@ class _EditSheetState extends State<_EditSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Mitarbeiter bearbeiten', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Mitarbeiter bearbeiten',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 20),
-
-            if (widget.canEditAll) ...[
-              TextField(
-                controller: _nachnameCtrl,
-                decoration: const InputDecoration(labelText: 'Nachname'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _vornameCtrl,
-                decoration: const InputDecoration(labelText: 'Vorname'),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _qualifikation,
-                decoration: const InputDecoration(labelText: 'Qualifikation'),
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('-')),
-                  ...widget.qualifikationen.map((q) => DropdownMenuItem(value: q, child: Text(q))),
-                ],
-                onChanged: (v) => setState(() => _qualifikation = v),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: _fuehrerschein,
-                decoration: const InputDecoration(labelText: 'Führerscheinklasse'),
-                items: widget.fuehrerscheinklassen.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
-                onChanged: (v) => setState(() => _fuehrerschein = v ?? widget.fuehrerscheinklassen.first),
-              ),
-              const SizedBox(height: 12),
-            ],
-
+            TextField(
+              controller: _nachnameCtrl,
+              decoration: const InputDecoration(labelText: 'Nachname'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _vornameCtrl,
+              decoration: const InputDecoration(labelText: 'Vorname'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _wohnortCtrl,
+              decoration: const InputDecoration(labelText: 'Wohnort (PLZ Ort)'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _telefonCtrl,
               decoration: const InputDecoration(labelText: 'Telefonnummer'),
               keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d\s\-\(\)\+]'))],
             ),
             const SizedBox(height: 24),
-
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -478,7 +503,9 @@ class _EditSheetState extends State<_EditSheet> {
                 FilledButton(
                   onPressed: _saving ? null : _submit,
                   style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
-                  child: _saving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Speichern'),
+                  child: _saving
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Speichern'),
                 ),
               ],
             ),

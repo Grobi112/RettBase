@@ -32,8 +32,7 @@ void initWebVersionCheck(void Function() onUpdateAvailable) {
       final data = jsonDecode(res.responseText ?? '{}') as Map<String, dynamic>?;
       if (data == null) return;
       final v = (data['version'] as String?) ?? '';
-      final b = (data['buildNumber'] as String?) ?? '';
-      final serverVer = '$v.$b'.trim();
+      final serverVer = v.trim();
 
       final clientVer = _getClientVersion();
       if (serverVer.isNotEmpty && clientVer.isNotEmpty && serverVer != clientVer) {

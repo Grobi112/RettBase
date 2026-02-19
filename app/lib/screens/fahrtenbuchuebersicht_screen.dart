@@ -9,10 +9,12 @@ import 'fahrtenbuch_druck_screen.dart';
 /// Fahrtenbuchübersicht – Übersicht aller Fahrtenbücher und Einträge
 class FahrtenbuchuebersichtScreen extends StatefulWidget {
   final String companyId;
+  final String? title;
   final VoidCallback onBack;
 
   const FahrtenbuchuebersichtScreen({
     required this.companyId,
+    this.title,
     required this.onBack,
   });
 
@@ -34,7 +36,7 @@ class _FahrtenbuchuebersichtScreenState extends State<FahrtenbuchuebersichtScree
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: _selectedFahrzeug?.displayLabel ?? 'Fahrtenbuchübersicht',
+        title: _selectedFahrzeug?.displayLabel ?? (widget.title ?? 'Fahrtenbuchübersicht'),
         onBack: () {
           if (_selectedFahrzeug != null) {
             setState(() => _selectedFahrzeug = null);

@@ -26,6 +26,7 @@ class InformationssystemScreen extends StatefulWidget {
   final VoidCallback? onInfoChanged;
   /// Wird aufgerufen, wenn Container-Typen geändert wurden – Dashboard/HomeScreen muss containerSlots neu laden
   final VoidCallback? onContainerTypesChanged;
+  final String? title;
 
   const InformationssystemScreen({
     super.key,
@@ -34,6 +35,7 @@ class InformationssystemScreen extends StatefulWidget {
     this.onBack,
     this.onInfoChanged,
     this.onContainerTypesChanged,
+    this.title,
   });
 
   @override
@@ -195,7 +197,7 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
               colorFilter: ColorFilter.mode(AppTheme.primary, BlendMode.srcIn),
             ),
             const SizedBox(width: 10),
-            Text('Informationssystem', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            Text(widget.title ?? 'Informationssystem', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
           ],
         ),
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),

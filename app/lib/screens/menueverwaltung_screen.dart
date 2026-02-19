@@ -23,6 +23,7 @@ class MenueverwaltungScreen extends StatefulWidget {
   /// Wird nach dem Speichern aufgerufen. Kann async sein – wird awaited.
   final Future<void> Function()? onMenuSaved;
   final bool hideAppBar;
+  final String? title;
 
   const MenueverwaltungScreen({
     super.key,
@@ -31,6 +32,7 @@ class MenueverwaltungScreen extends StatefulWidget {
     this.onBack,
     this.onMenuSaved,
     this.hideAppBar = false,
+    this.title,
   });
 
   @override
@@ -63,8 +65,10 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     });
     try {
       await _modulService.ensureSsdModuleExists();
+      await _modulService.ensureTelefonlisteModuleExists();
       await _modulService.ensureChatModuleExists();
       await _modulService.ensureSchichtplanNfsModuleExists();
+      await _modulService.ensureTelefonlisteNfsModuleExists();
       var items = await _menuService.loadMenuStructure(_selectedBereich);
       // Menü startet leer – keine Legacy-Migration, Nutzer legt alles selbst an
       var mods = await _modulService.getAllModules();
@@ -80,9 +84,11 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
           mods[m.id] = {...mods[m.id]!, 'url': ''};
         }
       }
-      // Einsatzprotokoll SSD und Chat immer verfügbar
+      // Einsatzprotokoll SSD, Chat, Telefonliste, TelefonlisteNFS immer verfügbar
       mods['ssd'] ??= {'id': 'ssd', 'label': 'Einsatzprotokoll SSD', 'url': ''};
       mods['chat'] ??= {'id': 'chat', 'label': 'Chat', 'url': ''};
+      mods['telefonliste'] ??= {'id': 'telefonliste', 'label': 'Telefonliste', 'url': ''};
+      mods['telefonlistenfs'] ??= {'id': 'telefonlistenfs', 'label': 'TelefonlisteNFS', 'url': ''};
       if (mounted) {
         setState(() {
           _items = items;
@@ -204,12 +210,14 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     });
   }
 
-  void _addModule(String moduleId, {int? underHeadingIndex}) {
+  void _addModule(String moduleId, {int? underHeadingIndex, String? customLabel}) {
     final m = _availableModules[moduleId];
     if (m == null) return;
+    final moduleName = (m['label'] ?? moduleId).toString();
+    final label = (customLabel ?? '').toString().trim();
     final newItem = {
       'id': moduleId,
-      'label': m['label'] ?? moduleId,
+      'label': label.isNotEmpty ? label : moduleName,
       'url': '', // Native Module: URL wird nicht verwendet, alte WebView-URLs ignorieren
       'type': 'module',
     };
@@ -224,6 +232,19 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       }
       _hasUnsavedChanges = true;
     });
+  }
+
+  void _addModuleWithLabelDialog(String moduleId, {int? underHeadingIndex}) async {
+    final m = _availableModules[moduleId];
+    if (m == null) return;
+    final defaultLabel = (m['label'] ?? moduleId).toString();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _ModuleLabelDialog(defaultLabel: defaultLabel),
+    );
+    if (result != null && mounted) {
+      _addModule(moduleId, underHeadingIndex: underHeadingIndex, customLabel: result);
+    }
   }
 
   void _addCustom({int? underHeadingIndex}) async {
@@ -417,7 +438,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Menü-Verwaltung',
+        title: widget.title ?? 'Menü-Verwaltung',
         onBack: _handleBack,
         actions: [
           if (widget.userRole == 'superadmin') ...[
@@ -542,39 +563,46 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
   }
 
   void _showAddMenu(BuildContext context) {
-    final maxH = MediaQuery.of(context).size.height * 0.6;
-    showModalBottomSheet(
+    final maxH = MediaQuery.of(context).size.height * 0.5;
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxH),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Hinzufügen', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-              ),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(leading: const Icon(Icons.folder_outlined), title: const Text('Oberbegriff'), onTap: () { Navigator.pop(ctx); _addHeading(); }),
-                      ListTile(leading: const Icon(Icons.list), title: const Text('Modul als eigenständigen Menüpunkt'), onTap: () { Navigator.pop(ctx); _showModulePicker(underHeadingIndex: null); }),
-                      ..._items.asMap().entries.where((e) => _isHeading(e.key) && _getChildren(e.key).length < MenueverwaltungService.maxChildrenPerHeading).map((e) {
-                        final label = (_items[e.key]['label'] ?? 'Oberbegriff').toString();
-                        return ListTile(leading: const Icon(Icons.subdirectory_arrow_right), title: Text('Modul unter „$label"'), onTap: () { Navigator.pop(ctx); _showModulePicker(underHeadingIndex: e.key); });
-                      }),
-                      ListTile(leading: const Icon(Icons.add_link), title: const Text('Benutzerdefinierter Link'), onTap: () { Navigator.pop(ctx); _addCustom(); }),
-                    ],
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hinzufügen'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.folder_outlined),
+                    title: const Text('Oberbegriff'),
+                    onTap: () { Navigator.pop(ctx); _addHeading(); },
                   ),
-                ),
+                  ListTile(
+                    leading: const Icon(Icons.list),
+                    title: const Text('Modul als eigenständigen Menüpunkt'),
+                    onTap: () { Navigator.pop(ctx); _showModulePicker(underHeadingIndex: null); },
+                  ),
+                  ..._items.asMap().entries.where((e) => _isHeading(e.key) && _getChildren(e.key).length < MenueverwaltungService.maxChildrenPerHeading).map((e) {
+                    final label = (_items[e.key]['label'] ?? 'Oberbegriff').toString();
+                    return ListTile(
+                      leading: const Icon(Icons.subdirectory_arrow_right),
+                      title: Text('Modul unter „$label"'),
+                      onTap: () { Navigator.pop(ctx); _showModulePicker(underHeadingIndex: e.key); },
+                    );
+                  }),
+                  ListTile(
+                    leading: const Icon(Icons.add_link),
+                    title: const Text('Benutzerdefinierter Link'),
+                    onTap: () { Navigator.pop(ctx); _addCustom(); },
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -590,6 +618,10 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     if (_selectedBereich != KundenBereich.schulsanitaetsdienst) {
       available = available.where((e) => e.key != 'ssd').toList();
     }
+    // TelefonlisteNFS nur für Bereich Notfallseelsorge
+    if (_selectedBereich != KundenBereich.notfallseelsorge) {
+      available = available.where((e) => e.key != 'telefonlistenfs').toList();
+    }
     available.sort((a, b) {
       final la = (a.value['label'] ?? a.key).toString().toLowerCase();
       final lb = (b.value['label'] ?? b.key).toString().toLowerCase();
@@ -602,7 +634,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         availableModules: available,
         underHeadingIndex: underHeadingIndex,
         maxHeight: maxH,
-        onAddModule: _addModule,
+        onAddModule: _addModuleWithLabelDialog,
         onAddCustom: _addCustom,
       ),
     );
@@ -732,6 +764,67 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ModuleLabelDialog extends StatefulWidget {
+  final String defaultLabel;
+
+  const _ModuleLabelDialog({required this.defaultLabel});
+
+  @override
+  State<_ModuleLabelDialog> createState() => _ModuleLabelDialogState();
+}
+
+class _ModuleLabelDialogState extends State<_ModuleLabelDialog> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.defaultLabel);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Menüpunkt-Titel'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+            const Text(
+              'Eigener Titel oder leer lassen, dann wird der Modulname verwendet:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _ctrl,
+              decoration: const InputDecoration(
+                labelText: 'Titel',
+                hintText: 'Leer = Modulname',
+              ),
+            autofocus: true,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Abbrechen')),
+        FilledButton(
+          onPressed: () {
+            final v = _ctrl.text.trim();
+            Navigator.pop(context, v); // leer = Modulname wird in _addModule verwendet
+          },
+          child: const Text('Hinzufügen'),
+        ),
+      ],
     );
   }
 }
@@ -974,11 +1067,11 @@ class _CustomItemDialogState extends State<_CustomItemDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(controller: _labelCtrl, decoration: const InputDecoration(labelText: 'Bezeichnung')),
+          TextField(controller: _labelCtrl, decoration: const InputDecoration(labelText: 'Titel (Anzeige im Menü)')),
           if (widget.isNativeModule) ...[
             const SizedBox(height: 12),
             Text(
-              'Natives Modul – die URL wird nicht verwendet.',
+              'Eigener Titel möglich – unabhängig von der Bezeichnung in der Modulverwaltung. URL wird nicht verwendet.',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ] else ...[

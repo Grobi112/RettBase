@@ -63,12 +63,30 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
         menuStructure = await _menuService.loadLegacyGlobalMenu();
       }
       final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
-      final modules = await _modulesService.getModulesForSchnellstart(
+      var modules = await _modulesService.getModulesForSchnellstart(
         widget.companyId,
         authData.role,
         menuModuleIds,
         bereich: bereich,
       );
+      // Menü-Titel (benutzerdefinierter Label) auf Dropdown-Optionen anwenden
+      final menuLabels = MenueverwaltungService.extractModuleLabelsFromMenu(menuStructure);
+      if (menuLabels.isNotEmpty) {
+        modules = modules.map((m) {
+          final customLabel = menuLabels[m.id];
+          if (customLabel == null) return m;
+          return AppModule(
+            id: m.id,
+            label: customLabel,
+            url: m.url,
+            icon: m.icon,
+            roles: m.roles,
+            order: m.order,
+            active: m.active,
+            submenu: m.submenu,
+          );
+        }).toList();
+      }
       final slotIds = await _modulesService.getSchnellstartSlotIds(
         widget.companyId,
         authData.role,

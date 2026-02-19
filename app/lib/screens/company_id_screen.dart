@@ -8,17 +8,32 @@ import 'login_screen.dart';
 
 /// Unternehmen auswählen – Kunden-ID eingeben (z.B. admin für admin.rettbase.de).
 class CompanyIdScreen extends StatefulWidget {
-  const CompanyIdScreen({super.key});
+  /// Vorausgefüllte Kunden-ID (z.B. wenn vorheriger Check fehlgeschlagen ist).
+  final String? initialCompanyId;
+  /// Hinweis, warum der Screen gezeigt wird (z.B. nach Fehler).
+  final String? retryHint;
+
+  const CompanyIdScreen({
+    super.key,
+    this.initialCompanyId,
+    this.retryHint,
+  });
 
   @override
   State<CompanyIdScreen> createState() => _CompanyIdScreenState();
 }
 
 class _CompanyIdScreenState extends State<CompanyIdScreen> {
-  final _controller = TextEditingController();
+  late final TextEditingController _controller;
   final _focusNode = FocusNode();
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialCompanyId ?? '');
+  }
 
   @override
   void dispose() {
@@ -118,6 +133,17 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 48),
+                  if (widget.retryHint != null) ...[
+                    Text(
+                      widget.retryHint!,
+                      style: TextStyle(
+                        color: Colors.amber.shade200,
+                        fontSize: 13,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   Text(
                     'Kunden-ID',
                     style: TextStyle(

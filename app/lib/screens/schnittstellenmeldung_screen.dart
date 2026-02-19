@@ -40,12 +40,14 @@ const _settingsRoles = ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdi
 class SchnittstellenmeldungScreen extends StatefulWidget {
   final String companyId;
   final String? userRole;
+  final String? title;
   final VoidCallback onBack;
 
   const SchnittstellenmeldungScreen({
     super.key,
     required this.companyId,
     this.userRole,
+    this.title,
     required this.onBack,
   });
 
@@ -271,7 +273,7 @@ class _SchnittstellenmeldungScreenState extends State<SchnittstellenmeldungScree
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Schnittstellenmeldung',
+        title: widget.title ?? 'Schnittstellenmeldung',
         onBack: widget.onBack,
         actions: [
           if (_canEditSettings) ...[

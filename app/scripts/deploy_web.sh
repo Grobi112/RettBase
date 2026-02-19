@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-echo "Version erhöhen (version.json, pubspec, index.html)..."
+echo "Version erhöhen (version.json, index.html)..."
 node scripts/inject_version.js
 
 echo "Building Flutter Web..."

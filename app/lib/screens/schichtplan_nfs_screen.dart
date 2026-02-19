@@ -16,12 +16,14 @@ bool _canEditEinstellungen(String? role) {
 class SchichtplanNfsScreen extends StatefulWidget {
   final String companyId;
   final String? userRole;
+  final String? title;
   final VoidCallback onBack;
 
   const SchichtplanNfsScreen({
     super.key,
     required this.companyId,
     this.userRole,
+    this.title,
     required this.onBack,
   });
 
@@ -117,7 +119,7 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Schichtplan',
+        title: widget.title ?? 'Schichtplan',
         onBack: widget.onBack,
         actions: [
           TextButton.icon(

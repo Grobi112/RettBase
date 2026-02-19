@@ -30,6 +30,23 @@ class ModulverwaltungService {
     } catch (_) {}
   }
 
+  /// Stellt sicher, dass das Modul Telefonliste in Firestore existiert (für Menü-Verwaltung).
+  Future<void> ensureTelefonlisteModuleExists() async {
+    try {
+      await _db.collection('settings').doc('modules').set({'_exists': true}, SetOptions(merge: true));
+      await _items.doc('telefonliste').set({
+        'label': 'Telefonliste',
+        'url': '',
+        'icon': 'default',
+        'roles': _ssdRoles,
+        'free': true,
+        'order': 28,
+        'active': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   /// Stellt sicher, dass das Modul Chat in Firestore existiert (für Menü-Verwaltung).
   Future<void> ensureChatModuleExists() async {
     try {
@@ -59,6 +76,26 @@ class ModulverwaltungService {
         'bereich': 'notfallseelsorge',
         'free': true,
         'order': 32,
+        'active': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  static const _telefonlistenfsRoles = ['superadmin', 'admin', 'koordinator', 'user'];
+
+  /// Stellt sicher, dass das Modul TelefonlisteNFS in Firestore existiert (für Menü-Verwaltung).
+  Future<void> ensureTelefonlisteNfsModuleExists() async {
+    try {
+      await _db.collection('settings').doc('modules').set({'_exists': true}, SetOptions(merge: true));
+      await _items.doc('telefonlistenfs').set({
+        'label': 'TelefonlisteNFS',
+        'url': '',
+        'icon': 'default',
+        'roles': _telefonlistenfsRoles,
+        'bereich': 'notfallseelsorge',
+        'free': true,
+        'order': 33,
         'active': true,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));

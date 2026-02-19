@@ -16,12 +16,14 @@ class MaengelmelderScreen extends StatefulWidget {
   final String companyId;
   final String userId;
   final String userRole;
+  final String? title;
   final VoidCallback onBack;
 
   const MaengelmelderScreen({
     required this.companyId,
     required this.userId,
     required this.userRole,
+    this.title,
     required this.onBack,
   });
 
@@ -129,7 +131,7 @@ class _MaengelmelderScreenState extends State<MaengelmelderScreen> {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Mängelmelder',
+        title: widget.title ?? 'Mängelmelder',
         onBack: widget.onBack,
       ),
       body: _loading

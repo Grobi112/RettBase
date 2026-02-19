@@ -6,11 +6,13 @@ import '../services/wachbuch_service.dart';
 /// Wachbuch Übersicht – Monat/Jahr auswählen, Tage mit Einträgen anzeigen
 class WachbuchUebersichtScreen extends StatefulWidget {
   final String companyId;
+  final String? title;
   final VoidCallback onBack;
   final void Function(String dayId)? onSelectDay;
 
   const WachbuchUebersichtScreen({
     required this.companyId,
+    this.title,
     required this.onBack,
     this.onSelectDay,
   });
@@ -81,7 +83,7 @@ class _WachbuchUebersichtScreenState extends State<WachbuchUebersichtScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Wachbuch Übersicht',
+        title: widget.title ?? 'Wachbuch Übersicht',
         onBack: widget.onBack,
       ),
       body: SingleChildScrollView(

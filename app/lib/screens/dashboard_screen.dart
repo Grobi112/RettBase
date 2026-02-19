@@ -38,6 +38,7 @@ import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'einsatzprotokoll_ssd_screen.dart';
 import 'schichtplan_nfs_screen.dart';
+import 'telefonliste_nfs_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
 import 'kundenverwaltung_screen.dart';
@@ -256,9 +257,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Bei gespeicherter Nutzerauswahl (6 Slots): nur diese anzeigen.
       // menuModuleIds nutzen, damit auch im Menü sichtbare Module (z.B. Chat) in Slots auflösbar sind.
       final hasCustomSchnellstart = await _modulesService.hasCustomSchnellstart(effectiveCompanyId);
-      final List<AppModule?> shortcuts = hasCustomSchnellstart
+      List<AppModule?> shortcuts = hasCustomSchnellstart
           ? await _modulesService.getShortcuts(effectiveCompanyId, authData.role, bereich: bereich, menuModuleIds: menuModuleIds)
           : allMods.map((m) => m as AppModule?).toList();
+      // Menü-Titel (benutzerdefinierter Label) auf Shortcuts anwenden
+      final menuLabels = MenueverwaltungService.extractModuleLabelsFromMenu(menuStructure);
+      if (menuLabels.isNotEmpty) {
+        shortcuts = shortcuts.map((m) {
+          if (m == null) return null;
+          final customLabel = menuLabels[m.id];
+          if (customLabel == null) return m;
+          return AppModule(
+            id: m.id,
+            label: customLabel,
+            url: m.url,
+            icon: m.icon,
+            roles: m.roles,
+            order: m.order,
+            active: m.active,
+            submenu: m.submenu,
+          );
+        }).toList();
+      }
 
       final slots = await _loadContainerSlots(effectiveCompanyId);
       final infos = await _infoService.loadInformationen(effectiveCompanyId);
@@ -395,6 +415,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'schichtanmeldung':
         screen = SchichtanmeldungScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
           hideAppBar: true,
           onFahrtenbuchOpen: (v) {
@@ -406,30 +427,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'schichtuebersicht':
         screen = SchichtuebersichtScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
         );
         break;
       case 'fahrtenbuch':
         screen = FahrtenbuchuebersichtScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
         );
         break;
       case 'fahrtenbuchuebersicht':
         screen = FahrtenbuchuebersichtScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
         );
         break;
       case 'wachbuch':
         screen = WachbuchScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
         );
         break;
       case 'wachbuchuebersicht':
         screen = WachbuchUebersichtScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
         );
         break;
@@ -437,6 +463,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = ChecklistenUebersichtScreen(
           companyId: _companyId,
           userRole: _userRole ?? 'user',
+          title: mod.label,
           onBack: onBack,
         );
         break;
@@ -444,6 +471,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = InformationssystemScreen(
           companyId: _companyId,
           userRole: _userRole,
+          title: mod.label,
           onBack: onBack,
           onInfoChanged: () async {
             final infos = await _infoService.loadInformationen(_companyId);
@@ -459,6 +487,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = EinstellungenScreen(
           companyId: _companyId,
           bereich: _bereich,
+          title: mod.label,
           onBack: onBack,
           onInformationssystemSaved: _load,
           hideAppBar: true,
@@ -469,6 +498,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           companyId: _companyId,
           userId: _authService.currentUser?.uid ?? '',
           userRole: _userRole ?? 'user',
+          title: mod.label,
           onBack: onBack,
         );
         break;
@@ -476,6 +506,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = FleetManagementScreen(
           companyId: _companyId,
           userRole: _userRole ?? 'user',
+          title: mod.label,
           onBack: onBack,
         );
         break;
@@ -483,12 +514,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = DokumenteScreen(
           companyId: _companyId,
           userRole: _userRole,
+          title: mod.label,
           onBack: onBack,
         );
         break;
       case 'unfallbericht':
         screen = UnfallberichtScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
         );
         break;
@@ -496,6 +529,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = SchnittstellenmeldungScreen(
           companyId: _companyId,
           userRole: _userRole,
+          title: mod.label,
           onBack: onBack,
         );
         break;
@@ -503,6 +537,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = UebergriffsmeldungScreen(
           companyId: _companyId,
           userRole: _userRole,
+          title: mod.label,
           onBack: onBack,
         );
         break;
@@ -511,12 +546,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           companyId: _companyId,
           userRole: _userRole ?? 'user',
           currentUserUid: _authService.currentUser?.uid,
+          title: mod.label,
           onBack: onBack,
         );
         break;
       case 'chat':
         screen = ChatScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
           hideAppBar: true,
         );
@@ -531,12 +568,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = SchichtplanNfsScreen(
           companyId: _companyId,
           userRole: _userRole,
+          title: mod.label,
+          onBack: onBack,
+        );
+        break;
+      case 'telefonlistenfs':
+        screen = TelefonlisteNfsScreen(
+          companyId: _companyId,
+          userRole: _userRole ?? 'user',
+          title: mod.label,
           onBack: onBack,
         );
         break;
       case 'kundenverwaltung':
         screen = KundenverwaltungScreen(
           companyId: _companyId,
+          title: mod.label,
           onBack: onBack,
           hideAppBar: true,
         );
@@ -545,6 +592,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = MitarbeiterverwaltungScreen(
           companyId: _companyId,
           userRole: _userRole,
+          title: mod.label,
           onBack: onBack,
           hideAppBar: true,
         );
@@ -553,6 +601,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = ModulverwaltungScreen(
           companyId: _companyId,
           userRole: _userRole,
+          title: mod.label,
           onBack: onBack,
           hideAppBar: true,
         );
@@ -561,6 +610,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = MenueverwaltungScreen(
           companyId: _companyId,
           userRole: _userRole,
+          title: mod.label,
           onBack: onBack,
           onMenuSaved: () => _load(forceMenuServerRead: true),
           hideAppBar: true,
@@ -572,12 +622,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           screen = MitarbeiterverwaltungScreen(
             companyId: _companyId,
             userRole: _userRole,
+            title: mod.label,
             onBack: onBack,
             hideAppBar: true,
           );
         } else if (mod.url.contains('kundenverwaltung.html')) {
           screen = KundenverwaltungScreen(
             companyId: _companyId,
+            title: mod.label,
             onBack: onBack,
             hideAppBar: true,
           );
@@ -585,6 +637,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           screen = ModulverwaltungScreen(
             companyId: _companyId,
             userRole: _userRole,
+            title: mod.label,
             onBack: onBack,
             hideAppBar: true,
           );
@@ -592,6 +645,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           screen = MenueverwaltungScreen(
             companyId: _companyId,
             userRole: _userRole,
+            title: mod.label,
             onBack: onBack,
             onMenuSaved: () => _load(forceMenuServerRead: true),
             hideAppBar: true,
@@ -658,6 +712,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'schnittstellenmeldung': return Icons.call_split;
       case 'uebergriffsmeldung': return Icons.warning;
       case 'telefonliste': return Icons.phone;
+      case 'telefonlistenfs': return Icons.phone;
       case 'chat': return Icons.chat_bubble_outline;
       case 'ssd': return Icons.medical_services;
       default: return Icons.apps;
@@ -676,13 +731,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Erstellt AppModule aus Menü-Item (für 1:1-Anzeige auch ohne Firmen-Freischaltung)
+  /// Erstellt AppModule aus Menü-Item (für 1:1-Anzeige auch ohne Firmen-Freischaltung).
+  /// Nutzt immer das Label aus dem Menü-Item (benutzerdefinierter Titel), nicht den Modul-Namen.
   AppModule _moduleFromMenuItem(Map<String, dynamic> item) {
     final id = (item['id'] ?? '').toString();
-    final label = (item['label'] ?? id).toString();
+    final menuLabel = (item['label'] ?? '').toString().trim();
     final url = (item['url'] ?? '').toString();
     final modById = {for (final m in _allModules) m.id: m};
-    return modById[id] ?? AppModule(id: id, label: label, url: url, order: 0);
+    final base = modById[id];
+    final label = menuLabel.isNotEmpty ? menuLabel : (base?.label ?? id);
+    if (base != null) {
+      return AppModule(
+        id: base.id,
+        label: label,
+        url: base.url,
+        icon: base.icon,
+        roles: base.roles,
+        order: base.order,
+        active: base.active,
+      );
+    }
+    return AppModule(id: id, label: label, url: url, order: 0);
   }
 
   /// Prüft ob die aktuelle Rolle Zugriff auf ein Modul hat (nur für Modul-Items).

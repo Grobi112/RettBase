@@ -13,6 +13,7 @@ class EinstellungenScreen extends StatelessWidget {
   /// Wird aufgerufen, wenn Informationssystem-Einstellungen gespeichert wurden
   final VoidCallback? onInformationssystemSaved;
   final bool hideAppBar;
+  final String? title;
 
   const EinstellungenScreen({
     super.key,
@@ -21,6 +22,7 @@ class EinstellungenScreen extends StatelessWidget {
     this.onBack,
     this.onInformationssystemSaved,
     this.hideAppBar = false,
+    this.title,
   });
 
   @override
@@ -29,7 +31,7 @@ class EinstellungenScreen extends StatelessWidget {
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Einstellungen',
+        title: title ?? 'Einstellungen',
         onBack: onBack ?? () => Navigator.of(context).pop(),
       ),
       body: ListView(

@@ -12,12 +12,14 @@ class KundenverwaltungScreen extends StatefulWidget {
   final String companyId;
   final VoidCallback? onBack;
   final bool hideAppBar;
+  final String? title;
 
   const KundenverwaltungScreen({
     super.key,
     required this.companyId,
     this.onBack,
     this.hideAppBar = false,
+    this.title,
   });
 
   @override
@@ -229,7 +231,7 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Kundenverwaltung',
+        title: widget.title ?? 'Kundenverwaltung',
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
       ),
       body: Column(

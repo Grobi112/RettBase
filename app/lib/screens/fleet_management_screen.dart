@@ -9,10 +9,11 @@ import '../services/fleet_service.dart';
 class FleetManagementScreen extends StatefulWidget {
   final String companyId;
   final String userRole;
+  final String? title;
   final VoidCallback? onBack;
   final int initialTabIndex;
 
-  const FleetManagementScreen({super.key, required this.companyId, this.userRole = 'user', this.onBack, this.initialTabIndex = 0});
+  const FleetManagementScreen({super.key, required this.companyId, this.userRole = 'user', this.title, this.onBack, this.initialTabIndex = 0});
 
   @override
   State<FleetManagementScreen> createState() => _FleetManagementScreenState();
@@ -41,7 +42,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> with Sing
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Flottenmanagement',
+        title: widget.title ?? 'Flottenmanagement',
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         bottom: TabBar(
           controller: _tabController,

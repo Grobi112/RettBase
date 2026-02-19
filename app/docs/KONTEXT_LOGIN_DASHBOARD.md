@@ -71,6 +71,10 @@ settings/modules/items/{moduleId}
   - Nur sichtbar bei `bereich == schulsanitaetsdienst`
   - Gilt für alle Rollen, inkl. Admin/Superadmin – keine Ausnahme
   - Bei Schulsanitätsdienst: `ssdAutoEnabled` ersetzt explizite Freischaltung
+- **TelefonlisteNFS** (Notfallseelsorge):
+  - Nur sichtbar bei `bereich == notfallseelsorge`
+  - Nachname, Vorname, Wohnort, Telefonnummer – Anklicken zum Anrufen
+  - Admin, Koordinator, Superadmin: bearbeiten und einsehen; User: nur lesen
 - **Schichtplan NFS**:
   - Nur sichtbar bei `bereich == notfallseelsorge`
   - Native Flutter-App, Bereitschaften-Verwaltung
@@ -92,7 +96,8 @@ settings/modules/items/{moduleId}
 | `lib/screens/dashboard_screen.dart` | _load, Menü, Shortcuts, Drawer (ohne Username, Benachrichtigungen/APK unter Abmelden) |
 | `lib/screens/menueverwaltung_screen.dart` | Menü-Module: URL ausblenden, url: '' |
 | `lib/screens/modulverwaltung_screen.dart` | Modul-URLs beim Laden normalisieren |
-| `lib/services/modulverwaltung_service.dart` | ensureChatModuleExists, ensureSsdModuleExists, ensureSchichtplanNfsModuleExists |
+| `lib/services/modulverwaltung_service.dart` | ensureChatModuleExists, ensureSsdModuleExists, ensureSchichtplanNfsModuleExists, ensureTelefonlisteNfsModuleExists |
+| `lib/screens/telefonliste_nfs_screen.dart` | TelefonlisteNFS (Notfallseelsorge) |
 | `lib/screens/schichtplan_nfs_screen.dart` | Schichtplan NFS (Notfallseelsorge) |
 | `lib/services/schichtplan_nfs_service.dart` | schichtplanNfs* Firestore-Operationen |
 | `functions/index.js` | kundeExists, saveMitarbeiterDoc, saveUsersDoc |

@@ -23,7 +23,7 @@
   <meta http-equiv="Expires" content="0">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="RettBase – WebApp für Einsätze, Wachbuch, Checklisten und mehr.">
-  <meta name="rettbase-version" content="1.0.1.2">
+  <meta name="rettbase-version" content="1.0.3">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -38,13 +38,19 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body style="margin:0;background:#1E1F26;min-height:100vh">
-  <div id="flutter-init-loader" style="position:fixed;inset:0;background:#1E1F26;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999">
-    <img src="img/rettbase_splash.png" alt="RettBase" style="height:120px;width:auto">
-    <div style="width:240px;height:8px;background:rgba(255,255,255,0.15);border-radius:4px;margin-top:32px;overflow:hidden">
-      <div style="width:40%;height:100%;background:linear-gradient(90deg,#0ea5e94d,#0ea5e9,#fff,#0ea5e9,#0ea5e94d);border-radius:4px;animation:shimmer 1.8s ease-in-out infinite"></div>
-    </div>
+  <div id="flutter-init-loader" class="splash-loader">
+    <img src="img/rettbase_splash.png" alt="RettBase" class="splash-logo">
+    <div class="splash-bar"><div class="splash-bar-inner"></div></div>
   </div>
   <style>
+    .splash-loader{position:fixed;inset:0;background:#1E1F26;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999}
+    .splash-logo{width:auto;height:140px}
+    .splash-bar{width:240px;height:8px;background:rgba(255,255,255,0.15);border-radius:4px;margin-top:32px;overflow:hidden}
+    .splash-bar-inner{width:40%;height:100%;background:linear-gradient(90deg,#0ea5e94d,#0ea5e9,#fff,#0ea5e9,#0ea5e94d);border-radius:4px;animation:shimmer 1.8s ease-in-out infinite}
+    @media (max-width:399px){
+      .splash-logo{height:100px}
+      .splash-bar{width:180px;margin-top:24px}
+    }
     @keyframes shimmer{0%,100%{transform:translateX(-100%)}50%{transform:translateX(250%)}}
   </style>
   <script>

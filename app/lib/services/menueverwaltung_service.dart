@@ -90,6 +90,30 @@ class MenueverwaltungService {
     }, SetOptions(merge: true));
   }
 
+  /// Extrahiert Modul-ID → benutzerdefinierter Label aus der Menüstruktur.
+  /// Wird z.B. für Schnellstart genutzt, um Menü-Titel statt Modul-Namen anzuzeigen.
+  static Map<String, String> extractModuleLabelsFromMenu(List<Map<String, dynamic>> items) {
+    final labels = <String, String>{};
+    void collect(List<dynamic> list) {
+      for (final item in list) {
+        if (item is! Map) continue;
+        final type = (item['type'] ?? '').toString();
+        if (type == 'heading') {
+          final children = item['children'];
+          if (children is List) collect(children);
+        } else if (type == 'module') {
+          final id = item['id']?.toString();
+          final label = (item['label'] ?? '').toString().trim();
+          if (id != null && id.isNotEmpty && label.isNotEmpty) {
+            labels[id] = label;
+          }
+        }
+      }
+    }
+    collect(items);
+    return labels;
+  }
+
   /// Extrahiert alle Modul-IDs aus der Menüstruktur (Reihenfolge: zuerst Top-Level, dann Kinder)
   static List<String> extractModuleIdsFromMenu(List<Map<String, dynamic>> items) {
     final ids = <String>[];

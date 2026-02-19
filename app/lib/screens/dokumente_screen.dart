@@ -11,12 +11,14 @@ import 'dokumente_ordner_screen.dart';
 class DokumenteScreen extends StatefulWidget {
   final String companyId;
   final String? userRole;
+  final String? title;
   final VoidCallback? onBack;
 
   const DokumenteScreen({
     super.key,
     required this.companyId,
     this.userRole,
+    this.title,
     this.onBack,
   });
 
@@ -86,7 +88,7 @@ class _DokumenteScreenState extends State<DokumenteScreen> {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Dokumente',
+        title: widget.title ?? 'Dokumente',
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         actions: [
           if (canEdit)

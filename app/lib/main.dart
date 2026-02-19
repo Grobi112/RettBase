@@ -130,29 +130,61 @@ class _RettBaseHomeState extends State<RettBaseHome> {
     }
 
     final cid = companyId.trim().toLowerCase();
-    final kundeFuture = FirebaseFunctions.instanceFor(region: 'europe-west1')
-        .httpsCallable('kundeExists')
-        .call<Map<String, dynamic>>({'companyId': cid});
-    final authFuture = FirebaseAuth.instance.authStateChanges().first;
+    dynamic kundeRes;
+    dynamic user;
+    try {
+      final kundeFuture = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('kundeExists')
+          .call<Map<String, dynamic>>({'companyId': cid});
+      final authFuture = FirebaseAuth.instance.authStateChanges().first;
 
-    final results = await Future.wait([
-      kundeFuture,
-      authFuture,
-      Future.delayed(const Duration(milliseconds: 400)),
-    ]);
+      final results = await Future.wait([
+        kundeFuture,
+        authFuture,
+        Future.delayed(const Duration(milliseconds: 400)),
+      ]);
+      kundeRes = results[0];
+      user = results[1];
+    } catch (e) {
+      // kundeExists fehlgeschlagen (Netzwerk, 404, Rate-Limit) → Kunden-ID neu eingeben
+      if (kDebugMode) debugPrint('RettBase kundeExists Fehler: $e');
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => CompanyIdScreen(
+            initialCompanyId: cid,
+            retryHint: 'Die Prüfung ist fehlgeschlagen. Bitte Kunden-ID erneut eingeben.',
+          ),
+          transitionDuration: Duration.zero,
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
 
     try {
-      final res = results[0] as dynamic;
+      final res = kundeRes as dynamic;
       final exists = res.data['exists'] == true;
       final docId = (res.data['docId'] as String?)?.trim().toLowerCase();
       if (exists && docId != null && docId.isNotEmpty && docId != cid) {
         companyId = docId;
         unawaited(prefs.setString('rettbase_company_id', docId));
+      } else if (!exists) {
+        // Kunde existiert nicht mehr → Kunden-ID neu eingeben
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => CompanyIdScreen(
+              initialCompanyId: cid,
+              retryHint: 'Diese Kunden-ID wurde nicht gefunden. Bitte erneut eingeben.',
+            ),
+            transitionDuration: Duration.zero,
+          ),
+        );
+        return;
       }
     } catch (_) {}
 
-    final user = results[1] as dynamic;
     if (!mounted) return;
     if (user != null) {
       debugPrint('RettBase: Bereits angemeldet (uid=${user.uid}) – springe direkt ins Dashboard');

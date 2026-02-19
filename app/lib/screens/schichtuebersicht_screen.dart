@@ -29,10 +29,12 @@ const _loeschenRollen = [
 /// Schichtübersicht – wer hat sich wann angemeldet (für Führungskräfte)
 class SchichtuebersichtScreen extends StatefulWidget {
   final String companyId;
+  final String? title;
   final VoidCallback onBack;
 
   const SchichtuebersichtScreen({
     required this.companyId,
+    this.title,
     required this.onBack,
   });
 
@@ -215,7 +217,7 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Schichtübersicht',
+        title: widget.title ?? 'Schichtübersicht',
         onBack: widget.onBack,
       ),
       body: _loading

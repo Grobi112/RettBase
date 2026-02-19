@@ -10,12 +10,14 @@ import 'gespeicherte_checklisten_screen.dart';
 class ChecklistenUebersichtScreen extends StatefulWidget {
   final String companyId;
   final String userRole;
+  final String? title;
   final VoidCallback onBack;
 
   const ChecklistenUebersichtScreen({
     super.key,
     required this.companyId,
     required this.userRole,
+    this.title,
     required this.onBack,
   });
 
@@ -43,7 +45,7 @@ class _ChecklistenUebersichtScreenState extends State<ChecklistenUebersichtScree
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Checklisten',
+        title: widget.title ?? 'Checklisten',
         onBack: widget.onBack,
       ),
       body: StreamBuilder<List<Checkliste>>(

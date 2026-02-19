@@ -14,12 +14,14 @@ class SchichtanmeldungScreen extends StatefulWidget {
   final VoidCallback onBack;
   final void Function(FahrtenbuchVorlage vorlage)? onFahrtenbuchOpen;
   final bool hideAppBar;
+  final String? title;
 
   const SchichtanmeldungScreen({
     required this.companyId,
     required this.onBack,
     this.onFahrtenbuchOpen,
     this.hideAppBar = false,
+    this.title,
   });
 
   @override
@@ -255,7 +257,7 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Schichtanmeldung',
+        title: widget.title ?? 'Schichtanmeldung',
         onBack: widget.onBack,
       ),
       body: _loading

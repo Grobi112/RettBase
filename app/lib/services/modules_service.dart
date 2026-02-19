@@ -44,6 +44,7 @@ class ModulesService {
     AppModule(id: 'email', label: 'E-Mail', url: '', order: 31, roles: _defaultRoles),
     AppModule(id: 'ssd', label: 'Einsatzprotokoll SSD', url: '', order: 29, roles: _defaultRoles),
     AppModule(id: 'schichtplannfs', label: 'Schichtplan NFS', url: '', order: 32, roles: _defaultRoles),
+    AppModule(id: 'telefonlistenfs', label: 'TelefonlisteNFS', url: '', order: 33, roles: ['superadmin', 'admin', 'koordinator', 'user']),
   ];
 
   /// Lädt Shortcuts für die Dashboard-Kacheln (6 Slots).
@@ -173,11 +174,17 @@ class ModulesService {
             bereichResolved != KundenBereich.notfallseelsorge &&
             !isAdminCompany &&
             !isGlobalSuperadmin) continue;
+        if (m.id == 'telefonlistenfs' &&
+            bereichResolved != KundenBereich.notfallseelsorge &&
+            !isAdminCompany &&
+            !isGlobalSuperadmin) continue;
         // SSD bei Schulsanitätsdienst: immer enabled (ohne explizite Freischaltung in kunden/modules)
         final ssdAutoEnabled = m.id == 'ssd' && bereichResolved == KundenBereich.schulsanitaetsdienst;
         // Schichtplan NFS bei Notfallseelsorge: immer enabled
         final schichtplannfsAutoEnabled = m.id == 'schichtplannfs' && bereichResolved == KundenBereich.notfallseelsorge;
-        final enabled = ssdAutoEnabled || schichtplannfsAutoEnabled || isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
+        // TelefonlisteNFS bei Notfallseelsorge: immer enabled
+        final telefonlistenfsAutoEnabled = m.id == 'telefonlistenfs' && bereichResolved == KundenBereich.notfallseelsorge;
+        final enabled = ssdAutoEnabled || schichtplannfsAutoEnabled || telefonlistenfsAutoEnabled || isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
         if (!enabled) continue;
         final def = allMods[m.id];
         final roles = def?['roles'] as List? ?? m.roles;

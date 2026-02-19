@@ -8,14 +8,13 @@
 2. **APK** danach (pubspec und version.json sind bereits aktuell)
 3. **iOS** danach (ebenso)
 
-## Automatische Versionserhöhung
+## Automatische Versionserhöhung (Web)
 
-Bei `flutter build web` (via `deploy_web.sh`) wird **automatisch**:
-- `version` in version.json erhöht (z.B. 1.0.0 → 1.0.1)
-- `buildNumber` erhöht (z.B. 1 → 2)
-- `index.html` (meta rettbase-version) und `pubspec.yaml` aktualisiert
+Bei `./flutter build web` (oder `./fw`) wird **automatisch**:
+- `version` in version.json erhöht (z.B. 1.0.1 → 1.0.2)
+- `index.html` (meta rettbase-version) aktualisiert
 
-Keine manuelle Anpassung nötig – `version.json` ist nach dem Web-Deploy aktuell. APK- und iOS-Build übernehmen diese Version.
+`buildNumber` bleibt unverändert – APK-Updates laufen über den Play Store. Die Version in `pubspec.yaml` wird bei nativen Builds separat gepflegt.
 
 ## version.json
 
@@ -30,8 +29,8 @@ Wird vom Skript `scripts/inject_version.js` automatisch gepflegt:
 }
 ```
 
-- **version:** fortlaufend (1.0.1, 1.0.2, …)
-- **buildNumber:** fortlaufend (2, 3, 4, …)
+- **version:** fortlaufend für Web (1.0.1, 1.0.2, …)
+- **buildNumber:** bleibt gesetzt (APK über Play Store)
 - **downloadUrl:** bei Bedarf manuell anpassen
 
 ## Deploy-Reihenfolge

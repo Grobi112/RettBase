@@ -11,6 +11,7 @@ class ModulverwaltungScreen extends StatefulWidget {
   final String? userRole;
   final VoidCallback? onBack;
   final bool hideAppBar;
+  final String? title;
 
   const ModulverwaltungScreen({
     super.key,
@@ -18,6 +19,7 @@ class ModulverwaltungScreen extends StatefulWidget {
     this.userRole,
     this.onBack,
     this.hideAppBar = false,
+    this.title,
   });
 
   @override
@@ -52,8 +54,10 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
     });
     try {
       await _modulService.ensureSsdModuleExists();
+      await _modulService.ensureTelefonlisteModuleExists();
       await _modulService.ensureChatModuleExists();
       await _modulService.ensureSchichtplanNfsModuleExists();
+      await _modulService.ensureTelefonlisteNfsModuleExists();
       var mods = await _modulService.getAllModules();
       if (mods.isEmpty) {
         final defs = await _kundenService.getAllModuleDefs();
@@ -185,7 +189,7 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
     final scaffold = Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Modul-Verwaltung',
+        title: widget.title ?? 'Modul-Verwaltung',
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         actions: [
           if (widget.userRole == 'superadmin')

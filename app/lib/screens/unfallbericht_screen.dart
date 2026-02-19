@@ -28,9 +28,10 @@ const _fuehrerscheinklassen = ['A', 'A1', 'A2', 'AM', 'B', 'BE', 'C', 'CE', 'C1'
 
 class UnfallberichtScreen extends StatefulWidget {
   final String companyId;
+  final String? title;
   final VoidCallback onBack;
 
-  const UnfallberichtScreen({super.key, required this.companyId, required this.onBack});
+  const UnfallberichtScreen({super.key, required this.companyId, this.title, required this.onBack});
 
   @override
   State<UnfallberichtScreen> createState() => _UnfallberichtScreenState();
@@ -525,7 +526,7 @@ class _UnfallberichtScreenState extends State<UnfallberichtScreen> {
       return Scaffold(
         backgroundColor: Colors.white,
         appBar: AppTheme.buildModuleAppBar(
-          title: 'Unfallbericht',
+          title: widget.title ?? 'Unfallbericht',
           onBack: widget.onBack,
         ),
         body: const Center(child: CircularProgressIndicator()),
@@ -535,7 +536,7 @@ class _UnfallberichtScreenState extends State<UnfallberichtScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Unfallbericht',
+        title: widget.title ?? 'Unfallbericht',
         onBack: widget.onBack,
         actions: [
           IconButton(

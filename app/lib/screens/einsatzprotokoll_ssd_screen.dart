@@ -31,9 +31,10 @@ const _pflichtfeldGelb = Color(0xFFFFF9C4); // Amber 100
 /// Einsatzprotokoll des Schulsanitätsdienstes – Formular
 class EinsatzprotokollSsdScreen extends StatefulWidget {
   final String companyId;
+  final String? title;
   final VoidCallback onBack;
 
-  const EinsatzprotokollSsdScreen({super.key, required this.companyId, required this.onBack});
+  const EinsatzprotokollSsdScreen({super.key, required this.companyId, this.title, required this.onBack});
 
   @override
   State<EinsatzprotokollSsdScreen> createState() => _EinsatzprotokollSsdScreenState();
@@ -544,7 +545,7 @@ class _EinsatzprotokollSsdScreenState extends State<EinsatzprotokollSsdScreen> {
       return Scaffold(
         backgroundColor: AppTheme.surfaceBg,
         appBar: AppTheme.buildModuleAppBar(
-          title: 'Einsatzprotokoll Schulsanitätsdienst',
+          title: widget.title ?? 'Einsatzprotokoll Schulsanitätsdienst',
           onBack: widget.onBack,
           actions: appBarActions,
         ),

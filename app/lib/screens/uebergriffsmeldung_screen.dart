@@ -78,12 +78,14 @@ const _settingsRoles = ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdi
 class UebergriffsmeldungScreen extends StatefulWidget {
   final String companyId;
   final String? userRole;
+  final String? title;
   final VoidCallback onBack;
 
   const UebergriffsmeldungScreen({
     super.key,
     required this.companyId,
     this.userRole,
+    this.title,
     required this.onBack,
   });
 
@@ -490,7 +492,7 @@ class _UebergriffsmeldungScreenState extends State<UebergriffsmeldungScreen> {
       return Scaffold(
         backgroundColor: AppTheme.surfaceBg,
         appBar: AppTheme.buildModuleAppBar(
-          title: 'Übergriff',
+          title: widget.title ?? 'Übergriff',
           onBack: widget.onBack,
           actions: [
             if (_canEditSettings) ...[
