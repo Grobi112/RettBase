@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
 
@@ -23,53 +22,46 @@ bool _isVersionNewer(String a, String b) {
   return false;
 }
 
-/// Web: Prüft periodisch version.json; nur bei echt neuer Server-Version wird neu geladen.
+/// Web: Einmalige Versionsprüfung (vor Dashboard-Load).
+/// Keine periodische Prüfung mehr – stört den Ablauf innerhalb der Session.
 /// Reload nur wenn Server > Client – verhindert Endlosschleife durch Cache-Unterschiede.
-void initWebVersionCheck(void Function() onUpdateAvailable) {
+Future<void> runWebVersionCheckOnce(void Function() onUpdateAvailable) async {
   final host = html.window.location.hostname;
   if (host == 'localhost' || host == '127.0.0.0' || host == '127.0.0.1') return;
 
   final baseUrl = AppConfig.androidUpdateCheckUrl;
   if (baseUrl == null || baseUrl.isEmpty) return;
 
-  const checkInterval = Duration(minutes: 5);
   const reloadCooldownMs = 120000;  // 2 Min – nach Reload nicht erneut prüfen
 
-  Future<void> check() async {
+  try {
+    final lastReload = html.window.sessionStorage['rettbase_version_reload'];
+    if (lastReload != null) {
+      final t = int.tryParse(lastReload) ?? 0;
+      if (DateTime.now().millisecondsSinceEpoch - t < reloadCooldownMs) return;
+    }
+
+    final url = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+    final res = await html.HttpRequest.request(url, method: 'GET')
+        .timeout(const Duration(seconds: 10));
+    if (res.status != 200) return;
+    final raw = (res.responseText ?? '').trim();
+    if (raw.isEmpty || !raw.startsWith('{')) return;
+    Map<String, dynamic>? data;
     try {
-      // Cooldown: Kein Reload, wenn wir kürzlich schon einen ausgelöst haben (z.B. Tab-Wechsel während Reload)
-      final lastReload = html.window.sessionStorage['rettbase_version_reload'];
-      if (lastReload != null) {
-        final t = int.tryParse(lastReload) ?? 0;
-        if (DateTime.now().millisecondsSinceEpoch - t < reloadCooldownMs) return;
-      }
+      data = jsonDecode(raw) as Map<String, dynamic>?;
+    } catch (_) {
+      return;
+    }
+    if (data == null) return;
+    final serverVer = ((data['version'] as String?) ?? '').trim();
+    final clientVer = _getClientVersion();
 
-      final url = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
-      final res = await html.HttpRequest.request(url, method: 'GET')
-          .timeout(const Duration(seconds: 10));
-      if (res.status != 200) return;
-      final raw = (res.responseText ?? '').trim();
-      if (raw.isEmpty || !raw.startsWith('{')) return;
-      Map<String, dynamic>? data;
-      try {
-        data = jsonDecode(raw) as Map<String, dynamic>?;
-      } catch (_) {
-        return;
-      }
-      if (data == null) return;
-      final serverVer = ((data['version'] as String?) ?? '').trim();
-      final clientVer = _getClientVersion();
+    if (serverVer.isEmpty || clientVer.isEmpty) return;
+    if (!_isVersionNewer(serverVer, clientVer)) return;
 
-      // Nur neu laden, wenn Server-Version echt neuer ist (nicht bei Cache-Abweichung)
-      if (serverVer.isEmpty || clientVer.isEmpty) return;
-      if (!_isVersionNewer(serverVer, clientVer)) return;
-
-      html.window.sessionStorage['rettbase_version_reload'] = '${DateTime.now().millisecondsSinceEpoch}';
-      onUpdateAvailable();
-    } catch (_) {}
-  }
-
-  Future.delayed(const Duration(seconds: 10), check);
-  html.window.onFocus.listen((_) => check());
-  Timer.periodic(checkInterval, (_) => check());
+    html.window.sessionStorage['rettbase_version_reload'] =
+        '${DateTime.now().millisecondsSinceEpoch}';
+    onUpdateAvailable();
+  } catch (_) {}
 }

@@ -1,2 +1,2 @@
 /// Stub: Keine Web-Versionsprüfung (Native).
-void initWebVersionCheck(void Function() onUpdateAvailable) {}
+Future<void> runWebVersionCheckOnce(void Function() onUpdateAvailable) async {}

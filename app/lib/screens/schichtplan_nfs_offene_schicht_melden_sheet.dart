@@ -62,9 +62,10 @@ class _SchichtplanNfsOffeneSchichtMeldenSheetState
         m = await _service.findMitarbeiterByUid(widget.companyId, uid);
       }
       final alleTypen = await _service.loadBereitschaftsTypen(widget.companyId);
-      final typen = SchichtplanNfsBereitschaftstypUtils.filterAndSortS1S2B(
-        alleTypen,
-      );
+      var typen = SchichtplanNfsBereitschaftstypUtils.filterAndSortS1S2B(alleTypen);
+      if (typen.isEmpty && alleTypen.isNotEmpty) {
+        typen = List.of(alleTypen)..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+      }
       if (mounted) {
         setState(() {
           _mitarbeiter = m;

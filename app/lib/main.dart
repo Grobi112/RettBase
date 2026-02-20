@@ -18,8 +18,8 @@ import 'utils/service_worker_update_stub.dart'
     if (dart.library.html) 'utils/service_worker_update_web.dart' as sw_update;
 import 'utils/firebase_sw_register_stub.dart'
     if (dart.library.html) 'utils/firebase_sw_register_web.dart' as firebase_sw;
-import 'utils/web_version_check.dart';
 import 'utils/reload_web.dart' as rw;
+import 'utils/web_version_check.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,9 +36,6 @@ void main() async {
   // Web: Service-Worker auf Updates prüfen → automatischer Reload bei neuem Build
   sw_update.initServiceWorkerUpdateListener();
 
-  if (kIsWeb) {
-    initWebVersionCheck(_reloadWeb);  // Automatisch neu laden bei neuer Version (kein Banner)
-  }
 
   try {
     await Firebase.initializeApp(
@@ -203,6 +200,13 @@ class _RettBaseHomeState extends State<RettBaseHome> {
     } catch (_) {}
 
     if (!mounted) return;
+
+    // Web: Einmalige Versionsprüfung im Ladefenster – Update ggf. sofort, keine Prüfung mehr in der Session
+    if (kIsWeb) {
+      await runWebVersionCheckOnce(_reloadWeb);
+      if (!mounted) return;
+    }
+
     if (user != null) {
       debugPrint('RettBase: Bereits angemeldet (uid=${user.uid}) – springe direkt ins Dashboard');
       Navigator.of(context).pushReplacement(
