@@ -206,16 +206,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _fotoFilename ?? 'photo.jpg',
         );
       }
+      String _v(String s) => s.trim();
+      Object? _field(String v) => v.isEmpty ? FieldValue.delete() : v;
       final updates = <String, dynamic>{
-        'nachname': _nameCtrl.text.trim(),
-        'vorname': _vornameCtrl.text.trim(),
-        'geburtsdatum': _geburtsdatum != null ? Timestamp.fromDate(_geburtsdatum!) : null,
-        'strasse': _strasseCtrl.text.trim(),
-        'hausnummer': _hausnrCtrl.text.trim(),
-        'plz': _plzCtrl.text.trim(),
-        'ort': _ortCtrl.text.trim(),
-        'telefon': _telefonCtrl.text.trim(),
-        'email': _emailCtrl.text.trim(),
+        'nachname': _field(_v(_nameCtrl.text)),
+        'vorname': _field(_v(_vornameCtrl.text)),
+        'geburtsdatum': _geburtsdatum != null ? Timestamp.fromDate(_geburtsdatum!) : FieldValue.delete(),
+        'strasse': _field(_v(_strasseCtrl.text)),
+        'hausnummer': _field(_v(_hausnrCtrl.text)),
+        'plz': _field(_v(_plzCtrl.text)),
+        'ort': _field(_v(_ortCtrl.text)),
+        'telefon': _field(_v(_telefonCtrl.text)),
+        'email': _field(_v(_emailCtrl.text)),
         'fotoUrl': fotoUrl ?? FieldValue.delete(),
       };
       await _profileService.saveProfile(
