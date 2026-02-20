@@ -141,7 +141,16 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 - `dense: true`, `contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0)`
 - Abstand zu „Abmelden“ darüber: 24 px
 
-## 8. Hinweis zu Firestore-Daten
+## 8. Letzte Session-Änderungen (Feb 2026)
+
+- **Cloud Functions:** kundeExists, _resolveToDocId, ensureUsersDoc – Firestore-Queries parallel mit Promise.all
+- **Web Build:** `--tree-shake-icons` in build_web.sh, deploy_web.sh, fw
+- **Dashboard:** Module + Menü parallel, Container-Slots/Infos lazy geladen; EnsureUsersDocCache verhindert doppeltes ensureUsersDoc nach Login
+- **LoginService:** Schnellpfad für 112 (admin) und admin@rettbase.de – kein Cloud-Call, kein Cold-Start
+- **APK:** Entfernt – kein downloadUrl mehr in version.json; app_update_service_android gibt immer upToDate; increment_version.js löscht downloadUrl
+- **Push:** permission-blocked nicht mehr als Fehler geloggt; bei denied wird getToken nicht versucht
+
+## 9. Hinweis zu Firestore-Daten
 
 Die **tatsächlichen Inhalte** von Firestore (Dokumente, Werte) sind nicht in diesem Repo. Bei Problemen:
 - Struktur und Pfade aus Code/ diesem Doc ableiten
