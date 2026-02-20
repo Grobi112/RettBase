@@ -3,29 +3,14 @@
 /// Arbeitet mit Kunden-ID (nicht Subdomain) – URL: kundenId.rettbase.de
 
 class AppConfig {
-  /// reCAPTCHA v3 Site-Key für Firebase App Check (Web).
-  /// Aktuell nicht verwendet – kundeExists/resolveLoginInfo sind durch Rate-Limit (5/min) geschützt.
-  /// Falls App Check gewünscht: Key in _appCheckRecaptchaSiteKeyConst eintragen.
-  static String? get appCheckRecaptchaSiteKey {
-    const envKey = String.fromEnvironment('RETTBASE_APP_CHECK_SITE_KEY', defaultValue: '');
-    if (envKey.isNotEmpty) return envKey;
-    return _appCheckRecaptchaSiteKeyConst;
-  }
-
-  static const String? _appCheckRecaptchaSiteKeyConst = null;
-
   /// VAPID-Key für Web-Push (FCM).
   /// In Firebase Console: Projekt-Einstellungen → Cloud Messaging → Web-Konfiguration → Schlüsselpaar erzeugen.
   /// Ohne diesen Key funktionieren Push-Benachrichtigungen auf Web nicht.
   static const String? fcmWebVapidKey = 'BOry5KP4SOhFgMZXOEAC2L5kttPU47Tuc8VBBCGk3NGqHqumnF1-bfPbwVTxdXD2rntuCt1azw48FejwsunG5u4';
   static const String rootDomain = 'rettbase.de';
 
-  /// Android APK: URL zur version.json für In-App-Updates.
+  /// URL zur version.json (für Web-Versionscheck und ggf. zukünftige native Updates).
   static const String? androidUpdateCheckUrl = 'https://app.rettbase.de/version.json';
-
-  /// Android APK: Direkter Download-Link (unabhängig von version.json).
-  /// Trage hier die URL ein, die im Browser den APK-Download startet.
-  static const String? androidApkDownloadUrl = 'https://app.rettbase.de/apk/app-release.apk';
 
   /// Basis-URL für die RettBase Web-App (Produktion)
   /// [kundenId] Kunden-ID, z.B. 'admin' → https://admin.rettbase.de

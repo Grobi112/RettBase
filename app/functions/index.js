@@ -276,19 +276,15 @@ exports.kundeExists = functions.region("europe-west1").https.onCall(async (data,
   try {
     const seen = new Set();
     const allDocs = [];
-    const byKundenId = await db.collection("kunden").where("kundenId", "==", id).limit(5).get();
+    const [byKundenId, bySubdomain] = await Promise.all([
+      db.collection("kunden").where("kundenId", "==", id).limit(5).get(),
+      db.collection("kunden").where("subdomain", "==", id).limit(5).get(),
+    ]);
     byKundenId.docs.forEach((d) => {
-      if (!seen.has(d.id)) {
-        seen.add(d.id);
-        allDocs.push(d);
-      }
+      if (!seen.has(d.id)) { seen.add(d.id); allDocs.push(d); }
     });
-    const bySubdomain = await db.collection("kunden").where("subdomain", "==", id).limit(5).get();
     bySubdomain.docs.forEach((d) => {
-      if (!seen.has(d.id)) {
-        seen.add(d.id);
-        allDocs.push(d);
-      }
+      if (!seen.has(d.id)) { seen.add(d.id); allDocs.push(d); }
     });
     if (allDocs.length > 0) {
       const docId = _pickBestDocId(allDocs, id);
@@ -312,11 +308,13 @@ async function _resolveToDocId(companyId) {
   try {
     const seen = new Set();
     const allDocs = [];
-    const byKundenId = await db.collection("kunden").where("kundenId", "==", id).limit(5).get();
+    const [byKundenId, bySubdomain] = await Promise.all([
+      db.collection("kunden").where("kundenId", "==", id).limit(5).get(),
+      db.collection("kunden").where("subdomain", "==", id).limit(5).get(),
+    ]);
     byKundenId.docs.forEach((d) => {
       if (!seen.has(d.id)) { seen.add(d.id); allDocs.push(d); }
     });
-    const bySubdomain = await db.collection("kunden").where("subdomain", "==", id).limit(5).get();
     bySubdomain.docs.forEach((d) => {
       if (!seen.has(d.id)) { seen.add(d.id); allDocs.push(d); }
     });
@@ -437,12 +435,12 @@ exports.ensureUsersDoc = functions.region("europe-west1").https.onCall(async (da
   const is112Admin = email.startsWith("112@admin") && email.includes("rettbase");
   let isAdminCompanySuperadmin = false;
   if (!isGlobalSuperadmin && !is112Admin) {
-    const adminUser = await db.collection("kunden").doc("admin").collection("users").doc(uid).get();
+    const [adminUser, byUidAdmin] = await Promise.all([
+      db.collection("kunden").doc("admin").collection("users").doc(uid).get(),
+      db.collection("kunden").doc("admin").collection("mitarbeiter").where("uid", "==", uid).limit(1).get(),
+    ]);
     if (adminUser.exists && (adminUser.data()?.role || "").toString().toLowerCase() === "superadmin") isAdminCompanySuperadmin = true;
-    if (!isAdminCompanySuperadmin) {
-      const byUidAdmin = await db.collection("kunden").doc("admin").collection("mitarbeiter").where("uid", "==", uid).limit(1).get();
-      if (!byUidAdmin.empty && (byUidAdmin.docs[0].data()?.role || "").toString().toLowerCase() === "superadmin") isAdminCompanySuperadmin = true;
-    }
+    if (!isAdminCompanySuperadmin && !byUidAdmin.empty && (byUidAdmin.docs[0].data()?.role || "").toString().toLowerCase() === "superadmin") isAdminCompanySuperadmin = true;
   }
   const ref = db.collection("kunden").doc(companyId).collection("users").doc(uid);
   const isSuperadminUser = isGlobalSuperadmin || is112Admin || isAdminCompanySuperadmin;

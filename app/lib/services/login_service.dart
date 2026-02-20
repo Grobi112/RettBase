@@ -9,6 +9,12 @@ import '../app_config.dart';
 class LoginService {
   final _functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
 
+  static bool _isGlobalSuperadmin(String s) {
+    final e = s.trim().toLowerCase();
+    return e == 'admin@rettbase.de' || e == 'admin@rettbase' ||
+        (e.startsWith('admin@') && e.contains('rettbase'));
+  }
+
   /// Liefert die E-Mail für signInWithEmailAndPassword (Kompatibilität).
   Future<String> resolveLoginEmail(String emailOrPersonalnummer, String companyId) async {
     final r = await resolveLoginInfo(emailOrPersonalnummer, companyId);
@@ -17,16 +23,26 @@ class LoginService {
 
   /// Liefert E-Mail + optional Mitarbeiter-Doc-Pfad + effektive Company-ID (für Auto-Create + UID-Update).
   /// Nutzt Cloud Function resolveLoginInfo – keine direkte Firestore-Leseberechtigung für mitarbeiter vor Login.
+  /// Schnellpfad: 112+admin und admin@rettbase.de werden lokal aufgelöst (spart Cloud-Call/Cold-Start).
   Future<({String email, String? mitarbeiterDocPath, String? effectiveCompanyId})> resolveLoginInfo(
       String emailOrPersonalnummer, String companyId) async {
     final input = emailOrPersonalnummer.trim();
     if (input.isEmpty) throw Exception('Bitte Benutzerkennung eingeben.');
 
+    final cid = companyId.trim().toLowerCase();
+    // Schnellpfad: Kein Cloud-Call, kein Cold-Start
+    if (_isGlobalSuperadmin(input)) {
+      return (email: 'admin@rettbase.de', mitarbeiterDocPath: null, effectiveCompanyId: cid);
+    }
+    if (cid == 'admin' && input == '112') {
+      return (email: '112@admin.${AppConfig.rootDomain}', mitarbeiterDocPath: null, effectiveCompanyId: 'admin');
+    }
+
     try {
       final res = await _functions
           .httpsCallable('resolveLoginInfo')
           .call<Map<String, dynamic>>({
-        'companyId': companyId.trim().toLowerCase(),
+        'companyId': cid,
         'emailOrPersonalnummer': input,
       });
       final data = res.data ?? {};

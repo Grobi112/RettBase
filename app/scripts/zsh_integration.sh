@@ -4,8 +4,8 @@
 # Danach: cd app && flutter build web erhöht automatisch die Version.
 
 rettbase_flutter() {
-  if [[ "$1" == "build" && "$2" == "web" ]] && [[ -f "$(pwd)/scripts/inject_version.js" ]]; then
-    node "$(pwd)/scripts/inject_version.js"
+  if [[ "$1" == "build" && "$2" == "web" ]] && [[ -f "$(pwd)/web/increment_version.js" ]]; then
+    node "$(pwd)/web/increment_version.js"
   fi
   command flutter "$@"
 }

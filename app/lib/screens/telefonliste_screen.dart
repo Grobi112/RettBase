@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../models/mitarbeiter_model.dart';
 import '../services/mitarbeiter_service.dart';
+import '../utils/phone_format.dart';
 
 /// Telefonliste – gleiche Datenbank (kunden/{companyId}/mitarbeiter), gleiche Funktion und Rollen wie Web
 /// Bearbeiten (voll): Admin, Rettungsdienstleitung, Geschäftsführung, Wachleitung
@@ -197,11 +198,17 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
                     ),
                   );
                 }
+                final useCompactLayout = Responsive.isPhone(context);
                 return ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: EdgeInsets.fromLTRB(
+                    Responsive.horizontalPadding(context),
+                    0,
+                    Responsive.horizontalPadding(context),
+                    MediaQuery.paddingOf(context).bottom + 16,
+                  ),
                   children: [
-                    _buildHeader(),
-                    ...list.map((m) => _buildRow(m)),
+                    _buildHeader(useCompactLayout),
+                    ...list.map((m) => _buildRow(m, useCompactLayout)),
                   ],
                 );
               },
@@ -212,39 +219,33 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool compact) {
     return Padding(
       padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
       child: DefaultTextStyle(
         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
-        child: LayoutBuilder(
-          builder: (_, constraints) {
-            final narrow = constraints.maxWidth < 600;
-            if (narrow) {
-              return const Row(
+        child: compact
+            ? const Row(
                 children: [
-                  Expanded(flex: 4, child: Text('Name')),
-                  Expanded(flex: 3, child: Center(child: Text('Qual.'))),
+                  Expanded(flex: 4, child: Text('Nachname, Vorname')),
+                  Expanded(flex: 2, child: Center(child: Text('Qual.'))),
                   Expanded(flex: 1, child: Center(child: Text('FS'))),
-                  Expanded(flex: 2, child: Center(child: Text('Telefonnummer'))),
+                  Expanded(flex: 3, child: Center(child: Text('Tel.Nr.'))),
                 ],
-              );
-            }
-            return const Row(
-              children: [
-                Expanded(flex: 4, child: Text('Nachname, Vorname')),
-                Expanded(flex: 4, child: Center(child: Text('Qualifikation'))),
-                Expanded(flex: 2, child: Center(child: Text('Führerschein'))),
-                Expanded(flex: 2, child: Center(child: Text('Telefonnummer'))),
-              ],
-            );
-          },
-        ),
+              )
+            : const Row(
+                children: [
+                  Expanded(flex: 4, child: Text('Nachname, Vorname')),
+                  Expanded(flex: 3, child: Center(child: Text('Qualifikation'))),
+                  Expanded(flex: 2, child: Center(child: Text('Führerschein'))),
+                  Expanded(flex: 3, child: Center(child: Text('Tel.Nr.'))),
+                ],
+              ),
       ),
     );
   }
 
-  Widget _buildRow(Mitarbeiter m) {
+  Widget _buildRow(Mitarbeiter m, bool compact) {
     final name = m.displayName;
     final qualis = (m.qualifikation ?? []).join(' / ');
     final fs = m.fuehrerschein ?? '';
@@ -253,6 +254,7 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
     Widget _phoneLink(String text) {
       final display = text.trim().isEmpty ? '' : text;
       final hasNumber = RegExp(r'\d').hasMatch(text);
+      final formatted = formatPhoneForDisplay(display);
       return InkWell(
         onTap: hasNumber ? () => _launchTel(text) : null,
         borderRadius: BorderRadius.circular(8),
@@ -260,12 +262,15 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             child: Text(
-              display.isEmpty ? '-' : display,
+              display.isEmpty ? '-' : formatted,
               style: TextStyle(
                 fontSize: 14,
                 color: hasNumber ? AppTheme.primary : Colors.grey[600],
                 decoration: hasNumber ? TextDecoration.underline : null,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 2,
+              textAlign: TextAlign.center,
             ),
           ),
         ),
@@ -274,51 +279,31 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
 
     final canEditThis = _canEditAllByRole || _canEditPhoneOnlyByRole || _isOwnProfile(m);
     final editArea = canEditThis ? () => _openEdit(m) : null;
+    final textStyleMuted = TextStyle(fontSize: 14, color: Colors.grey[700]);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: LayoutBuilder(
-          builder: (_, constraints) {
-            if (constraints.maxWidth < 500) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: compact
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  InkWell(
-                    onTap: editArea,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                          if (qualis.isNotEmpty || fs.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text('$qualis${fs.isNotEmpty ? ' · $fs' : ''}', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _phoneLink(tel),
+                  Expanded(flex: 4, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis, maxLines: 2)))),
+                  Expanded(flex: 2, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(qualis, style: textStyleMuted, overflow: TextOverflow.ellipsis, maxLines: 1))))),
+                  Expanded(flex: 1, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(fs, style: textStyleMuted, overflow: TextOverflow.ellipsis, maxLines: 1))))),
+                  Expanded(flex: 3, child: _phoneLink(tel)),
                 ],
-              );
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(flex: 4, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(name, style: const TextStyle(fontSize: 14))))),
-                Expanded(flex: 4, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(qualis, style: TextStyle(fontSize: 14, color: Colors.grey[700])))))),
-                Expanded(flex: 2, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(fs, style: TextStyle(fontSize: 14, color: Colors.grey[700])))))),
-                Expanded(flex: 2, child: _phoneLink(tel)),
-              ],
-            );
-          },
-        ),
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(flex: 4, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(name, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis, maxLines: 1)))),
+                  Expanded(flex: 3, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(qualis, style: textStyleMuted, overflow: TextOverflow.ellipsis, maxLines: 1))))),
+                  Expanded(flex: 2, child: InkWell(onTap: editArea, borderRadius: BorderRadius.circular(8), child: Center(child: Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(fs, style: textStyleMuted, overflow: TextOverflow.ellipsis, maxLines: 1))))),
+                  Expanded(flex: 3, child: _phoneLink(tel)),
+                ],
+              ),
       ),
     );
   }

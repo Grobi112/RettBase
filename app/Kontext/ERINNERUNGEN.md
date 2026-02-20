@@ -305,9 +305,9 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 **Aktueller Stand:** APK-In-App-Update ist **entfernt**. Kein Update-Dialog, kein Download-Link im Dashboard, keine App-Update-Karte in Einstellungen.
 
 ### Was existiert, aber nicht genutzt wird
-- `lib/services/app_update_service*.dart`, `app_update_types.dart` – Code bleibt, wird nirgends aufgerufen
-- `app_config.dart`: `androidUpdateCheckUrl`, `androidApkDownloadUrl` – ungenutzt
-- `scripts/inject_version.js`, `web/version.json` – für Web-Versionierung, APK-Vergleich aus
+- `lib/services/app_update_service*.dart`, `app_update_types.dart` – Code bleibt, wird nirgends aufgerufen. APK-Updates entfernt (Play Store).
+- `app_config.dart`: `androidUpdateCheckUrl` – für Web-Versionscheck (version.json) genutzt
+- `web/increment_version.js`, `web/version.json` – für Web-Versionierung, APK-Vergleich aus
 
 ### Was zurückgenommen wurde
 - **app_installer_plus** (In-App-Download/Install) – entfernt, hatte XML-Änderungen (FileProvider, Permissions) die Probleme verursachten
@@ -319,7 +319,7 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 ### Web-App (Stand Feb 2026)
 - **Kein Update-Banner mehr** – bei neuer Version (version.json) wird die Seite **automatisch** neu geladen
 - **version.json-Check:** periodisch + bei Tab-Fokus; bei Abweichung → sofortiger Reload (Cache-Bypass)
-- **Versionierung:** `version.json` + `inject_version.js` – vor Web-Build manuell oder via `./fw` / `./scripts/build_web.sh`
+- **Versionierung:** `web/version.json` + `web/increment_version.js` – wird bei `./fw`, `./flutter build web` oder `./scripts/build_web.sh` erhöht. Nicht bei direktem `flutter build web` (IDE/CLI)
 - **Cache-Leerung beim Aufruf:** firebase.json headers + index.html Meta-Tags für index.html, JS, manifest, version.json
 
 ---

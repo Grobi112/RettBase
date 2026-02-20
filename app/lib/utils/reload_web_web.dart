@@ -1,10 +1,19 @@
 import 'dart:html' as html;
 
-/// Lädt die Seite neu und umgeht den Cache, damit index.html mit aktualisierter
-/// Version geladen wird (verhindert erneutes Anzeigen des Update-Banners).
+/// Lädt die Seite neu und umgeht den Cache. Deregistriert zuvor den Service Worker,
+/// damit der Reload index.html frisch vom Server holt (ohne Query-Parameter).
 void reload() {
-  final uri = html.window.location;
-  final base = '${uri.protocol}//${uri.host}${uri.pathname}';
-  final separator = (uri.search == null || uri.search!.isEmpty) ? '?' : '&';
-  html.window.location.href = '$base${separator}_=${DateTime.now().millisecondsSinceEpoch}';
+  if (html.window.navigator.serviceWorker != null) {
+    html.window.navigator.serviceWorker!.ready.then((_) {
+      return html.window.navigator.serviceWorker!.getRegistrations();
+    }).then((regs) {
+      return Future.wait(regs.map((r) => r.unregister()));
+    }).then((_) {
+      html.window.location.reload();
+    }).catchError((_) {
+      html.window.location.reload();
+    });
+  } else {
+    html.window.location.reload();
+  }
 }

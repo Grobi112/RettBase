@@ -106,33 +106,34 @@ class PushNotificationService {
     _lastCompanyId = companyId;
     _lastUid = uid;
     if (kIsWeb) {
+      if (AppConfig.fcmWebVapidKey == null || AppConfig.fcmWebVapidKey!.isEmpty) {
+        return;
+      }
+      // Berechtigung bereits verweigert → kein getToken versuchen, kein Log
+      if (getNotificationPermissionStatusWeb() == 'denied') return;
       try {
-        if (AppConfig.fcmWebVapidKey == null || AppConfig.fcmWebVapidKey!.isEmpty) {
-          debugPrint('RettBase Push Web: VAPID-Key fehlt – Token wird nicht abgerufen');
-          return;
-        }
         await perm_impl.ensureServiceWorkerRegisteredWeb();
         final token = await _messaging.getToken(vapidKey: AppConfig.fcmWebVapidKey);
-        if (token == null || token.isEmpty) {
-          debugPrint('RettBase Push Web: getToken lieferte null – Berechtigung prüfen');
-          return;
-        }
+        if (token == null || token.isEmpty) return;
         await _saveTokenToFirestore(companyId, uid, token);
-        debugPrint('RettBase Push Web: Token erfolgreich gespeichert für $companyId / $uid');
       } catch (e) {
-        debugPrint('RettBase Push Web: token speichern fehlgeschlagen: $e');
+        // permission-blocked ist erwartbar (Nutzer hat abgelehnt) – nicht als Fehler loggen
+        final msg = e.toString();
+        if (!msg.contains('permission-blocked') && !msg.contains('permission_blocked')) {
+          debugPrint('RettBase Push Web: token speichern fehlgeschlagen: $e');
+        }
       }
       return;
     }
     try {
       final token = await _messaging.getToken();
-      if (token == null || token.isEmpty) {
-        debugPrint('RettBase Push: getToken lieferte null – Berechtigung prüfen');
-        return;
-      }
+      if (token == null || token.isEmpty) return;
       await _saveTokenToFirestore(companyId, uid, token);
     } catch (e) {
-      debugPrint('RettBase Push: token speichern fehlgeschlagen: $e');
+      final msg = e.toString();
+      if (!msg.contains('permission-blocked') && !msg.contains('permission_blocked')) {
+        debugPrint('RettBase Push: token speichern fehlgeschlagen: $e');
+      }
     }
   }
 
@@ -144,7 +145,6 @@ class PushNotificationService {
       };
       await _db.collection('kunden').doc(companyId).collection('users').doc(uid).set(data, SetOptions(merge: true));
       await _db.collection('fcmTokens').doc(uid).set(data, SetOptions(merge: true));
-      debugPrint('RettBase Push: token gespeichert für $companyId / $uid (global)');
     } catch (e) {
       debugPrint('RettBase Push: Firestore-Schreiben fehlgeschlagen: $e');
     }

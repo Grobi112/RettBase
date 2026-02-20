@@ -1,15 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'services/push_notification_service.dart';
-import 'app_config.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 import 'screens/company_id_screen.dart';
@@ -25,6 +24,15 @@ import 'utils/reload_web.dart' as rw;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Uncaught Errors abfangen (z.B. async Fehler in _initApp, Push-Service)
+  FlutterError.onError = (details) {
+    if (kDebugMode) debugPrint('RettBase FlutterError: ${details.exception}\n${details.stack}');
+  };
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    if (kDebugMode) debugPrint('RettBase Uncaught: $error\n$stack');
+    return true; // verhindert weiteren Abbruch
+  };
+
   // Web: Service-Worker auf Updates prüfen → automatischer Reload bei neuem Build
   sw_update.initServiceWorkerUpdateListener();
 
@@ -37,8 +45,14 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
     debugPrint('RettBase Firebase: project=${Firebase.app().options.projectId}');
-    await _initAppCheck();
-    unawaited(PushNotificationService.initialize());
+    if (kIsWeb) {
+      try {
+        await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+      } catch (_) {}
+    }
+    unawaited(PushNotificationService.initialize().catchError((e) {
+      if (kDebugMode) debugPrint('RettBase Push Init: $e');
+    }));
   } catch (e) {
     debugPrint('Firebase Init Fehler: $e');
   }
@@ -53,24 +67,6 @@ void main() async {
 final _navigatorKey = GlobalKey<NavigatorState>();
 
 void _reloadWeb() => rw.reload();
-
-/// App Check aktivieren – schützt Cloud Functions (kundeExists, resolveLoginInfo) vor Enumerations-Angriffen.
-/// Firebase Console: App Check Enforcement für Cloud Functions aktivieren, wenn bereit.
-Future<void> _initAppCheck() async {
-  try {
-    final webKey = AppConfig.appCheckRecaptchaSiteKey;
-    await FirebaseAppCheck.instance.activate(
-      webProvider: (kIsWeb && webKey != null && webKey.isNotEmpty)
-          ? ReCaptchaV3Provider(webKey)
-          : null,
-      androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
-      appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
-    );
-    debugPrint('RettBase App Check: aktiv');
-  } catch (e) {
-    debugPrint('RettBase App Check Init Fehler: $e');
-  }
-}
 
 class RettBaseApp extends StatelessWidget {
   const RettBaseApp({super.key});
@@ -112,6 +108,21 @@ class _RettBaseHomeState extends State<RettBaseHome> {
   }
 
   Future<void> _initApp() async {
+    try {
+      await _initAppImpl();
+    } catch (e, s) {
+      if (kDebugMode) debugPrint('RettBase _initApp Fehler: $e\n$s');
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const CompanyIdScreen(),
+          transitionDuration: Duration.zero,
+        ),
+      );
+    }
+  }
+
+  Future<void> _initAppImpl() async {
     final prefs = await SharedPreferences.getInstance();
     final companyConfigured = prefs.getBool('rettbase_company_configured') ?? false;
     var companyId = prefs.getString('rettbase_company_id') ??
@@ -131,20 +142,23 @@ class _RettBaseHomeState extends State<RettBaseHome> {
 
     final cid = companyId.trim().toLowerCase();
     dynamic kundeRes;
-    dynamic user;
+    User? user;
     try {
       final kundeFuture = FirebaseFunctions.instanceFor(region: 'europe-west1')
           .httpsCallable('kundeExists')
           .call<Map<String, dynamic>>({'companyId': cid});
-      final authFuture = FirebaseAuth.instance.authStateChanges().first;
+      final authFuture = FirebaseAuth.instance
+          .authStateChanges()
+          .handleError((e) {
+            if (kDebugMode) debugPrint('RettBase authStateChanges: $e');
+          })
+          .first
+          .then<User?>((u) => u)
+          .catchError((_) => null);
 
-      final results = await Future.wait([
-        kundeFuture,
-        authFuture,
-        Future.delayed(const Duration(milliseconds: 400)),
-      ]);
+      final results = await Future.wait([kundeFuture, authFuture]);
       kundeRes = results[0];
-      user = results[1];
+      user = results[1] as User?;
     } catch (e) {
       // kundeExists fehlgeschlagen (Netzwerk, 404, Rate-Limit) → Kunden-ID neu eingeben
       if (kDebugMode) debugPrint('RettBase kundeExists Fehler: $e');
@@ -164,24 +178,27 @@ class _RettBaseHomeState extends State<RettBaseHome> {
 
     try {
       final res = kundeRes as dynamic;
-      final exists = res.data['exists'] == true;
-      final docId = (res.data['docId'] as String?)?.trim().toLowerCase();
-      if (exists && docId != null && docId.isNotEmpty && docId != cid) {
-        companyId = docId;
-        unawaited(prefs.setString('rettbase_company_id', docId));
-      } else if (!exists) {
-        // Kunde existiert nicht mehr → Kunden-ID neu eingeben
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (_, __, ___) => CompanyIdScreen(
-              initialCompanyId: cid,
-              retryHint: 'Diese Kunden-ID wurde nicht gefunden. Bitte erneut eingeben.',
+      final data = res.data;
+      if (data != null) {
+        final exists = data['exists'] == true;
+        final docId = (data['docId'] as String?)?.trim().toLowerCase();
+        if (exists && docId != null && docId.isNotEmpty && docId != cid) {
+          companyId = docId;
+          unawaited(prefs.setString('rettbase_company_id', docId));
+        } else if (!exists) {
+          // Kunde existiert nicht mehr → Kunden-ID neu eingeben
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (_, __, ___) => CompanyIdScreen(
+                initialCompanyId: cid,
+                retryHint: 'Diese Kunden-ID wurde nicht gefunden. Bitte erneut eingeben.',
+              ),
+              transitionDuration: Duration.zero,
             ),
-            transitionDuration: Duration.zero,
-          ),
-        );
-        return;
+          );
+          return;
+        }
       }
     } catch (_) {}
 

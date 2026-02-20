@@ -1,5 +1,5 @@
 #!/bin/bash
 # Version erhöhen + flutter build web
 cd "$(dirname "$0")"
-node scripts/inject_version.js
-flutter build web
+node web/increment_version.js
+flutter build web --tree-shake-icons

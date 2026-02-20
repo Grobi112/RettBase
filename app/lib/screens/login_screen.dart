@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../app_config.dart';
 import '../theme/app_theme.dart';
 import '../services/login_service.dart';
+import '../utils/ensure_users_doc_cache.dart';
 import '../services/push_notification_service.dart';
 import 'company_id_screen.dart';
 import 'dashboard_screen.dart';
@@ -114,17 +115,18 @@ class _LoginScreenState extends State<LoginScreen> {
         password: password,
       );
       if (!mounted) return;
-      if (effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('rettbase_company_id', effectiveCompanyId!);
-      }
-      await FirebaseFunctions.instanceFor(region: 'europe-west1')
+      final user = FirebaseAuth.instance.currentUser!;
+      final prefsProm = effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)
+          ? SharedPreferences.getInstance().then((p) => p.setString('rettbase_company_id', effectiveCompanyId!))
+          : Future.value();
+      final ensureProm = FirebaseFunctions.instanceFor(region: 'europe-west1')
           .httpsCallable('ensureUsersDoc')
           .call({'companyId': dashboardCompanyId});
+      await Future.wait([prefsProm, ensureProm]);
+      EnsureUsersDocCache.record(dashboardCompanyId);
       if (!mounted) return;
-      await FirebaseAuth.instance.currentUser?.getIdToken(true);
-      if (!mounted) return;
-      unawaited(PushNotificationService().saveToken(dashboardCompanyId!, FirebaseAuth.instance.currentUser!.uid));
+      unawaited(user.getIdToken(false));
+      unawaited(PushNotificationService().saveToken(dashboardCompanyId!, user.uid));
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -154,16 +156,16 @@ class _LoginScreenState extends State<LoginScreen> {
           final companyId = effectiveCompanyId != null && effectiveCompanyId.isNotEmpty
               ? effectiveCompanyId!
               : _normalizeCompanyId(widget.companyId);
-          if (effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)) {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('rettbase_company_id', effectiveCompanyId!);
-          }
-          await FirebaseFunctions.instanceFor(region: 'europe-west1')
+          final prefsProm = effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)
+              ? SharedPreferences.getInstance().then((p) => p.setString('rettbase_company_id', effectiveCompanyId!))
+              : Future.value();
+          final ensureProm = FirebaseFunctions.instanceFor(region: 'europe-west1')
               .httpsCallable('ensureUsersDoc')
               .call({'companyId': companyId});
+          await Future.wait([prefsProm, ensureProm]);
+          EnsureUsersDocCache.record(companyId);
           if (!mounted) return;
-          await userCredential.user?.getIdToken(true);
-          if (!mounted) return;
+          unawaited(userCredential.user?.getIdToken(false));
           unawaited(PushNotificationService().saveToken(companyId, userCredential.user!.uid));
           if (!mounted) return;
           Navigator.of(context).pushReplacement(

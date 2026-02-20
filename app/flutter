@@ -3,6 +3,6 @@
 # Nutzung: ./flutter build web  (aus dem app/-Verzeichnis)
 if [ "$1" = "build" ] && [ "$2" = "web" ]; then
   cd "$(dirname "$0")"
-  node scripts/inject_version.js
+  node web/increment_version.js
 fi
 exec command flutter "$@"

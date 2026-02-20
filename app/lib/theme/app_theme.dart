@@ -9,6 +9,10 @@ class Responsive {
   static bool isMedium(BuildContext context) =>
       MediaQuery.sizeOf(context).width < 900;
 
+  /// Handy: kürzeste Seite < 600 (gilt für Hoch- und Querformat)
+  static bool isPhone(BuildContext context) =>
+      MediaQuery.sizeOf(context).shortestSide < 600;
+
   /// Horizontales Padding: 16 auf Handy, 20 tablet, 24 desktop
   static double horizontalPadding(BuildContext context) =>
       isCompact(context) ? 16 : (isNarrow(context) ? 18 : 24);

@@ -45,6 +45,7 @@ import 'kundenverwaltung_screen.dart';
 import 'mitarbeiterverwaltung_screen.dart';
 import 'modulverwaltung_screen.dart';
 import 'menueverwaltung_screen.dart';
+import 'package:app/utils/ensure_users_doc_cache.dart';
 import 'package:app/utils/url_hash_stub.dart'
     if (dart.library.html) 'package:app/utils/url_hash_web.dart' as url_hash;
 import 'package:app/utils/visibility_refresh_stub.dart'
@@ -187,9 +188,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     debugPrint('RettBase Dashboard _load: uid=${user.uid} email=${user.email} widget.companyId=${widget.companyId}');
     try {
       try {
-        await FirebaseFunctions.instanceFor(region: 'europe-west1')
-            .httpsCallable('ensureUsersDoc')
-            .call({'companyId': widget.companyId});
+        if (!EnsureUsersDocCache.shouldSkip(widget.companyId)) {
+          await FirebaseFunctions.instanceFor(region: 'europe-west1')
+              .httpsCallable('ensureUsersDoc')
+              .call({'companyId': widget.companyId});
+          EnsureUsersDocCache.record(widget.companyId);
+        }
         await user.getIdToken(true);
       } catch (_) {}
       final authData = await _authDataService.getAuthData(
@@ -213,28 +217,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (bereich == null || bereich.isEmpty) {
         bereich = isAdminCompany ? KundenBereich.admin : KundenBereich.rettungsdienst;
       }
-      var allMods = await _modulesService.getModulesForCompany(effectiveCompanyId, authData.role, bereich: bereich);
-
-      var menuStructure = <Map<String, dynamic>>[];
       debugPrint('RettBase Dashboard: getCompanyBereich($effectiveCompanyId)=$bereich');
-      if (bereich != null && bereich.isNotEmpty) {
-        menuStructure = await _menuService.loadMenuStructure(bereich, forceServerRead: forceMenuServerRead);
-        debugPrint('RettBase Dashboard: loadMenuStructure($bereich) -> ${menuStructure.length} items');
-        if (menuStructure.isEmpty) {
-          menuStructure = await _menuService.loadLegacyGlobalMenu(forceServerRead: forceMenuServerRead);
-          debugPrint('RettBase Dashboard: loadLegacyGlobalMenu Fallback -> ${menuStructure.length} items');
-        }
-        // Admin-Bereich: wenn Menü leer, Fallback auf Notfallseelsorge und Rettungsdienst
-        if (menuStructure.isEmpty && (bereich == KundenBereich.admin || isAdminCompany)) {
-          for (final fallbackBereich in [KundenBereich.notfallseelsorge, KundenBereich.rettungsdienst]) {
-            menuStructure = await _menuService.loadMenuStructure(fallbackBereich, forceServerRead: forceMenuServerRead);
-            if (menuStructure.isNotEmpty) {
-              debugPrint('RettBase Dashboard: Admin-Fallback loadMenuStructure($fallbackBereich) -> ${menuStructure.length} items');
-              break;
-            }
-          }
-        }
-      }
+
+      // Module und Menü parallel laden (beide benötigen bereich)
+      final modsFuture = _modulesService.getModulesForCompany(effectiveCompanyId, authData.role, bereich: bereich);
+      final menuFuture = _loadMenuStructure(bereich, isAdminCompany, forceMenuServerRead);
+
+      var allMods = await modsFuture;
+      var menuStructure = await menuFuture;
 
       // Menü-Module auch für _allModules ergänzen – sonst erscheinen sie im Drawer nicht
       // (z.B. Chat unter Notfallseelsorge, wenn noch nicht explizit in kunden/modules freigeschaltet)
@@ -280,9 +270,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }).toList();
       }
 
-      final slots = await _loadContainerSlots(effectiveCompanyId);
-      final infos = await _infoService.loadInformationen(effectiveCompanyId);
-
       if (!mounted) return;
       final displayName = authData.displayName?.trim().isNotEmpty == true
           ? authData.displayName
@@ -300,8 +287,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _menuStructure = menuStructure;
         _loading = false;
       });
-      _containerSlotsNotifier.value = slots;
-      _infoItemsNotifier.value = infos;
+
+      // Container-Slots und Informationen lazy laden – Haupt-Dashboard erscheint sofort
+      unawaited(_loadContainerSlots(effectiveCompanyId).then((slots) {
+        if (mounted) _containerSlotsNotifier.value = slots;
+      }));
+      unawaited(_infoService.loadInformationen(effectiveCompanyId).then((infos) {
+        if (mounted) _infoItemsNotifier.value = infos;
+      }));
       _startChatUnreadListener();
       if (kIsWeb) {
         final h = url_hash.getInitialHash();
@@ -314,6 +307,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       debugPrint('RettBase Dashboard _load StackTrace: $st');
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadMenuStructure(
+      String? bereich, bool isAdminCompany, bool forceMenuServerRead) async {
+    var menuStructure = <Map<String, dynamic>>[];
+    if (bereich != null && bereich.isNotEmpty) {
+      menuStructure = await _menuService.loadMenuStructure(bereich, forceServerRead: forceMenuServerRead);
+      debugPrint('RettBase Dashboard: loadMenuStructure($bereich) -> ${menuStructure.length} items');
+      if (menuStructure.isEmpty) {
+        menuStructure = await _menuService.loadLegacyGlobalMenu(forceServerRead: forceMenuServerRead);
+        debugPrint('RettBase Dashboard: loadLegacyGlobalMenu Fallback -> ${menuStructure.length} items');
+      }
+      if (menuStructure.isEmpty && (bereich == KundenBereich.admin || isAdminCompany)) {
+        for (final fallbackBereich in [KundenBereich.notfallseelsorge, KundenBereich.rettungsdienst]) {
+          menuStructure = await _menuService.loadMenuStructure(fallbackBereich, forceServerRead: forceMenuServerRead);
+          if (menuStructure.isNotEmpty) {
+            debugPrint('RettBase Dashboard: Admin-Fallback loadMenuStructure($fallbackBereich) -> ${menuStructure.length} items');
+            break;
+          }
+        }
+      }
+    }
+    return menuStructure;
   }
 
   Future<List<String?>> _loadContainerSlots(String companyId) async {

@@ -5,10 +5,10 @@ set -e
 cd "$(dirname "$0")/.."
 
 echo "Version erhöhen (version.json, index.html)..."
-node scripts/inject_version.js
+node web/increment_version.js
 
 echo "Building Flutter Web..."
-flutter build web
+flutter build web --tree-shake-icons
 
 echo "Deploying to Firebase Hosting (rett-fe0fa)..."
 firebase deploy --only hosting
