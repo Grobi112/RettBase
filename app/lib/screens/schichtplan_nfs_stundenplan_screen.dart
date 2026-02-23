@@ -35,7 +35,7 @@ class _SchichtplanNfsMonatsuebersichtBodyState
   final _service = SchichtplanNfsService();
   int _month = DateTime.now().month;
   int _year = DateTime.now().year;
-  Map<String, String> _tageStatus = {};
+  Map<String, TagStatusMitTypCounts> _tageStatus = {};
   bool _loading = true;
   String? _error;
 
@@ -195,7 +195,7 @@ class _SchichtplanNfsMonatsuebersichtBodyState
                           }
                           final d = DateTime(_year, _month, day);
                           final dayId = _dayId(d);
-                          final status = _tageStatus[dayId] ?? 'neutral';
+                          final status = _tageStatus[dayId]?.status ?? 'neutral';
                           final isToday = DateTime.now().year == _year &&
                               DateTime.now().month == _month &&
                               DateTime.now().day == day;

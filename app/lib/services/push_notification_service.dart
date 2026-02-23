@@ -109,8 +109,8 @@ class PushNotificationService {
       if (AppConfig.fcmWebVapidKey == null || AppConfig.fcmWebVapidKey!.isEmpty) {
         return;
       }
-      // Berechtigung bereits verweigert → kein getToken versuchen, kein Log
-      if (getNotificationPermissionStatusWeb() == 'denied') return;
+      // Nur Token holen wenn Berechtigung bereits erteilt – sonst kein getToken (vermeidet Dialog beim Start)
+      if (getNotificationPermissionStatusWeb() != 'granted') return;
       try {
         await perm_impl.ensureServiceWorkerRegisteredWeb();
         final token = await _messaging.getToken(vapidKey: AppConfig.fcmWebVapidKey);

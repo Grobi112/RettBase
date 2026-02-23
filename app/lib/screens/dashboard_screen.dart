@@ -608,6 +608,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         screen = MitarbeiterverwaltungScreen(
           companyId: _companyId,
           userRole: _userRole,
+          bereich: _bereich,
           title: mod.label,
           onBack: onBack,
           hideAppBar: true,
@@ -638,6 +639,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           screen = MitarbeiterverwaltungScreen(
             companyId: _companyId,
             userRole: _userRole,
+            bereich: _bereich,
             title: mod.label,
             onBack: onBack,
             hideAppBar: true,

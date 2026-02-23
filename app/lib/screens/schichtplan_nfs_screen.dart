@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_data_service.dart';
+import '../services/auth_service.dart';
 import 'schichtplan_nfs_stundenplan_screen.dart';
 import 'schichtplan_nfs_meldungen_body.dart';
 import 'schichtplan_nfs_einstellungen_screen.dart';
@@ -7,6 +9,13 @@ import 'schichtplan_nfs_schicht_anlegen_sheet.dart';
 import 'schichtplan_nfs_offene_schicht_melden_sheet.dart';
 
 bool _canEditEinstellungen(String? role) {
+  if (role == null || role.isEmpty) return false;
+  final r = role.trim().toLowerCase();
+  return r == 'superadmin' || r == 'admin' || r == 'koordinator';
+}
+
+/// Reiter "Meldungen" nur für Admin, Koordinator, Superadmin – User darf ihn nicht sehen
+bool _canSeeMeldungen(String? role) {
   if (role == null || role.isEmpty) return false;
   final r = role.trim().toLowerCase();
   return r == 'superadmin' || r == 'admin' || r == 'koordinator';
@@ -35,6 +44,9 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
     with SingleTickerProviderStateMixin {
   final List<void Function()> _refreshCallbacks = [];
   late TabController _tabController;
+  final _authService = AuthService();
+  final _authDataService = AuthDataService();
+  String? _effectiveRole;
 
   void _refreshAllBodies() {
     for (final cb in _refreshCallbacks) {
@@ -45,9 +57,36 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
+    // Zunächst restriktiv (nur Monat) – Rolle wird asynchron geladen
+    _tabController = TabController(length: 1, vsync: this, initialIndex: 0);
     _tabController.addListener(() => setState(() {}));
+    _loadRole();
   }
+
+  Future<void> _loadRole() async {
+    final user = _authService.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _effectiveRole = widget.userRole);
+      return;
+    }
+    final authData = await _authDataService.getAuthData(
+      user.uid,
+      user.email ?? '',
+      widget.companyId,
+    );
+    if (!mounted) return;
+    final newRole = authData.role;
+    final hadMeldungen = _canSeeMeldungen(_effectiveRole ?? widget.userRole);
+    final hasMeldungen = _canSeeMeldungen(newRole);
+    setState(() => _effectiveRole = newRole);
+    if (hadMeldungen != hasMeldungen) {
+      _tabController.dispose();
+      _tabController = TabController(length: hasMeldungen ? 2 : 1, vsync: this, initialIndex: 0);
+      _tabController.addListener(() => setState(() {}));
+    }
+  }
+
+  String? get _role => _effectiveRole ?? widget.userRole;
 
   @override
   void dispose() {
@@ -61,7 +100,7 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
       MaterialPageRoute(
         builder: (_) => SchichtplanNfsEinstellungenScreen(
           companyId: widget.companyId,
-          userRole: widget.userRole,
+          userRole: _role,
           onBack: () => Navigator.pop(context),
         ),
       ),
@@ -127,7 +166,7 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
             icon: const Icon(Icons.person_add_outlined, size: 20),
             label: const Text('Verfügbarkeit angeben'),
           ),
-          if (_canEditEinstellungen(widget.userRole)) ...[
+          if (_canEditEinstellungen(_role)) ...[
             TextButton.icon(
               onPressed: _openSchichtAnlegen,
               icon: const Icon(Icons.add_circle_outline, size: 20),
@@ -143,33 +182,42 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
       ),
       body: Column(
         children: [
-          TabBar(
-            controller: _tabController,
-            labelColor: AppTheme.primary,
-            unselectedLabelColor: AppTheme.textMuted,
-            indicatorColor: AppTheme.primary,
-            tabs: const [
-              Tab(text: 'Monat'),
-              Tab(text: 'Meldungen'),
-            ],
-          ),
-          Expanded(
-            child: TabBarView(
+          if (_canSeeMeldungen(_role))
+            TabBar(
               controller: _tabController,
-              children: [
-                SchichtplanNfsMonatsuebersichtBody(
-                  companyId: widget.companyId,
-                  userRole: widget.userRole,
-                  onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
-                ),
-                SchichtplanNfsMeldungenBody(
-                  companyId: widget.companyId,
-                  userRole: widget.userRole,
-                  onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
-                  onMeldungAngenommen: _refreshAllBodies,
-                ),
+              labelColor: AppTheme.primary,
+              unselectedLabelColor: AppTheme.textMuted,
+              indicatorColor: AppTheme.primary,
+              tabs: const [
+                Tab(text: 'Monat'),
+                Tab(text: 'Meldungen'),
               ],
-            ),
+            )
+          else
+            const SizedBox.shrink(),
+          Expanded(
+            child: _canSeeMeldungen(_role)
+                ? TabBarView(
+                    controller: _tabController,
+                    children: [
+                      SchichtplanNfsMonatsuebersichtBody(
+                        companyId: widget.companyId,
+                        userRole: _role,
+                        onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
+                      ),
+                      SchichtplanNfsMeldungenBody(
+                        companyId: widget.companyId,
+                        userRole: _role,
+                        onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
+                        onMeldungAngenommen: _refreshAllBodies,
+                      ),
+                    ],
+                  )
+                : SchichtplanNfsMonatsuebersichtBody(
+                    companyId: widget.companyId,
+                    userRole: _role,
+                    onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
+                  ),
           ),
         ],
       ),

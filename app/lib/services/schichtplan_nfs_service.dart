@@ -4,6 +4,13 @@ import 'mitarbeiter_service.dart';
 import 'schichtanmeldung_service.dart';
 
 /// Schichtplan NFS (Notfallseelsorge) – eigenes Modul mit separaten Firestore-Collections.
+
+/// Tag-Status plus Anzahl Mitglieder pro Bereitschaftstyp
+class TagStatusMitTypCounts {
+  final String status;
+  final Map<String, int> typCounts; // typId -> Anzahl Mitglieder
+  TagStatusMitTypCounts({required this.status, required this.typCounts});
+}
 /// Pfade: schichtplanNfsStandorte, schichtplanNfsBereitschaftsTypen,
 /// Mitarbeiter aus Mitgliederverwaltung (kunden/{companyId}/mitarbeiter)
 /// schichtplanNfsBereitschaften/{dayId}/bereitschaften
@@ -364,8 +371,9 @@ class SchichtplanNfsService {
     return result;
   }
 
-  /// Tag-Status für Farbe: 'red' = offene Schichten, 'green' = alle mit S1 belegt, 'neutral' = sonst
-  Future<Map<String, String>> loadTageStatusForMonth(
+  /// Tag-Status für Farbe: 'red' = offene Schichten, 'green' = alle mit S1 belegt, 'neutral' = sonst.
+  /// typCounts: typId -> Anzahl Mitglieder, die an diesem Tag diesen Dienst haben.
+  Future<Map<String, TagStatusMitTypCounts>> loadTageStatusForMonth(
     String companyId,
     int month,
     int year,
@@ -376,13 +384,14 @@ class SchichtplanNfsService {
         .firstOrNull;
     final s1TypId = s1Typ?.id;
     final daysInMonth = DateTime(year, month + 1, 0).day;
-    final result = <String, String>{};
+    final result = <String, TagStatusMitTypCounts>{};
     for (var day = 1; day <= daysInMonth; day++) {
       final dayId =
           '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.$year';
       final e = await loadStundenplanEintraege(companyId, dayId);
       final belegt = <int>{};
       final typenProStunde = <int, Set<String>>{};
+      final typCounts = <String, Set<String>>{}; // typId -> Set mitarbeiterIds
       for (var h = 0; h < 24; h++) typenProStunde[h] = {};
       for (final entry in e.entries) {
         if (entry.value.trim().isEmpty) continue;
@@ -390,18 +399,24 @@ class SchichtplanNfsService {
         if (parts.length != 2) continue;
         final h = int.tryParse(parts[1]);
         if (h == null || h < 0 || h >= 24) continue;
+        final typId = entry.value.trim();
+        final mitarbeiterId = parts[0];
         belegt.add(h);
-        typenProStunde[h]!.add(entry.value.trim());
+        typenProStunde[h]!.add(typId);
+        typCounts.putIfAbsent(typId, () => {}).add(mitarbeiterId);
       }
       final freieStunden = [for (var h = 0; h < 24; h++) if (!belegt.contains(h)) h];
+      String status;
       if (freieStunden.isNotEmpty) {
-        result[dayId] = 'red';
+        status = 'red';
       } else if (s1TypId != null &&
           typenProStunde.values.every((t) => t.length == 1 && t.contains(s1TypId))) {
-        result[dayId] = 'green';
+        status = 'green';
       } else {
-        result[dayId] = 'neutral';
+        status = 'neutral';
       }
+      final counts = typCounts.map((k, v) => MapEntry(k, v.length));
+      result[dayId] = TagStatusMitTypCounts(status: status, typCounts: counts);
     }
     return result;
   }

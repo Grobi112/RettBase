@@ -78,10 +78,21 @@ async function _requireAdminRole(context, companyId) {
   }
   const uid = context.auth.uid;
   const email = (context.auth.token?.email || "").toString().toLowerCase();
-  const adminRoles = ["superadmin", "admin", "leiterssd"];
+  const adminRoles = ["superadmin", "admin", "leiterssd", "koordinator"];
   const isGlobalSuperadmin = email === "admin@rettbase.de" || (email.startsWith("admin@") && email.includes("rettbase"));
   const is112Admin = companyId === "admin" && (email === "112@admin.rettbase.de" || (email.startsWith("112@admin") && email.includes("rettbase")));
   if (isGlobalSuperadmin || is112Admin) return;
+  // Admin-Superadmins (users/mitarbeiter in admin mit role superadmin) dürfen in allen Firmen Admin-Aktionen ausführen
+  if (companyId !== "admin") {
+    const [adminUser, adminMitarbeiter] = await Promise.all([
+      db.collection("kunden").doc("admin").collection("users").doc(uid).get(),
+      db.collection("kunden").doc("admin").collection("mitarbeiter").where("uid", "==", uid).limit(1).get(),
+    ]);
+    if (adminUser.exists && (adminUser.data()?.role || "").toString().toLowerCase() === "superadmin") return;
+    if (!adminMitarbeiter.empty && (adminMitarbeiter.docs[0].data()?.role || "").toString().toLowerCase() === "superadmin") return;
+    const pn112 = await db.collection("kunden").doc("admin").collection("mitarbeiter").where("personalnummer", "==", "112").limit(1).get();
+    if (!pn112.empty && pn112.docs[0].data()?.uid === uid) return;
+  }
   const usersSnap = await db.collection("kunden").doc(String(companyId)).collection("users").doc(uid).get();
   if (usersSnap.exists) {
     const role = (usersSnap.data()?.role || "").toString().toLowerCase();
@@ -400,7 +411,8 @@ exports.saveMitarbeiterDoc = functions.region("europe-west1").https.onCall(async
     if (!context?.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
     }
-    const { companyId, docId, data: docData } = data || {};
+    const { companyId: rawCompanyId, docId, data: docData } = data || {};
+    const companyId = (await _resolveToDocId(rawCompanyId)) || (rawCompanyId || "").trim().toLowerCase();
     if (companyId) await _requireAdminRole(context, companyId);
     if (!companyId || !docId || !docData || typeof docData !== "object") {
       throw new functions.https.HttpsError("invalid-argument", "companyId, docId und data erforderlich");
@@ -498,7 +510,8 @@ exports.saveUsersDoc = functions.region("europe-west1").https.onCall(async (data
     if (!context?.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
     }
-    const { companyId, uid, data: docData } = data || {};
+    const { companyId: rawCompanyId, uid, data: docData } = data || {};
+    const companyId = (await _resolveToDocId(rawCompanyId)) || (rawCompanyId || "").trim().toLowerCase();
     if (companyId) await _requireAdminRole(context, companyId);
     if (!companyId || !uid || !docData || typeof docData !== "object") {
       throw new functions.https.HttpsError("invalid-argument", "companyId, uid und data erforderlich");
@@ -788,7 +801,8 @@ exports.createMitarbeiterDoc = functions.region("europe-west1").https.onCall(asy
     if (!context?.auth) {
       throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
     }
-    const { companyId, data: docData } = data || {};
+    const { companyId: rawCompanyId, data: docData } = data || {};
+    const companyId = (await _resolveToDocId(rawCompanyId)) || (rawCompanyId || "").trim().toLowerCase();
     if (companyId) await _requireAdminRole(context, companyId);
     if (!companyId || !docData || typeof docData !== "object") {
       throw new functions.https.HttpsError("invalid-argument", "companyId und data erforderlich");

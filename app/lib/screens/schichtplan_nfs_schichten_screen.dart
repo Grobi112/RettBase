@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../utils/schichtplan_nfs_bereitschaftstyp_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
+import '../app_config.dart';
 import '../services/schichtanmeldung_service.dart';
 import '../services/schichtplan_nfs_service.dart';
 import 'schichtplan_nfs_schicht_anlegen_sheet.dart';
@@ -64,16 +65,20 @@ class _SchichtplanNfsSchichtenScreenState
     });
     try {
       final alleTypen = await _service.loadBereitschaftsTypen(widget.companyId);
-      final typen = SchichtplanNfsBereitschaftstypUtils.filterAndSortS1S2B(
+      final s1s2b = SchichtplanNfsBereitschaftstypUtils.filterAndSortS1S2B(
         alleTypen,
       );
+      final rest = alleTypen
+          .where((t) => !s1s2b.any((s) => s.id == t.id))
+          .toList()
+        ..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
       final ma =
           await _service.loadMitarbeiterMitStandort(widget.companyId);
       final eintraege = await _service
           .loadStundenplanEintraege(widget.companyId, _dayId);
       if (mounted) {
         setState(() {
-          _typen = typen;
+          _typen = [...s1s2b, ...rest];
           _mitarbeiter = ma;
           _eintraege = eintraege;
           _loading = false;
@@ -100,6 +105,21 @@ class _SchichtplanNfsSchichtenScreenState
       }
     }
     return [for (var h = 0; h < 24; h++) if (!belegt.contains(h)) h];
+  }
+
+  /// Pro Stunde: typId -> Anzahl (wie viele Personen diesen Typ in dieser Stunde haben)
+  Map<String, int> _typCountsForHour(int h) {
+    final counts = <String, int>{};
+    for (final e in _eintraege.entries) {
+      final parts = e.key.split('_');
+      if (parts.length == 2 && int.tryParse(parts[1]) == h) {
+        final typId = (e.value ?? '').trim();
+        if (typId.isNotEmpty) {
+          counts[typId] = (counts[typId] ?? 0) + 1;
+        }
+      }
+    }
+    return counts;
   }
 
   /// Pro Stunde (0–23): 'free' = rot, 's1' = grün, 'other' = neutral
@@ -354,15 +374,10 @@ class _SchichtplanNfsSchichtenScreenState
       );
     }
 
-    final wochentag =
-        _wochentage[widget.selectedDate.weekday - 1];
-    final datum =
-        '${widget.selectedDate.day.toString().padLeft(2, '0')}.${widget.selectedDate.month.toString().padLeft(2, '0')}.${widget.selectedDate.year}';
-
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: 'Schichten – $wochentag, $datum',
+        title: 'Schichten',
         onBack: widget.onBack,
         actions: [
           TextButton.icon(
@@ -429,7 +444,7 @@ class _SchichtplanNfsSchichtenScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Stundenübersicht',
+            'Stundenübersicht – ${_wochentage[widget.selectedDate.weekday - 1]}, ${widget.selectedDate.day.toString().padLeft(2, '0')}.${widget.selectedDate.month.toString().padLeft(2, '0')}.${widget.selectedDate.year}',
             style: const TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 16,
@@ -438,7 +453,7 @@ class _SchichtplanNfsSchichtenScreenState
           ),
           const SizedBox(height: 4),
           Text(
-            'Rot = frei · Grün = S1 belegt',
+            'Rot = frei · Grün = S1 belegt · Kreise = Anzahl pro Bereitschaftstyp',
             style: TextStyle(
               fontSize: 12,
               color: AppTheme.textMuted,
@@ -457,6 +472,7 @@ class _SchichtplanNfsSchichtenScreenState
 
   Widget _buildStundenChip(int h) {
     final status = _stundenStatus(h);
+    final typCounts = _typCountsForHour(h);
     final label = h == 23
         ? '23:00–24:00'
         : '${h.toString().padLeft(2, '0')}:00–${(h + 1).toString().padLeft(2, '0')}:00';
@@ -479,19 +495,101 @@ class _SchichtplanNfsSchichtenScreenState
         borderColor = Colors.red.shade300;
         textColor = Colors.red.shade800;
     }
+    const circleSize = 18.0;
+    const maxCirclesPerRow = 3;
+    final typenMitCount = [
+      for (final typ in _typen)
+        if ((typCounts[typ.id] ?? 0) > 0) (typ: typ, count: typCounts[typ.id]!),
+    ];
+    final row1 = typenMitCount.take(maxCirclesPerRow).toList();
+    final row2 = typenMitCount.skip(maxCirclesPerRow).toList();
+
+    Widget _circle(BereitschaftsTyp typ, int count) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1),
+          child: Container(
+            width: circleSize,
+            height: circleSize,
+            decoration: BoxDecoration(
+              color: SchichtplanNfsBereitschaftstypUtils.colorForTyp(typ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 1,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '$count',
+              style: const TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      width: 86,
+      height: 68,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: borderColor, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 2,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: textColor,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(
+              height: 44,
+              child: typenMitCount.isEmpty
+                  ? const SizedBox.shrink()
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: row1.map((e) => _circle(e.typ, e.count)).toList(),
+                        ),
+                        if (row2.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: row2.map((e) => _circle(e.typ, e.count)).toList(),
+                          ),
+                        ],
+                      ],
+                    ),
+            ),
+          ],
         ),
       ),
     );
@@ -992,7 +1090,12 @@ class _MitarbeiterDatenblatt extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          _DataRow(label: 'E-Mail', value: m.email ?? '—'),
+          _DataRow(
+            label: 'E-Mail',
+            value: (m.email != null && m.email!.isNotEmpty && !m.email!.endsWith('.${AppConfig.rootDomain}'))
+                ? m.email!
+                : '—',
+          ),
           _DataRow(label: 'Telefonnummer', value: tel.isEmpty ? '—' : tel),
           _DataRow(
             label: 'Ort (Wohnort)',

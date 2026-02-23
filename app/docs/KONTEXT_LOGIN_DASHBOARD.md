@@ -150,7 +150,7 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 - **APK:** Entfernt – kein downloadUrl mehr in version.json; app_update_service_android gibt immer upToDate; increment_version.js löscht downloadUrl
 - **Push:** permission-blocked nicht mehr als Fehler geloggt; bei denied wird getToken nicht versucht
 - **Profil:** Gelöschte/geleerte Felder senden FieldValue.delete() – werden in Firestore korrekt entfernt (nicht mehr durch merge erhalten)
-- **Web Version-Check:** Reload nur wenn Server-Version > Client; 2 Min Cooldown; robustes JSON-Parsing (leere/ungültige Antwort)
+- **Web Version-Check:** Nur **einmal** beim App-Start im Ladefenster (vor Dashboard/Login); keine periodische Prüfung mehr – stört Session-Ablauf. Reload nur wenn Server-Version > Client; 2 Min Cooldown; robustes JSON-Parsing (leere/ungültige Antwort). `runWebVersionCheckOnce` in main.dart/_RettBaseHomeState
 
 ## 9. Hinweis zu Firestore-Daten
 

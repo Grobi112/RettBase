@@ -154,6 +154,86 @@ class SchichtanmeldungService {
     }
   }
 
+  /// Bereitschafts-Typ anlegen (schichtplanBereitschaftsTypen)
+  Future<String> createBereitschaftsTyp(
+    String companyId,
+    String name, {
+    String? beschreibung,
+    int? color,
+  }) async {
+    final ref = await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('schichtplanBereitschaftsTypen')
+        .add({
+      'name': name,
+      if (beschreibung != null && beschreibung.isNotEmpty) 'beschreibung': beschreibung,
+      if (color != null) 'color': color,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  /// Bereitschafts-Typ aktualisieren
+  Future<void> updateBereitschaftsTyp(
+    String companyId,
+    String typId, {
+    String? name,
+    String? beschreibung,
+    int? color,
+  }) async {
+    final data = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
+    if (name != null) data['name'] = name;
+    if (beschreibung != null) data['beschreibung'] = beschreibung;
+    if (color != null) data['color'] = color;
+    await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('schichtplanBereitschaftsTypen')
+        .doc(typId)
+        .update(data);
+  }
+
+  /// NFS-BereitschaftsTypen nach schichtplanBereitschaftsTypen synchronisieren
+  /// Kopiert alle Einträge aus schichtplanNfsBereitschaftsTypen
+  Future<int> syncBereitschaftsTypenFromNfs(String companyId) async {
+    final nfsSnap = await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('schichtplanNfsBereitschaftsTypen')
+        .get();
+    if (nfsSnap.docs.isEmpty) return 0;
+    final existing = await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('schichtplanBereitschaftsTypen')
+        .get();
+    final existingNames = existing.docs
+        .map((d) => (d.data()['name'] ?? '').toString().trim().toLowerCase())
+        .where((n) => n.isNotEmpty)
+        .toSet();
+    var count = 0;
+    for (final d in nfsSnap.docs) {
+      final data = d.data();
+      final name = (data['name'] ?? '').toString().trim();
+      if (name.isEmpty) continue;
+      if (existingNames.contains(name.toLowerCase())) continue;
+      await _db
+          .collection('kunden')
+          .doc(companyId)
+          .collection('schichtplanBereitschaftsTypen')
+          .add({
+        'name': name,
+        if (data['beschreibung'] != null) 'beschreibung': data['beschreibung'],
+        if (data['color'] != null) 'color': data['color'],
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      existingNames.add(name.toLowerCase());
+      count++;
+    }
+    return count;
+  }
+
   /// Schichtplan-Mitarbeiter laden (für Zuordnung zum eingeloggten User)
   Future<List<SchichtplanMitarbeiter>> loadSchichtplanMitarbeiter(String companyId) async {
     try {
@@ -755,6 +835,7 @@ class SchichtTyp {
   final String name;
   final String? description;
   final String? standortId;
+  final String? typId; // BereitschaftsTyp-ID (schichtplanBereitschaftsTypen)
   final String? startTime; // HH:mm
   final String? endTime;   // HH:mm
   final bool endetFolgetag; // true wenn Endzeit <= Startzeit (z.B. 19:00-07:00, 19:00-19:00)
@@ -766,6 +847,7 @@ class SchichtTyp {
     required this.name,
     this.description,
     this.standortId,
+    this.typId,
     this.startTime,
     this.endTime,
     this.endetFolgetag = false,
@@ -793,6 +875,7 @@ class SchichtTyp {
       name: data['name']?.toString() ?? id,
       description: data['description']?.toString(),
       standortId: data['standortId']?.toString(),
+      typId: data['typId']?.toString(),
       startTime: startTime,
       endTime: endTime,
       endetFolgetag: endetFolgetag,
@@ -805,6 +888,7 @@ class SchichtTyp {
         'name': name,
         if (description != null) 'description': description,
         if (standortId != null) 'standortId': standortId,
+        if (typId != null && typId!.isNotEmpty) 'typId': typId,
         if (startTime != null) 'startTime': startTime,
         if (endTime != null) 'endTime': endTime,
         'endetFolgetag': endetFolgetag,

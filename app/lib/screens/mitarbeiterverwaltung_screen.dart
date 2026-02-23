@@ -13,6 +13,7 @@ import '../app_config.dart';
 class MitarbeiterverwaltungScreen extends StatefulWidget {
   final String companyId;
   final String? userRole;
+  final String? bereich;
   final VoidCallback? onBack;
   final bool hideAppBar;
   final String? title;
@@ -21,6 +22,7 @@ class MitarbeiterverwaltungScreen extends StatefulWidget {
     super.key,
     required this.companyId,
     this.userRole,
+    this.bereich,
     this.onBack,
     this.hideAppBar = false,
     this.title,
@@ -39,7 +41,8 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
   bool _loading = true;
   String? _error;
 
-  static const _roles = ['user', 'ovd', 'wachleitung', 'leiterssd', 'supervisor', 'admin'];
+  static const _rolesRettungsdienst = ['user', 'ovd', 'wachleitung', 'leiterssd', 'supervisor', 'admin'];
+  static const _rolesNotfallseelsorge = ['user', 'koordinator', 'admin'];
   static const _qualifikationen = ['RH', 'RS', 'RA', 'NFS'];
   static const _vertraege = ['Vollzeit', 'Teilzeit', 'GfB', 'Ausbildung', 'Ehrenamt'];
   static const _fuehrerscheinklassen = ['', 'A', 'A1', 'A2', 'AM', 'B', 'BE', 'C', 'CE', 'C1', 'C1E', 'D', 'DE', 'D1', 'D1E', 'L', 'T'];
@@ -50,13 +53,23 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
     'leiterssd': 'LeiterSSD',
     'supervisor': 'Supervisor',
     'admin': 'Admin',
+    'koordinator': 'Koordinator',
     'superadmin': 'Superadmin',
   };
 
   List<String> get _rolesForCompany {
-    final r = List<String>.from(_roles);
+    final isNfs = (widget.bereich ?? '').trim().toLowerCase() == 'notfallseelsorge';
+    final r = List<String>.from(isNfs ? _rolesNotfallseelsorge : _rolesRettungsdienst);
     if (widget.companyId == 'admin') r.add('superadmin');
     return r;
+  }
+
+  bool get _canAddMitarbeiter {
+    if (widget.userRole == null) return false;
+    final role = widget.userRole!.trim().toLowerCase();
+    final isNfs = (widget.bereich ?? '').trim().toLowerCase() == 'notfallseelsorge';
+    if (isNfs) return ['superadmin', 'admin', 'koordinator'].contains(role);
+    return ['superadmin', 'admin', 'leiterssd'].contains(role);
   }
 
   @override
@@ -272,10 +285,10 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
         : (m.pseudoEmail ?? (m.personalnummer != null && m.personalnummer!.isNotEmpty
             ? '${m.personalnummer}@${widget.companyId}.${AppConfig.rootDomain}'
             : null));
-    if (!hasUid && (loginEmail == null || loginEmail.isEmpty)) {
+    if (loginEmail == null || loginEmail.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Passwort setzen erst möglich, wenn der Mitarbeiter sich mindestens einmal angemeldet hat.'),
+          content: Text('Passwort setzen erfordert E-Mail oder Personalnummer. Bitte zuerst bearbeiten und Personalnummer/E-Mail eintragen.'),
         ),
       );
       return;
@@ -318,12 +331,48 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
     );
     if (result == true && passCtrl.text.length >= 6) {
       try {
-        await _functions.httpsCallable('updateMitarbeiterPassword').call({
-          'companyId': widget.companyId,
-          'uid': m.uid,
-          'email': loginEmail,
-          'newPassword': passCtrl.text,
-        });
+        // Zuerst Passwort aktualisieren (funktioniert, wenn User bereits existiert – mit uid oder per E-Mail-Lookup)
+        try {
+          await _functions.httpsCallable('updateMitarbeiterPassword').call({
+            'companyId': widget.companyId,
+            'uid': m.uid,
+            'email': loginEmail,
+            'newPassword': passCtrl.text,
+          });
+        } on FirebaseFunctionsException catch (pwErr) {
+          if (pwErr.code == 'not-found') {
+            // Nutzer existiert noch nicht (z.B. nur PN, nie eingeloggt) – erst anlegen, dann uid speichern
+            final createRes = await _functions.httpsCallable('createAuthUser').call({
+              'companyId': widget.companyId,
+              'email': loginEmail,
+              'password': passCtrl.text,
+            });
+            final newUid = createRes.data['uid'] as String?;
+            if (newUid != null && m.id.isNotEmpty) {
+              await _functions.httpsCallable('saveMitarbeiterDoc').call({
+                'companyId': widget.companyId,
+                'docId': m.id,
+                'data': {'uid': newUid},
+              });
+              await _functions.httpsCallable('saveUsersDoc').call({
+                'companyId': widget.companyId,
+                'uid': newUid,
+                'data': {
+                  'email': loginEmail,
+                  'role': m.role ?? 'user',
+                  'companyId': widget.companyId,
+                  'status': true,
+                  'mitarbeiterDocId': m.id,
+                  if (m.vorname != null) 'vorname': m.vorname,
+                  if (m.nachname != null) 'nachname': m.nachname,
+                },
+              });
+              await _load(); // Liste neu laden, damit uid angezeigt wird
+            }
+          } else {
+            rethrow;
+          }
+        }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwort aktualisiert.')));
         }
@@ -345,7 +394,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
         title: widget.title ?? 'Mitgliederverwaltung',
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
         actions: [
-          if (widget.userRole != null && ['superadmin', 'admin', 'leiterssd'].contains(widget.userRole!))
+          if (_canAddMitarbeiter)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: MediaQuery.sizeOf(context).width < 400
@@ -514,7 +563,8 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
                         ),
                         if ((m.uid != null && m.uid!.isNotEmpty) ||
                             (m.pseudoEmail != null && m.pseudoEmail!.isNotEmpty) ||
-                            (m.email != null && m.email!.isNotEmpty && !m.email!.endsWith('.${AppConfig.rootDomain}')))
+                            (m.email != null && m.email!.isNotEmpty && !m.email!.endsWith('.${AppConfig.rootDomain}')) ||
+                            (m.personalnummer != null && m.personalnummer!.isNotEmpty))
                           IconButton(
                             icon: const Icon(Icons.lock_reset),
                             onPressed: () => _resetPassword(m),
@@ -795,6 +845,62 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
             'data': updates,
           });
         }
+        // Neues Passwort setzen (auch für Nutzer ohne E-Mail, z.B. nur Personalnummer)
+        if (_passwordCtrl.text.length >= 6) {
+          final loginEmail = (mitarbeiter.email != null && mitarbeiter.email!.isNotEmpty && !mitarbeiter.email!.endsWith('.${AppConfig.rootDomain}'))
+              ? mitarbeiter.email
+              : (mitarbeiter.pseudoEmail ?? (mitarbeiter.personalnummer != null && mitarbeiter.personalnummer!.isNotEmpty
+                  ? '${mitarbeiter.personalnummer}@${widget.companyId}.${AppConfig.rootDomain}'
+                  : null));
+          if (mitarbeiter.uid != null && mitarbeiter.uid!.isNotEmpty) {
+            await functions.httpsCallable('updateMitarbeiterPassword').call({
+              'companyId': widget.companyId,
+              'uid': mitarbeiter.uid,
+              'email': loginEmail,
+              'newPassword': _passwordCtrl.text,
+            });
+          } else if (loginEmail != null && loginEmail.isNotEmpty) {
+            try {
+              await functions.httpsCallable('updateMitarbeiterPassword').call({
+                'companyId': widget.companyId,
+                'email': loginEmail,
+                'newPassword': _passwordCtrl.text,
+              });
+            } on FirebaseFunctionsException catch (pwErr) {
+              if (pwErr.code == 'not-found') {
+                // Nutzer existiert noch nicht – erst anlegen, dann mit neuem Passwort verknüpfen
+                final createRes = await functions.httpsCallable('createAuthUser').call({
+                  'companyId': widget.companyId,
+                  'email': loginEmail,
+                  'password': _passwordCtrl.text,
+                });
+                final newUid = createRes.data['uid'] as String?;
+                if (newUid != null) {
+                  await functions.httpsCallable('saveMitarbeiterDoc').call({
+                    'companyId': widget.companyId,
+                    'docId': widget.mitarbeiter!.id,
+                    'data': {'uid': newUid},
+                  });
+                  await functions.httpsCallable('saveUsersDoc').call({
+                    'companyId': widget.companyId,
+                    'uid': newUid,
+                    'data': {
+                      'email': loginEmail,
+                      'role': _role,
+                      'companyId': widget.companyId,
+                      'status': true,
+                      'mitarbeiterDocId': widget.mitarbeiter!.id,
+                      if (mitarbeiter.vorname != null) 'vorname': mitarbeiter.vorname,
+                      if (mitarbeiter.nachname != null) 'nachname': mitarbeiter.nachname,
+                    },
+                  });
+                }
+              } else {
+                rethrow;
+              }
+            }
+          }
+        }
         if (mounted) Navigator.of(context).pop(mitarbeiter);
       }
     } on FirebaseFunctionsException catch (e) {
@@ -1066,6 +1172,17 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Passwort (für Login, min. 6 Zeichen)',
                       hintText: 'Nur bei E-Mail/Personalnummer',
+                    ),
+                  ),
+                ],
+                if (!isCreate) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _passwordCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Neues Passwort setzen (optional)',
+                      hintText: 'Nur ausfüllen, wenn Passwort vergessen – z.B. für Nutzer ohne E-Mail',
                     ),
                   ),
                 ],

@@ -20,8 +20,10 @@ class EinstellungenSchichtartenScreen extends StatefulWidget {
 class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtartenScreen> {
   final _service = SchichtanmeldungService();
   List<Standort> _standorte = [];
+  List<BereitschaftsTyp> _bereitschaftsTypen = [];
   List<SchichtTyp> _schichten = [];
   bool _loading = true;
+  bool _syncing = false;
 
   @override
   void initState() {
@@ -33,16 +35,37 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
     setState(() => _loading = true);
     try {
       final standorte = await _service.loadStandorte(widget.companyId);
+      final bereitschaftsTypen = await _service.loadBereitschaftsTypen(widget.companyId);
       final schichten = await _service.loadSchichten(widget.companyId);
       if (mounted) {
         setState(() {
           _standorte = standorte;
+          _bereitschaftsTypen = bereitschaftsTypen;
           _schichten = schichten;
           _loading = false;
         });
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _syncFromNfs() async {
+    setState(() => _syncing = true);
+    try {
+      final count = await _service.syncBereitschaftsTypenFromNfs(widget.companyId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(count > 0 ? '$count Bereitschaftstyp(en) von NFS übernommen.' : 'Keine neuen Typen – bereits vorhanden.')),
+        );
+        _load();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _syncing = false);
     }
   }
 
@@ -140,6 +163,114 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
     }
   }
 
+  Future<void> _addBereitschaftsTyp() async {
+    final data = await _showBereitschaftsTypDialog();
+    if (data == null) return;
+    try {
+      await _service.createBereitschaftsTyp(
+        widget.companyId,
+        data['name'] as String,
+        beschreibung: (data['beschreibung'] as String?)?.trim().isEmpty == true ? null : data['beschreibung'] as String?,
+        color: data['color'] as int?,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bereitschaftstyp angelegt.')));
+        _load();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+    }
+  }
+
+  Future<void> _editBereitschaftsTyp(BereitschaftsTyp t) async {
+    final data = await _showBereitschaftsTypDialog(current: t);
+    if (data == null) return;
+    try {
+      await _service.updateBereitschaftsTyp(
+        widget.companyId,
+        t.id,
+        name: data['name'] as String?,
+        beschreibung: (data['beschreibung'] as String?)?.trim().isEmpty == true ? null : data['beschreibung'] as String?,
+        color: data['color'] as int?,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bereitschaftstyp aktualisiert.')));
+        _load();
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+    }
+  }
+
+  static const _typFarben = [
+    0xFF0EA5E9, 0xFF10B981, 0xFFF59E0B, 0xFF8B5CF6,
+    0xFFEF4444, 0xFF06B6D4, 0xFFEC4899, 0xFF84CC16,
+  ];
+
+  Future<Map<String, dynamic>?> _showBereitschaftsTypDialog({BereitschaftsTyp? current}) async {
+    final nameCtrl = TextEditingController(text: current?.name ?? '');
+    final beschreibungCtrl = TextEditingController(text: current?.beschreibung ?? '');
+    var color = current?.color ?? _typFarben.first;
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, setDialogState) => AlertDialog(
+          title: Text(current != null ? 'Bereitschaftstyp bearbeiten' : 'Neuer Bereitschaftstyp'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Name', hintText: 'z.B. S1, S2, B'),
+                  onSubmitted: (_) {},
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: beschreibungCtrl,
+                  decoration: const InputDecoration(labelText: 'Beschreibung (optional)'),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                const Text('Farbe', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _typFarben.map((c) => InkWell(
+                    onTap: () => setDialogState(() => color = c),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Color(c),
+                        shape: BoxShape.circle,
+                        border: color == c ? Border.all(color: Colors.black, width: 2) : null,
+                      ),
+                    ),
+                  )).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Abbrechen')),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop({
+                'name': nameCtrl.text.trim(),
+                'beschreibung': beschreibungCtrl.text.trim().isEmpty ? null : beschreibungCtrl.text.trim(),
+                'color': color,
+              }),
+              child: const Text('Speichern'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _addSchicht() async {
     if (_standorte.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -154,6 +285,7 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
         id: '',
         name: data['name'] as String,
         standortId: data['standortId'] as String?,
+        typId: data['typId'] as String?,
         startTime: data['startTime'] as String?,
         endTime: data['endTime'] as String?,
         endetFolgetag: SchichtTyp.computeEndetFolgetag(data['startTime'] as String?, data['endTime'] as String?),
@@ -171,9 +303,17 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
     }
   }
 
+  String _bereitschaftsTypName(String? id) {
+    if (id == null || id.isEmpty) return '–';
+    final t = _bereitschaftsTypen.where((x) => x.id == id).firstOrNull;
+    return t?.name ?? id;
+  }
+
   Future<Map<String, dynamic>?> _showSchichtDialog({SchichtTyp? current}) async {
     final nameCtrl = TextEditingController(text: current?.name ?? '');
     String? standortId = current?.standortId ?? (_standorte.isNotEmpty ? _standorte.first.id : null);
+    String? typId = current?.typId;
+    if (typId != null && !_bereitschaftsTypen.any((t) => t.id == typId)) typId = null;
     final startCtrl = TextEditingController(text: current?.startTime ?? '07:00');
     final endCtrl = TextEditingController(text: current?.endTime ?? '19:00');
 
@@ -202,6 +342,18 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
                   ],
                   onChanged: (v) => setDialogState(() => standortId = v),
                 ),
+                if (_bereitschaftsTypen.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: typId?.isEmpty == true ? null : typId,
+                    decoration: const InputDecoration(labelText: 'Bereitschaftstyp (optional)'),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('– Keiner –')),
+                      ..._bereitschaftsTypen.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))),
+                    ],
+                    onChanged: (v) => setDialogState(() => typId = v),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: startCtrl,
@@ -223,6 +375,7 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
               onPressed: () => Navigator.of(ctx).pop({
                 'name': nameCtrl.text.trim(),
                 'standortId': standortId,
+                'typId': typId,
                 'startTime': startCtrl.text.trim().isNotEmpty ? startCtrl.text.trim() : null,
                 'endTime': endCtrl.text.trim().isNotEmpty ? endCtrl.text.trim() : null,
               }),
@@ -242,6 +395,7 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
         id: s.id,
         name: data['name'] as String,
         standortId: data['standortId'] as String?,
+        typId: data['typId'] as String?,
         startTime: data['startTime'] as String?,
         endTime: data['endTime'] as String?,
         endetFolgetag: SchichtTyp.computeEndetFolgetag(data['startTime'] as String?, data['endTime'] as String?),
@@ -326,6 +480,47 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
                         ),
                       )),
                 const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Bereitschafts-Typen', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton.icon(
+                          onPressed: _syncing ? null : _syncFromNfs,
+                          icon: _syncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync, size: 18),
+                          label: Text(_syncing ? 'Synchronisiere…' : 'Von NFS übernehmen'),
+                        ),
+                        IconButton(icon: const Icon(Icons.add), onPressed: _addBereitschaftsTyp, tooltip: 'Typ hinzufügen'),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_bereitschaftsTypen.isEmpty)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        'Keine Bereitschaftstypen. Nutzen Sie „Von NFS übernehmen“, wenn Sie Schichtplan NFS verwenden, oder + um einen neuen Typ anzulegen.',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      ),
+                    ),
+                  )
+                else
+                  ..._bereitschaftsTypen.map((t) => Card(
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: t.color != null ? Color(t.color!) : AppTheme.primary,
+                            radius: 18,
+                          ),
+                          title: Text(t.name),
+                          subtitle: t.beschreibung != null ? Text(t.beschreibung!) : null,
+                          trailing: IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () => _editBereitschaftsTyp(t)),
+                        ),
+                      )),
+                const SizedBox(height: 24),
                 _SectionHeader(title: 'Schichtarten', onAdd: _addSchicht),
                 const SizedBox(height: 8),
                 if (_schichten.isEmpty)
@@ -340,7 +535,7 @@ class _EinstellungenSchichtartenScreenState extends State<EinstellungenSchichtar
                         child: ListTile(
                           title: Text(s.name),
                           subtitle: Text(
-                            '${_standortName(s.standortId)} · ${s.startTime ?? '–'} – ${s.endTime ?? '–'}${s.endetFolgetag ? ' (Folgetag)' : ''}',
+                            '${_standortName(s.standortId)}${(s.typId != null && s.typId!.isNotEmpty) ? ' · ${_bereitschaftsTypName(s.typId)}' : ''} · ${s.startTime ?? '–'} – ${s.endTime ?? '–'}${s.endetFolgetag ? ' (Folgetag)' : ''}',
                             style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                           ),
                           trailing: Row(
