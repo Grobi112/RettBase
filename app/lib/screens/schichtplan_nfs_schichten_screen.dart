@@ -213,6 +213,7 @@ class _SchichtplanNfsSchichtenScreenState
           child: SchichtAnlegenSheet(
             companyId: widget.companyId,
             initialDate: widget.selectedDate,
+            baseEintraegeByDayId: {_dayId: _eintraege},
             onSaved: () {
               Navigator.pop(ctx);
               _load();
@@ -246,12 +247,35 @@ class _SchichtplanNfsSchichtenScreenState
       ),
     );
     if (confirmed != true || !mounted) return;
-    await _service.deleteStundenplanEintraegeForMitarbeiter(
-      widget.companyId,
-      _dayId,
-      row.mitarbeiter.id,
-    );
-    if (mounted) await _load();
+    final mitarbeiterId = row.mitarbeiter.id;
+    try {
+      await _service.deleteStundenplanEintraegeForMitarbeiter(
+        widget.companyId,
+        _dayId,
+        mitarbeiterId,
+      );
+      if (mounted) {
+        // Optimistisches Update: Einträge lokal entfernen, damit die UI sofort aktualisiert
+        final prefix = '${mitarbeiterId}_';
+        final neu = Map<String, String>.from(_eintraege)
+          ..removeWhere((k, _) => k.startsWith(prefix));
+        setState(() {
+          _eintraege = neu;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Einsatz entfernt.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Fehler beim Löschen: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _openBearbeiten(NfsMitarbeiterRow row) {

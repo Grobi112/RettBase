@@ -422,17 +422,21 @@ class SchichtplanNfsService {
   }
 
   /// Einträge für einen Tag: Map mit Key "mitarbeiterId_stunde" -> typId
+  /// [forceServerRead]: Wenn true, liest vom Server (nicht Cache) – für frische Daten nach Löschungen.
   Future<Map<String, String>> loadStundenplanEintraege(
     String companyId,
-    String dayId,
-  ) async {
+    String dayId, {
+    bool forceServerRead = false,
+  }) async {
     try {
-      final snap = await _db
+      final ref = _db
           .collection('kunden')
           .doc(companyId)
           .collection('schichtplanNfsStundenplan')
-          .doc(dayId)
-          .get();
+          .doc(dayId);
+      final snap = forceServerRead
+          ? await ref.get(const GetOptions(source: Source.server))
+          : await ref.get();
       final eintraege = snap.data()?['eintraege'];
       if (eintraege is Map) {
         return eintraege.map((k, v) => MapEntry(k.toString(), (v ?? '').toString()));
@@ -441,7 +445,8 @@ class SchichtplanNfsService {
     return {};
   }
 
-  /// Einträge eines Mitarbeiters für bestimmte Stunden löschen (ein Schreibvorgang)
+  /// Einträge eines Mitarbeiters für bestimmte Stunden löschen.
+  /// Nutzt Transaktion für atomare Lese-Schreib-Operation.
   Future<void> deleteStundenplanEintraegeForMitarbeiterStunden(
     String companyId,
     String dayId,
@@ -449,50 +454,54 @@ class SchichtplanNfsService {
     int startStunde,
     int endStunde,
   ) async {
-    final ref = _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('schichtplanNfsStundenplan')
-        .doc(dayId);
-    final snap = await ref.get();
-    final eintraege = snap.data()?['eintraege'];
-    if (eintraege == null || eintraege is! Map) return;
-    final e = Map<String, dynamic>.from(eintraege);
-    for (var h = startStunde; h < endStunde; h++) {
-      e.remove('${mitarbeiterId}_$h');
-    }
-    await ref.set({
-      'dayId': dayId,
-      'eintraege': e,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    final docPath = 'kunden/$companyId/schichtplanNfsStundenplan/$dayId';
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(_db.doc(docPath));
+      final raw = snap.data()?['eintraege'];
+      final e = raw is Map ? Map<String, dynamic>.from(raw) : null;
+      if (e == null) return;
+      for (var h = startStunde; h < endStunde; h++) {
+        e.remove('${mitarbeiterId}_$h');
+      }
+      tx.set(_db.doc(docPath), {
+        'dayId': dayId,
+        'eintraege': e,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
   }
 
-  /// Alle Einträge eines Mitarbeiters für einen Tag löschen
+  /// Alle Einträge eines Mitarbeiters für einen Tag löschen.
+  /// Nutzt Transaktion für atomare Lese-Schreib-Operation.
   Future<void> deleteStundenplanEintraegeForMitarbeiter(
     String companyId,
     String dayId,
     String mitarbeiterId,
   ) async {
-    final ref = _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('schichtplanNfsStundenplan')
-        .doc(dayId);
-    final snap = await ref.get();
-    final eintraege = snap.data()?['eintraege'];
-    if (eintraege == null || eintraege is! Map) return;
-    final e = Map<String, dynamic>.from(eintraege);
-    final prefix = '${mitarbeiterId}_';
-    e.removeWhere((k, _) => k.startsWith(prefix));
-    await ref.set({
-      'dayId': dayId,
-      'eintraege': e,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    final docPath = 'kunden/$companyId/schichtplanNfsStundenplan/$dayId';
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(_db.doc(docPath));
+      if (!snap.exists) return;
+      final raw = snap.data()?['eintraege'];
+      final eintraege = raw is Map ? Map<String, dynamic>.from(raw) : null;
+      if (eintraege == null) {
+        throw StateError(
+          'Stundenplan-Daten für $dayId haben ungültiges Format (eintraege fehlt oder ist kein Map)',
+        );
+      }
+      final prefix = '${mitarbeiterId}_';
+      eintraege.removeWhere((k, _) => k.startsWith(prefix));
+      tx.set(_db.doc(docPath), {
+        'dayId': dayId,
+        'eintraege': eintraege,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
   }
 
-  /// Eintrag setzen oder löschen (typId leer = entfernen)
+  /// Eintrag setzen oder löschen (typId leer = entfernen).
+  /// Nutzt Transaktion, damit immer die aktuellsten Daten gelesen werden
+  /// (verhindert, dass gelöschte Einträge durch gecachte Daten wieder auftauchen).
   Future<void> saveStundenplanEintrag(
     String companyId,
     String dayId,
@@ -500,25 +509,73 @@ class SchichtplanNfsService {
     int stunde,
     String typId,
   ) async {
-    final ref = _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('schichtplanNfsStundenplan')
-        .doc(dayId);
-    final key = '${mitarbeiterId}_$stunde';
-    final snap = await ref.get();
-    final existing = snap.data()?['eintraege'] ?? {};
-    final e = Map<String, dynamic>.from(existing);
-    if (typId.trim().isEmpty) {
-      e.remove(key);
-    } else {
-      e[key] = typId.trim();
+    final docPath = 'kunden/$companyId/schichtplanNfsStundenplan/$dayId';
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(_db.doc(docPath));
+      final existing = snap.data()?['eintraege'] ?? {};
+      final e = Map<String, dynamic>.from(existing);
+      final key = '${mitarbeiterId}_$stunde';
+      if (typId.trim().isEmpty) {
+        e.remove(key);
+      } else {
+        e[key] = typId.trim();
+      }
+      tx.set(_db.doc(docPath), {
+        'dayId': dayId,
+        'eintraege': e,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  /// Mehrere Einträge für einen Tag setzen.
+  /// [baseEintraege]: Wenn gesetzt, wird diese Map als Ausgangsbasis verwendet
+  /// (statt aus Firestore zu lesen). Verhindert, dass gecachte/stale Daten
+  /// zuvor gelöschte Einträge wiederherstellen.
+  Future<void> saveStundenplanEintraegeBatch(
+    String companyId,
+    String dayId,
+    List<({String mitarbeiterId, int stunde, String typId})> eintraege, {
+    Map<String, String>? baseEintraege,
+  }) async {
+    if (eintraege.isEmpty) return;
+    final docPath = 'kunden/$companyId/schichtplanNfsStundenplan/$dayId';
+    if (baseEintraege != null) {
+      // Basis aus lokaler Ansicht – kein Firestore-Read, verhindert Stale-Data-Problem
+      final e = Map<String, dynamic>.from(baseEintraege);
+      for (final entry in eintraege) {
+        final key = '${entry.mitarbeiterId}_${entry.stunde}';
+        if (entry.typId.trim().isEmpty) {
+          e.remove(key);
+        } else {
+          e[key] = entry.typId.trim();
+        }
+      }
+      await _db.doc(docPath).set({
+        'dayId': dayId,
+        'eintraege': e,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      return;
     }
-    await ref.set({
-      'dayId': dayId,
-      'eintraege': e,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(_db.doc(docPath));
+      final existing = snap.data()?['eintraege'] ?? {};
+      final e = Map<String, dynamic>.from(existing);
+      for (final entry in eintraege) {
+        final key = '${entry.mitarbeiterId}_${entry.stunde}';
+        if (entry.typId.trim().isEmpty) {
+          e.remove(key);
+        } else {
+          e[key] = entry.typId.trim();
+        }
+      }
+      tx.set(_db.doc(docPath), {
+        'dayId': dayId,
+        'eintraege': e,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
   }
 
   /// Meldung speichern (von "Bereitschaftszeit angeben")
@@ -597,15 +654,11 @@ class SchichtplanNfsService {
     while (!d.isAfter(end)) {
       final dayId =
           '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
-      for (var h = meldung.uhrzeitVon; h < meldung.uhrzeitBis; h++) {
-        await saveStundenplanEintrag(
-          companyId,
-          dayId,
-          meldung.mitarbeiterId,
-          h,
-          meldung.typId,
-        );
-      }
+      final eintraege = [
+        for (var h = meldung.uhrzeitVon; h < meldung.uhrzeitBis; h++)
+          (mitarbeiterId: meldung.mitarbeiterId, stunde: h, typId: meldung.typId),
+      ];
+      await saveStundenplanEintraegeBatch(companyId, dayId, eintraege);
       d = d.add(const Duration(days: 1));
     }
     await _db
