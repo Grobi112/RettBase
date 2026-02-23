@@ -93,9 +93,9 @@ kunden/{companyId}/
 - Pseudo-Email nicht im Mitarbeiter-Datenblatt anzeigen
 - TagStatusMitTypCounts in schichtplan_nfs_service (wird für Monat nicht mehr genutzt, Service behält Struktur)
 - **Fix Löschen:** Firestore `set()` ohne merge – gelöschte Schichten werden dauerhaft aus DB entfernt (Commit 08db50f)
-- **Performance:** Parallele Firestore-Operationen (Future.wait) – Monatsübersicht, Tagesansicht, Schicht anlegen, Bearbeiten, Meldungen annehmen (Commit d8369b4)
+- **Performance:** Parallele Firestore-Operationen (Future.wait) – Monatsübersicht, Tagesansicht, Schicht anlegen, Bearbeiten, Meldungen annehmen (Commit f3f9635)
 
-## 11. Performance-Optimierungen (Commit d8369b4)
+## 11. Performance-Optimierungen (Commit f3f9635)
 
 - **loadTageStatusForMonth:** Alle Tage parallel statt 28–31 sequentielle Reads
 - **loadTageMitEintraegen:** Parallele Reads
