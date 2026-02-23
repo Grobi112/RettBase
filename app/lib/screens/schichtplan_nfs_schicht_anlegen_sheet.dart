@@ -54,25 +54,33 @@ class _SchichtAnlegenSheetState extends State<SchichtAnlegenSheet> {
 
   Future<void> _load() async {
     try {
-      final alleTypen = await _service.loadBereitschaftsTypen(widget.companyId);
+      var d = DateTime(_datumVon.year, _datumVon.month, _datumVon.day);
+      final end = DateTime(_datumBis.year, _datumBis.month, _datumBis.day);
+      final dayIds = <String>[];
+      while (!d.isAfter(end)) {
+        dayIds.add(
+            '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}');
+        d = d.add(const Duration(days: 1));
+      }
+      final allFutures = [
+        _service.loadBereitschaftsTypen(widget.companyId),
+        _service.loadMitarbeiterMitStandort(widget.companyId),
+        ...dayIds.map((id) => _service.loadStundenplanEintraege(
+              widget.companyId,
+              id,
+              forceServerRead: true,
+            )),
+      ];
+      final allResults = await Future.wait(allFutures);
+      final alleTypen = allResults[0] as List<BereitschaftsTyp>;
+      final ma = allResults[1] as List<NfsMitarbeiterRow>;
+      final eintraegeList = allResults.skip(2).cast<Map<String, String>>().toList();
+      final loaded = <String, Map<String, String>>{
+        for (var i = 0; i < dayIds.length; i++) dayIds[i]: eintraegeList[i],
+      };
       final typen = SchichtplanNfsBereitschaftstypUtils.filterAndSortS1S2B(
         alleTypen,
       );
-      final ma = await _service.loadMitarbeiterMitStandort(widget.companyId);
-      // Immer frische Einträge vom Server laden (verhindert Stale-Data nach Löschungen)
-      final loaded = <String, Map<String, String>>{};
-      var d = DateTime(_datumVon.year, _datumVon.month, _datumVon.day);
-      final end = DateTime(_datumBis.year, _datumBis.month, _datumBis.day);
-      while (!d.isAfter(end)) {
-        final dayId =
-            '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
-        loaded[dayId] = await _service.loadStundenplanEintraege(
-          widget.companyId,
-          dayId,
-          forceServerRead: true,
-        );
-        d = d.add(const Duration(days: 1));
-      }
       if (mounted) {
         setState(() {
           _typen = typen;
@@ -98,6 +106,7 @@ class _SchichtAnlegenSheetState extends State<SchichtAnlegenSheet> {
     try {
       var d = DateTime(_datumVon.year, _datumVon.month, _datumVon.day);
       final end = DateTime(_datumBis.year, _datumBis.month, _datumBis.day);
+      final saves = <Future<void>>[];
       while (!d.isAfter(end)) {
         final dayId =
             '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
@@ -106,21 +115,24 @@ class _SchichtAnlegenSheetState extends State<SchichtAnlegenSheet> {
             (mitarbeiterId: m.id, stunde: h, typId: _typId!),
         ];
         var base = widget.baseEintraegeByDayId?[dayId] ?? _loadedEintraegeByDayId[dayId];
-        if (base == null) {
-          base = await _service.loadStundenplanEintraege(
+        saves.add((() async {
+          if (base == null) {
+            base = await _service.loadStundenplanEintraege(
+              widget.companyId,
+              dayId,
+              forceServerRead: true,
+            );
+          }
+          await _service.saveStundenplanEintraegeBatch(
             widget.companyId,
             dayId,
-            forceServerRead: true,
+            eintraege,
+            baseEintraege: base,
           );
-        }
-        await _service.saveStundenplanEintraegeBatch(
-          widget.companyId,
-          dayId,
-          eintraege,
-          baseEintraege: base,
-        );
+        })());
         d = d.add(const Duration(days: 1));
       }
+      await Future.wait(saves);
       if (mounted) widget.onSaved();
     } finally {
       if (mounted) setState(() => _saving = false);

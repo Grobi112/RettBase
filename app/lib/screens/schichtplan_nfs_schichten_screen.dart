@@ -64,7 +64,14 @@ class _SchichtplanNfsSchichtenScreenState
       _error = null;
     });
     try {
-      final alleTypen = await _service.loadBereitschaftsTypen(widget.companyId);
+      final results = await Future.wait([
+        _service.loadBereitschaftsTypen(widget.companyId),
+        _service.loadMitarbeiterMitStandort(widget.companyId),
+        _service.loadStundenplanEintraege(widget.companyId, _dayId),
+      ]);
+      final alleTypen = results[0] as List<BereitschaftsTyp>;
+      final ma = results[1] as List<NfsMitarbeiterRow>;
+      final eintraege = results[2] as Map<String, String>;
       final s1s2b = SchichtplanNfsBereitschaftstypUtils.filterAndSortS1S2B(
         alleTypen,
       );
@@ -72,10 +79,6 @@ class _SchichtplanNfsSchichtenScreenState
           .where((t) => !s1s2b.any((s) => s.id == t.id))
           .toList()
         ..sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
-      final ma =
-          await _service.loadMitarbeiterMitStandort(widget.companyId);
-      final eintraege = await _service
-          .loadStundenplanEintraege(widget.companyId, _dayId);
       if (mounted) {
         setState(() {
           _typen = [...s1s2b, ...rest];
@@ -850,18 +853,18 @@ class _BearbeitenBereitschaftszeitDialogState
       oldDayId,
       widget.mitarbeiterId,
     );
+    final byDay = <String, List<({int stunde, String typId})>>{};
     for (final blk in _blocks) {
       final newDayId = _dayId(blk.datum);
-      for (var h = blk.startHour; h < blk.endHour; h++) {
-        await widget.service.saveStundenplanEintrag(
-          widget.companyId,
-          newDayId,
-          widget.mitarbeiterId,
-          h,
-          blk.typId,
-        );
-      }
+      byDay.putIfAbsent(newDayId, () => []).addAll([
+        for (var h = blk.startHour; h < blk.endHour; h++) (stunde: h, typId: blk.typId),
+      ]);
     }
+    await Future.wait(byDay.entries.map((e) => widget.service.saveStundenplanEintraegeBatch(
+          widget.companyId,
+          e.key,
+          e.value.map((v) => (mitarbeiterId: widget.mitarbeiterId, stunde: v.stunde, typId: v.typId)).toList(),
+        )));
     if (mounted) {
       setState(() => _saving = false);
       widget.onSaved();

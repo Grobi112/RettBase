@@ -359,13 +359,18 @@ class SchichtplanNfsService {
     int year,
   ) async {
     final daysInMonth = DateTime(year, month + 1, 0).day;
+    final dayIds = [
+      for (var day = 1; day <= daysInMonth; day++)
+        '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.$year',
+    ];
+    final eintraegeList = await Future.wait(
+      dayIds.map((id) => loadStundenplanEintraege(companyId, id)),
+    );
     final result = <String>{};
-    for (var day = 1; day <= daysInMonth; day++) {
-      final dayId =
-          '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.$year';
-      final e = await loadStundenplanEintraege(companyId, dayId);
+    for (var i = 0; i < dayIds.length; i++) {
+      final e = eintraegeList[i];
       if (e.isNotEmpty && e.values.any((v) => v.trim().isNotEmpty)) {
-        result.add(dayId);
+        result.add(dayIds[i]);
       }
     }
     return result;
@@ -373,22 +378,29 @@ class SchichtplanNfsService {
 
   /// Tag-Status für Farbe: 'red' = offene Schichten, 'green' = alle mit S1 belegt, 'neutral' = sonst.
   /// typCounts: typId -> Anzahl Mitglieder, die an diesem Tag diesen Dienst haben.
+  /// Lädt alle Tage des Monats parallel für maximale Geschwindigkeit.
   Future<Map<String, TagStatusMitTypCounts>> loadTageStatusForMonth(
     String companyId,
     int month,
     int year,
   ) async {
-    final typen = await loadBereitschaftsTypen(companyId);
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final dayIds = [
+      for (var day = 1; day <= daysInMonth; day++)
+        '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.$year',
+    ];
+    final typenFuture = loadBereitschaftsTypen(companyId);
+    final eintraegeFutures = dayIds.map((id) => loadStundenplanEintraege(companyId, id));
+    final typen = await typenFuture;
     final s1Typ = typen
         .where((t) => t.name.trim().toLowerCase() == 's1')
         .firstOrNull;
     final s1TypId = s1Typ?.id;
-    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final eintraegeList = await Future.wait(eintraegeFutures);
     final result = <String, TagStatusMitTypCounts>{};
-    for (var day = 1; day <= daysInMonth; day++) {
-      final dayId =
-          '${day.toString().padLeft(2, '0')}.${month.toString().padLeft(2, '0')}.$year';
-      final e = await loadStundenplanEintraege(companyId, dayId);
+    for (var i = 0; i < dayIds.length; i++) {
+      final dayId = dayIds[i];
+      final e = eintraegeList[i];
       final belegt = <int>{};
       final typenProStunde = <int, Set<String>>{};
       final typCounts = <String, Set<String>>{}; // typId -> Set mitarbeiterIds
@@ -651,6 +663,7 @@ class SchichtplanNfsService {
       meldung.datumBis.month,
       meldung.datumBis.day,
     );
+    final saves = <Future<void>>[];
     while (!d.isAfter(end)) {
       final dayId =
           '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
@@ -658,9 +671,10 @@ class SchichtplanNfsService {
         for (var h = meldung.uhrzeitVon; h < meldung.uhrzeitBis; h++)
           (mitarbeiterId: meldung.mitarbeiterId, stunde: h, typId: meldung.typId),
       ];
-      await saveStundenplanEintraegeBatch(companyId, dayId, eintraege);
+      saves.add(saveStundenplanEintraegeBatch(companyId, dayId, eintraege));
       d = d.add(const Duration(days: 1));
     }
+    await Future.wait(saves);
     await _db
         .collection('kunden')
         .doc(companyId)
