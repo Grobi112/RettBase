@@ -1,56 +1,98 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <title>Meine React-Seite</title>
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="RettBase – WebApp für Einsätze, Wachbuch, Checklisten, Schichtplan und mehr. Einfach. Sicher. Digital.">
+  <meta name="keywords" content="RettBase, Rettungsdienst, Einsatzprotokoll, Wachbuch, Checklisten, Schichtplan">
+  <title>RettBase – Einfach. Sicher. Digital.</title>
+  <link rel="icon" type="image/png" href="img/rettbase_splash.png">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div id="root"></div>
+  <header class="header">
+    <div class="header-inner">
+      <a href="/" class="logo">
+        <img src="img/rettbase_splash.png" alt="RettBase">
+        <span>RettBase</span>
+      </a>
+      <nav class="nav">
+        <a href="#features">Funktionen</a>
+        <a href="#cta">App starten</a>
+      </nav>
+    </div>
+  </header>
 
-  <script type="text/babel">
-    function Header() {
-      return (
-        <header style={{background:"'ffffff", color:"#fff", padding:"1rem"}}>
-          <img 
-          src="/img/logo.png" 
-          alt="Logo" 
-          style={{height:"40px", marginRight:"10px"}}
-        />
-            <h1>Protect-Alert</h1>
-          <nav>
-            <a href="#" style={{marginRight:"1rem", color:"#fff"}}>Home</a>
-            <a href="#" style={{color:"#fff"}}>About</a>
-          </nav>
-        </header>
-      );
-    }
-
-    function Footer() {
-      return (
-        <footer style={{background:"#eee", padding:"1rem", marginTop:"2rem", textAlign:"center"}}>
-          © {new Date().getFullYear()} Meine Website
-        </footer>
-      );
-    }
-
-    function App() {
-      return (
-        <div>
-          <Header />
-          <main style={{padding:"1rem"}}>
-            <h2>Willkommen!</h2>
-            <p>Das ist der Inhalt deiner Seite.</p>
-          </main>
-          <Footer />
+  <main>
+    <section class="hero">
+      <div class="hero-inner">
+        <img src="img/rettbase_splash.png" alt="RettBase" class="hero-logo">
+        <h1>RettBase</h1>
+        <p class="slogan">Einfach. Sicher. Digital.</p>
+        <p>Die zentrale Plattform für Einsätze, Wachbuch, Checklisten, Schichtplan und Dokumente – für Rettungsdienste, Schulsanitätsdienste und Notfallseelsorge.</p>
+        <div class="hero-buttons">
+          <a href="https://app.rettbase.de" class="btn btn-primary">App öffnen</a>
+          <a href="#features" class="btn btn-outline">Mehr erfahren</a>
         </div>
-      );
-    }
+      </div>
+    </section>
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
+    <section id="features" class="features">
+      <h2>Was RettBase bietet</h2>
+      <div class="features-grid">
+        <article class="feature-card">
+          <div class="icon">📋</div>
+          <h3>Einsatzprotokoll</h3>
+          <p>Einsätze digital erfassen, dokumentieren und auswerten – für SSD, NFS und Rettungsdienste.</p>
+        </article>
+        <article class="feature-card">
+          <div class="icon">📖</div>
+          <h3>Wachbuch</h3>
+          <p>Digitale Wachbücher mit Echtzeit-Synchronisation und Zugriff von überall.</p>
+        </article>
+        <article class="feature-card">
+          <div class="icon">✅</div>
+          <h3>Checklisten</h3>
+          <p>Checklisten für Fahrzeuge, Ausrüstung und Abläufe – immer aktuell und übersichtlich.</p>
+        </article>
+        <article class="feature-card">
+          <div class="icon">📅</div>
+          <h3>Schichtplan</h3>
+          <p>Schichtplanung und -anmeldung für Notfallseelsorge und andere Bereiche.</p>
+        </article>
+        <article class="feature-card">
+          <div class="icon">📁</div>
+          <h3>Dokumente</h3>
+          <p>Zentrale Ablage für Richtlinien, Formulare und wichtige Unterlagen.</p>
+        </article>
+        <article class="feature-card">
+          <div class="icon">💬</div>
+          <h3>Chat & Infos</h3>
+          <p>Interner Chat und Informationssystem für die schnelle Kommunikation im Team.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="cta" class="cta">
+      <div class="cta-inner">
+        <h2>Bereit loszulegen?</h2>
+        <p>Öffnen Sie die RettBase-App im Browser oder laden Sie sie als native App für iOS und Android herunter.</p>
+        <a href="https://app.rettbase.de" class="btn btn-primary">App öffnen</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <a href="/" class="logo">
+        <img src="img/rettbase_splash.png" alt="RettBase">
+        <span>RettBase</span>
+      </a>
+      <div class="footer-links">
+        <a href="https://app.rettbase.de">App</a>
+      </div>
+      <span class="footer-copy">© RettBase · www.rettbase.de</span>
+    </div>
+  </footer>
 </body>
 </html>
