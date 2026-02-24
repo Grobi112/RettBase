@@ -69,6 +69,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       await _modulService.ensureChatModuleExists();
       await _modulService.ensureSchichtplanNfsModuleExists();
       await _modulService.ensureTelefonlisteNfsModuleExists();
+      await _modulService.ensureEinsatzprotokollNfsModuleExists();
       var items = await _menuService.loadMenuStructure(_selectedBereich);
       // Menü startet leer – keine Legacy-Migration, Nutzer legt alles selbst an
       var mods = await _modulService.getAllModules();
@@ -89,6 +90,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       mods['chat'] ??= {'id': 'chat', 'label': 'Chat', 'url': ''};
       mods['telefonliste'] ??= {'id': 'telefonliste', 'label': 'Telefonliste', 'url': ''};
       mods['telefonlistenfs'] ??= {'id': 'telefonlistenfs', 'label': 'TelefonlisteNFS', 'url': ''};
+      mods['einsatzprotokollnfs'] ??= {'id': 'einsatzprotokollnfs', 'label': 'Einsatzprotokoll Notfallseelsorge', 'url': ''};
       if (mounted) {
         setState(() {
           _items = items;
@@ -618,9 +620,9 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     if (_selectedBereich != KundenBereich.schulsanitaetsdienst) {
       available = available.where((e) => e.key != 'ssd').toList();
     }
-    // TelefonlisteNFS nur für Bereich Notfallseelsorge
+    // TelefonlisteNFS und Einsatzprotokoll NFS nur für Bereich Notfallseelsorge
     if (_selectedBereich != KundenBereich.notfallseelsorge) {
-      available = available.where((e) => e.key != 'telefonlistenfs').toList();
+      available = available.where((e) => e.key != 'telefonlistenfs' && e.key != 'einsatzprotokollnfs').toList();
     }
     available.sort((a, b) {
       final la = (a.value['label'] ?? a.key).toString().toLowerCase();

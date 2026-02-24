@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import '../services/auth_data_service.dart';
 import '../services/modules_service.dart';
 import '../services/informationen_service.dart';
+import '../services/informationssystem_service.dart';
 import '../services/kundenverwaltung_service.dart';
 import '../services/menueverwaltung_service.dart';
 import '../services/push_notification_service.dart';
@@ -37,7 +38,9 @@ import 'company_id_screen.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'einsatzprotokoll_ssd_screen.dart';
+import 'einsatzprotokoll_nfs_screen.dart';
 import 'schichtplan_nfs_screen.dart';
+import '../services/schichtplan_nfs_service.dart';
 import 'telefonliste_nfs_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
@@ -72,11 +75,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _modulesService = ModulesService();
   final _infoService = InformationenService();
   final _chatService = ChatService();
+  final _schichtplanNfsService = SchichtplanNfsService();
   final _bodyNavigatorKey = GlobalKey<NavigatorState>();
 
   final _chatUnreadNotifier = ValueNotifier<int>(0);
   StreamSubscription<int>? _chatUnreadSub;
   Timer? _badgePollTimer;
+
+  final _schichtplanNfsMeldungenNotifier = ValueNotifier<int>(0);
+  StreamSubscription<int>? _schichtplanNfsMeldungenSub;
 
   List<AppModule?> _shortcuts = [];
   List<AppModule> _allModules = [];
@@ -121,6 +128,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _startChatUnreadListener();
   }
 
+  static bool _canSeeSchichtplanNfsMeldungen(String? role) {
+    if (role == null || role.isEmpty) return false;
+    final r = role.trim().toLowerCase();
+    return r == 'superadmin' || r == 'admin' || r == 'koordinator';
+  }
+
   void _startChatUnreadListener() {
     _chatUnreadSub?.cancel();
     _chatUnreadSub = null;
@@ -152,6 +165,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _startSchichtplanNfsMeldungenStream() {
+    if (!_canSeeSchichtplanNfsMeldungen(_userRole)) return;
+    final hasSchichtplanNfs = _shortcuts.any((m) => m?.id == 'schichtplannfs');
+    if (!hasSchichtplanNfs) return;
+    final cid = _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
+    if (cid.isEmpty) return;
+    _schichtplanNfsMeldungenSub?.cancel();
+    _schichtplanNfsMeldungenSub = _schichtplanNfsService
+        .streamMeldungenCount(cid)
+        .listen((count) {
+      if (mounted) _schichtplanNfsMeldungenNotifier.value = count;
+    });
+  }
+
+  void _stopSchichtplanNfsMeldungenStream() {
+    _schichtplanNfsMeldungenSub?.cancel();
+    _schichtplanNfsMeldungenSub = null;
+  }
+
   void _maybeOpenChatFromNotification(String companyId) {
     final chat = PushNotificationService.initialChatFromNotification;
     if (chat == null) return;
@@ -173,6 +205,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _chatUnreadNotifier.dispose();
     _chatUnreadSub?.cancel();
     _badgePollTimer?.cancel();
+    _stopSchichtplanNfsMeldungenStream();
+    _schichtplanNfsMeldungenNotifier.dispose();
     _containerSlotsNotifier.dispose();
     _infoItemsNotifier.dispose();
     super.dispose();
@@ -296,6 +330,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) _infoItemsNotifier.value = infos;
       }));
       _startChatUnreadListener();
+      _startSchichtplanNfsMeldungenStream();
       if (kIsWeb) {
         final h = url_hash.getInitialHash();
         PushNotificationService.setInitialChatFromHash(h);
@@ -332,11 +367,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return menuStructure;
   }
 
+  /// Lädt Container-Slots für Hauptseite – firmenweit und bereichsübergreifend.
+  /// companyId = effectiveCompanyId (Firestore docId), keine Bereichs-Trennung.
   Future<List<String?>> _loadContainerSlots(String companyId) async {
     try {
+      final cid = companyId.trim().toLowerCase();
       final ref = FirebaseFirestore.instance
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('settings')
           .doc('informationssystem');
       final snap = await ref.get();
@@ -344,27 +382,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final validOrder = _parseContainerTypeOrder(data);
       final list = data?['containerSlots'] as List?;
       if (list != null && list.isNotEmpty) {
+        final maxSlots = InformationssystemService.maxContainerSlots;
         final validSet = validOrder.isNotEmpty ? validOrder.toSet() : null;
         final slots = <String?>[];
-        for (var i = 0; i < list.length && i < 2; i++) {
-          final s = list[i]?.toString();
-          if (s != null && s.trim().isNotEmpty) {
+        for (var i = 0; i < list.length && i < maxSlots; i++) {
+          final raw = list[i];
+          final s = raw?.toString().trim();
+          if (s != null && s.isNotEmpty && s != 'null') {
             if (validSet == null || validSet.contains(s)) {
               slots.add(s);
+            } else {
+              slots.add(null);
             }
           } else {
             slots.add(null);
           }
         }
-        while (slots.length < 2) slots.add(null);
-        return slots;
+        while (slots.length < maxSlots) {
+          slots.add(null);
+        }
+        return slots.take(maxSlots).toList();
       }
-      // Default: nur Typen aus containerTypeOrder nutzen, nicht hart verdrahtet
-      if (validOrder.isNotEmpty) {
-        return [validOrder.first, validOrder.length > 1 ? validOrder[1] : null];
-      }
+      // Kein Fallback: Wenn containerSlots fehlt/leer, nichts anzeigen.
+      // „Container auf Hauptseite“ muss explizit in den Einstellungen konfiguriert werden.
     } catch (_) {}
-    return ['informationen', 'verkehrslage'];
+    return List.filled(InformationssystemService.maxContainerSlots, null);
   }
 
   List<String> _parseContainerTypeOrder(Map<String, dynamic>? data) {
@@ -412,6 +454,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       shortcuts: _shortcuts,
       onShortcutTap: _onShortcutTap,
       chatUnreadListenable: _chatUnreadNotifier,
+      schichtplanNfsMeldungenListenable: _schichtplanNfsMeldungenNotifier,
       containerSlotsListenable: _containerSlotsNotifier,
       informationenItemsListenable: _infoItemsNotifier,
       companyId: _companyId,
@@ -577,6 +620,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'ssd':
         screen = EinsatzprotokollSsdScreen(
           companyId: _companyId,
+          onBack: onBack,
+        );
+        break;
+      case 'einsatzprotokollnfs':
+        screen = EinsatzprotokollNfsScreen(
+          companyId: _companyId,
+          title: 'Einsatzprotokoll Notfallseelsorge',
           onBack: onBack,
         );
         break;

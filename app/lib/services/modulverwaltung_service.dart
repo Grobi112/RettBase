@@ -102,6 +102,24 @@ class ModulverwaltungService {
     } catch (_) {}
   }
 
+  /// Stellt sicher, dass das Modul Einsatzprotokoll NFS in Firestore existiert (für Menü-Verwaltung).
+  Future<void> ensureEinsatzprotokollNfsModuleExists() async {
+    try {
+      await _db.collection('settings').doc('modules').set({'_exists': true}, SetOptions(merge: true));
+      await _items.doc('einsatzprotokollnfs').set({
+        'label': 'Einsatzprotokoll Notfallseelsorge',
+        'url': '',
+        'icon': 'default',
+        'roles': _ssdRoles,
+        'bereich': 'notfallseelsorge',
+        'free': true,
+        'order': 34,
+        'active': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   /// Lädt alle Modul-Definitionen (ohne orderBy – manche Docs könnten order fehlen)
   Future<Map<String, Map<String, dynamic>>> getAllModules() async {
     try {

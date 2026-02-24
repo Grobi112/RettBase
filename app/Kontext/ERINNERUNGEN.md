@@ -48,6 +48,7 @@
 
 ### Mitgliederverwaltung
 - `saveUsersDoc`: schreibt `vorname`/`nachname` mit (für DisplayName)
+- **Kontext:** docs/KONTEXT_MITARBEITERVERWALTUNG.md
 
 ### getCompanyBereich
 - Fallback per `kundenId`/`subdomain` auch wenn Doc existiert aber `bereich` fehlt
@@ -76,8 +77,9 @@
 | Modul | Bereich | Firestore-Pfade |
 |-------|---------|-----------------|
 | **SSD (Einsatzprotokoll)** | `schulsanitaetsdienst` | – |
-| **Schichtplan NFS** | `notfallseelsorge` | `schichtplanNfsStandorte`, `schichtplanNfsBereitschaftsTypen`, `schichtplanNfsMitarbeiter`, `schichtplanNfsBereitschaften/{dayId}/bereitschaften` |
-| **TelefonlisteNFS** | `notfallseelsorge` | Daten aus Mitgliederverwaltung (`kunden/{companyId}/mitarbeiter`). Rechte: Admin/Koordinator/Superadmin bearbeiten, User nur lesen + Nummer antippen zum Anrufen. User pflegen ihre Daten über das Profil. |
+| **Schichtplan NFS** | `notfallseelsorge` | `schichtplanNfsStandorte`, `schichtplanNfsBereitschaftsTypen`, `schichtplanNfsMitarbeiter`, `schichtplanNfsBereitschaften/{dayId}/bereitschaften`, `schichtplanNfsStundenplan/{dayId}`. **Kontext:** docs/KONTEXT_SCHICHTPLAN_NFS.md |
+| **TelefonlisteNFS** | `notfallseelsorge` | Daten aus Mitgliederverwaltung (`kunden/{companyId}/mitarbeiter`). Rechte: Admin/Koordinator/Superadmin bearbeiten, User nur lesen + Nummer antippen zum Anrufen. User pflegen ihre Daten über das Profil. **Kontext:** docs/KONTEXT_TELEFONLISTE_NFS.md |
+| **Einsatzprotokoll NFS** | `notfallseelsorge` | Nur wenn Admin das Modul freischaltet und ins Menü einpflegt (kein Auto-Enable). Firestore: `kunden/{companyId}/einsatzprotokoll-nfs`. **Kontext:** docs/KONTEXT_EINSATZPROTOKOLL_NFS.md |
 
 - **Neue bereichs-spezifische Module:** Gleiches Muster in `getModulesForCompany` (Bereichs-Check + Auto-Enabled)
 
@@ -159,7 +161,7 @@
 ## 8. Web vs. Native (Flutter)
 
 - **Gemeinsam:** LoginService, ModulesService, allgemeine Screens
-- **Nur Web:** `firebase_options.dart` → web; Auth-Bridge (module_webview_widget, webview_screen)
+- **Nur Web:** `firebase_options.dart` → web; Auth-Bridge (module_webview_widget)
 - **Nur Native:** `firebase_options.dart` → android, ios, macos
 - **Nicht** beide Plattformen gleichzeitig ändern – nur wenn ausdrücklich gefordert
 
@@ -250,14 +252,18 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 - Nur Checkbox-Inhalt gelb, Labels unverändert
 
 ### Pflichtfelder (Mindestanforderungen)
-- Schulsanitäter/in 1: Name
+- Schulsanitäter/in 1: Vorname, Name
 - Einsatzort
 - Patientendaten: Vorname, Name, Klasse (Geburtsdatum optional)
 - Art des Vorfalls: mind. 1 Checkbox (Erkrankung/Unfall) + ggf. Zusatzfeld
 - „Was hat der Verletzte gemacht“: mind. 1 Checkbox
 - Erstbefund: Atmung (mind. 1), Puls, SpO2
+- Erstbefund bei Unfall: Schmerzen (mind. 1 der 3 Optionen), „Welche Verletzung liegt vermutlich vor“ (mind. 1 der 4 Optionen)
 - „Klagt über“: Pflichtfeld
+- „Mindestens eine Person informiert“: nur Pflichtfeld, wenn Notruf oder Eltern benachrichtigt angekreuzt
+- Bei „Lehrer informiert“: Pflichtfeld „Name des Lehrers / der Lehrerin“
 - Getroffene Maßnahmen: mind. 1 (ohne Notruf/Eltern benachrichtigt)
+- Verlaufsbeschreibung: Pflichtfeld
 - Schilderung, Informiert-Gruppe, Übergabe an, Unterschrift Schulsanitäter/in 1
 
 ### Validierung
@@ -295,7 +301,8 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 | Bereich | Dateien |
 |---------|---------|
 | Einsatzprotokoll SSD | `einsatzprotokoll_ssd_screen.dart`, `einsatzprotokoll_ssd_uebersicht_screen.dart`, `einsatzprotokoll_ssd_druck_screen.dart` |
-| Einsatzprotokoll Service | `einsatzprotokoll_ssd_service.dart` |
+| Einsatzprotokoll NFS | `einsatzprotokoll_nfs_screen.dart` |
+| Einsatzprotokoll Service | `einsatzprotokoll_ssd_service.dart`, `einsatzprotokoll_nfs_service.dart` |
 | Logo/ Splash | `splash_screen.dart`, `img/rettbase_splash.png` |
 
 ---
@@ -319,7 +326,7 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 ### Web-App (Stand Feb 2026)
 - **Kein Update-Banner mehr** – bei neuer Version (version.json) wird die Seite **automatisch** neu geladen
 - **version.json-Check:** nur **einmal** beim App-Start im Ladefenster (vor Dashboard/Login); keine periodische Prüfung mehr in der Session
-- **Versionierung:** `web/version.json` + `web/increment_version.js` – wird bei `./fw`, `./flutter build web` oder `./scripts/build_web.sh` erhöht. Nicht bei direktem `flutter build web` (IDE/CLI)
+- **Versionierung:** `web/version.json` + `web/increment_version.js` – wird bei `./fw`, `./flutter build web`, `./scripts/build_web.sh`, `./scripts/deploy_web.sh` automatisch erhöht. Manuell: `node web/increment_version.js`
 - **Cache-Leerung beim Aufruf:** firebase.json headers + index.html Meta-Tags für index.html, JS, manifest, version.json
 
 ---

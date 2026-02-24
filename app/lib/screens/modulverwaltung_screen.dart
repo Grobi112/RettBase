@@ -58,6 +58,7 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
       await _modulService.ensureChatModuleExists();
       await _modulService.ensureSchichtplanNfsModuleExists();
       await _modulService.ensureTelefonlisteNfsModuleExists();
+      await _modulService.ensureEinsatzprotokollNfsModuleExists();
       var mods = await _modulService.getAllModules();
       if (mods.isEmpty) {
         final defs = await _kundenService.getAllModuleDefs();
@@ -72,8 +73,9 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
           mods[m.id] = {...mods[m.id]!, 'url': ''};
         }
       }
-      // Einsatzprotokoll SSD immer anzeigen (Fallback falls Merge übersprungen)
+      // Einsatzprotokoll SSD und NFS immer anzeigen (Fallback falls Merge übersprungen)
       mods['ssd'] ??= {'id': 'ssd', 'label': 'Einsatzprotokoll SSD', 'url': '', 'order': 29, 'active': true, 'roles': _allRoles};
+      mods['einsatzprotokollnfs'] ??= {'id': 'einsatzprotokollnfs', 'label': 'Einsatzprotokoll Notfallseelsorge', 'url': '', 'order': 34, 'active': true, 'roles': _allRoles};
       if (mounted) {
         setState(() {
           _modules = mods;

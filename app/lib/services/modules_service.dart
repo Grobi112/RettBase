@@ -31,6 +31,7 @@ class ModulesService {
     AppModule(id: 'wachbuch', label: 'Wachbuch', url: '', order: 18, roles: _defaultRoles),
     AppModule(id: 'wachbuchuebersicht', label: 'Wachbuch-Übersicht', url: '', order: 19, roles: ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'wachleitung', 'leiterssd']),
     AppModule(id: 'checklisten', label: 'Checklisten', url: '', order: 20, roles: _defaultRoles),
+    // User: nur Container auf Hauptseite; Modul (Einstellungen, Tabs) nur für Admin/Koordinator etc.
     AppModule(id: 'informationssystem', label: 'Informationssystem', url: '', order: 21, roles: ['superadmin', 'admin', 'leiterssd', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'wachleitung', 'koordinator']),
     AppModule(id: 'einstellungen', label: 'Einstellungen', url: '', order: 9, roles: ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung']),
     AppModule(id: 'maengelmelder', label: 'Mängelmelder', url: '', order: 22, roles: _defaultRoles),
@@ -45,6 +46,7 @@ class ModulesService {
     AppModule(id: 'ssd', label: 'Einsatzprotokoll SSD', url: '', order: 29, roles: _defaultRoles),
     AppModule(id: 'schichtplannfs', label: 'Schichtplan NFS', url: '', order: 32, roles: _defaultRoles),
     AppModule(id: 'telefonlistenfs', label: 'TelefonlisteNFS', url: '', order: 33, roles: ['superadmin', 'admin', 'koordinator', 'user']),
+    AppModule(id: 'einsatzprotokollnfs', label: 'Einsatzprotokoll Notfallseelsorge', url: '', order: 34, roles: _defaultRoles),
   ];
 
   /// Lädt Shortcuts für die Dashboard-Kacheln (6 Slots).
@@ -178,12 +180,18 @@ class ModulesService {
             bereichResolved != KundenBereich.notfallseelsorge &&
             !isAdminCompany &&
             !isGlobalSuperadmin) continue;
+        // Einsatzprotokoll NFS: nur bei Notfallseelsorge, und nur wenn explizit freigeschaltet (kein Auto-Enable)
+        if (m.id == 'einsatzprotokollnfs' &&
+            bereichResolved != KundenBereich.notfallseelsorge &&
+            !isAdminCompany &&
+            !isGlobalSuperadmin) continue;
         // SSD bei Schulsanitätsdienst: immer enabled (ohne explizite Freischaltung in kunden/modules)
         final ssdAutoEnabled = m.id == 'ssd' && bereichResolved == KundenBereich.schulsanitaetsdienst;
         // Schichtplan NFS bei Notfallseelsorge: immer enabled
         final schichtplannfsAutoEnabled = m.id == 'schichtplannfs' && bereichResolved == KundenBereich.notfallseelsorge;
         // TelefonlisteNFS bei Notfallseelsorge: immer enabled
         final telefonlistenfsAutoEnabled = m.id == 'telefonlistenfs' && bereichResolved == KundenBereich.notfallseelsorge;
+        // Einsatzprotokoll NFS: nur wenn Firma admin es freischaltet (kein Auto-Enable wie Schichtplan/Telefonliste)
         final enabled = ssdAutoEnabled || schichtplannfsAutoEnabled || telefonlistenfsAutoEnabled || isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
         if (!enabled) continue;
         final def = allMods[m.id];
