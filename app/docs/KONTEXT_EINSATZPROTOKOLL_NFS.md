@@ -7,76 +7,94 @@
 - **Modul-ID:** `einsatzprotokollnfs`
 - **Titel (sichtbar):** „Einsatzprotokoll Notfallseelsorge“
 - **Bereich:** `notfallseelsorge`
-- **Sichtbarkeit:** Nur wenn Firma „admin“ das Modul freischaltet und ins Menü einpflegt (kein Auto-Enable wie Schichtplan/Telefonliste)
-- **4 Bereiche:** Einsatzdaten, Einsatzbericht, Einsatzverlauf, Sonstiges (auf-/zuklappbar wie Einsatzprotokoll SSD)
+- **Sichtbarkeit:** Nur wenn Firma „admin“ das Modul freischaltet und ins Menü einpflegt (kein Auto-Enable)
+- **4 Bereiche:** Einsatzdaten, Einsatzbericht, Einsatzverlauf, Sonstiges (auf-/zuklappbar)
 
 ## 2. Firestore-Struktur
 
 ```
 kunden/{companyId}/
-  einsatzprotokoll-nfs/   # Protokolle (createdAt, createdBy, createdByName, …)
+  einsatzprotokoll-nfs/           # Protokolle
+  einsatzprotokoll-nfs-zähler/    # Zähler pro Jahr für laufende interne Nr.
+    {Jahr}/                       # z.B. "2026" mit lastNumber
 ```
+
+**Firestore-Regeln:** Einsatzprotokoll-nfs: create, read, delete – **kein update** (laufendeInterneNr unveränderbar).
 
 ## 3. Screens und Services
 
 | Screen/Service | Datei | Funktion |
 |----------------|-------|----------|
 | EinsatzprotokollNfsScreen | einsatzprotokoll_nfs_screen.dart | Formular mit 4 Bereichen |
-| EinsatzprotokollNfsService | einsatzprotokoll_nfs_service.dart | Firestore create, streamProtokolle |
+| EinsatzprotokollNfsDruckScreen | einsatzprotokoll_nfs_druck_screen.dart | PDF-Vorschau, Drucken, Teilen, Löschen |
+| EinsatzprotokollNfsEinstellungenScreen | einsatzprotokoll_nfs_einstellungen_screen.dart | Einstellungen (Zahnrad) |
+| EinsatzprotokollNfsUebersichtScreen | einsatzprotokoll_nfs_uebersicht_screen.dart | Protokollübersicht mit Filter |
+| EinsatzprotokollNfsService | einsatzprotokoll_nfs_service.dart | create, getNextLaufendeInterneNr, streamProtokolle, delete |
 
-## 4. Bereich „Einsatzdaten“ (abgeschlossen)
+## 4. Bereich „Einsatzdaten“
 
-**Linke Spalte:**
-- Vor- und Nachname (read-only, Vorname zuerst – vom eingeloggten Nutzer)
+**Linke Spalte (breite Ansicht ≥600px):**
+- Laufende interne Nr. (read-only, disabled, Format YYYYNNNN z.B. 20260001 – wird beim Formular-Load reserviert)
+- Vor- und Nachname (read-only, Vorname zuerst)
 - Alarmierung durch: Koordinator, sonstige (Checkboxen)
+- Einsatzindikation (Dropdown)
+- Einsatz im: öffentlicher Bereich, privater Bereich (Checkboxen)
+- Wurden NFS nachalarmiert?: Ja, Nein (Checkboxen, Pflichtfeld)
+- Bei Ja: Label „Namen der nachalarmierten NFS eingeben“ über Textfeld
 
 **Rechte Spalte:**
-- Einsatz-Datum (TT.MM.JJJJ, ohne Vorbelegung – Datumswähler)
-- Einsatz-Nr. (nur Ziffern)
-- Eintreffen vor Ort (HH:MM) – Zeitwähler
-- Abfahrt vom Einsatzort (HH:MM) – Zeitwähler
-- Einsatzende (HH:MM) – Zeitwähler
+- Einsatz-Datum, Einsatz-Nr., Alarmierungszeit, Eintreffen, Abfahrt, Einsatzende
+- Einsatzdauer (HH.MM, berechnet), Gefahrene KM
 
-**Unter beiden Spalten:**
-- Einsatzindikation (Dropdown): bitte auswählen …, ÜTN, häuslicher Todesfall, frustrane Reanimation, Suizid, Verkehrsunfall, Arbeitsunfall, Schuleinsatz, Brand/Explosion/Unwetter, Gewalttat/Verbrechen, Große Einsatzlage, plötzlicher Kindstod, sonstiges
-- Einsatz im (links) + Wurden NFS nachalarmiert? (rechts, nebeneinander):
-  - Einsatz im: öffentlicher Bereich, privater Bereich (Checkboxen)
-  - Wurden NFS nachalarmiert?: Ja, Nein (Checkboxen, gegenseitig ausschließend)
-  - Bei Ja: Textfeld rechts neben den Checkboxen, über beide Zeilen, Platzhalter „Namen eingeben“ (ohne Label – Ausnahme)
+**Laufende interne Nr.:**
+- Format: YYYYNNNN (z.B. 20260001)
+- Neues Jahr → Zähler bei 0001
+- Beim Formular-Öffnen wird nächste Nr. geladen und angezeigt
+- Nicht änderbar (enabled: false, Firestore: kein update)
 
-**Weitere Details:**
-- Alle Felder Pflichtfelder mit gelber Hervorhebung (_pflichtfeldGelb)
-- Zeitwähler: `showTimePicker` mit `initialEntryMode: TimePickerEntryMode.input`, 24h-Format
-- Keine Tastatureingabe in den Uhrzeitfeldern – nur Zeitwähler-Dialog
+## 5. Bereich „Einsatzbericht“
 
-## 5. Bereiche 2–4 (noch nicht implementiert)
+- Situation vor Ort
+- Meine Rolle / Aufgabe
+- Weitere Betreuung durch (Dropdown, mit „sonstiges“-Feld)
 
-- **Einsatzbericht:** Inhalt folgt
-- **Einsatzverlauf:** Inhalt folgt
-- **Sonstiges:** Inhalt folgt
+## 6. Bereich „Einsatzverlauf“
 
-## 6. Integration
+- Verlauf der Begleitung
+- Weitere Betreuung durch (Dropdown)
+- Situation am Ende vor Ort
+- Wurden weitere Dienste in den Einsatz einbezogen?: Ja/Nein (Checkboxen)
+- Bei Ja: Textfeld rechts neben Checkboxen, hintText „Namen der Dienste“
+
+## 7. Bereich „Sonstiges“
+
+- Was ist interessant für eine Fallbesprechung?
+- Ist eine gesonderte Einsatznachbesprechung gewünscht? (Dropdown, mit „sonstiges“-Feld)
+
+## 8. PDF-Ansicht
+
+- Einsatzdaten: Laufende interne Nr., Vor- und Nachname, Alarmierung durch (Wert), Einsatzindikation, Einsatz im (Wert), NFS nachalarmiert (Ja/Nein, bei Ja mit Namen)
+- Einsatzbericht, Einsatzverlauf, Sonstiges
+- Zeichen-Sanitisierung: problematische Unicode-Zeichen (☒, –, etc.) durch `-` ersetzen (pdf-zeichen-sanitisierung.mdc)
+- Kein „Erstellt von“ (Name steht oben)
+
+## 9. Integration
 
 | Stelle | Anpassung |
 |--------|-----------|
-| modules_service.dart | Modul `einsatzprotokollnfs`, nur bei expliziter Freischaltung (kein Auto-Enable) |
+| modules_service.dart | Modul `einsatzprotokollnfs` |
 | dashboard_screen.dart | Route für `einsatzprotokollnfs` |
-| menueverwaltung_screen.dart | Modul für Notfallseelsorge-Menü verfügbar |
+| menueverwaltung_screen.dart | Modul für Notfallseelsorge-Menü |
 | modulverwaltung_screen.dart | Modul in der Modulverwaltung |
-| modulverwaltung_service.dart | ensureEinsatzprotokollNfsModuleExists() |
 
-## 7. Wichtige Dateien
+## 10. Wichtige Dateien
 
 | Datei | Rolle |
 |-------|-------|
-| lib/screens/einsatzprotokoll_nfs_screen.dart | Formular mit 4 Bereichen, Einsatzdaten |
-| lib/services/einsatzprotokoll_nfs_service.dart | Firestore create, streamProtokolle |
-
-## 8. Letzte Änderungen (Feb 2026)
-
-- Modul erstellt mit 4 Bereichen (Einsatzdaten, Einsatzbericht, Einsatzverlauf, Sonstiges)
-- Einsatzdaten vollständig: Name, Alarmierung, Datum, Einsatz-Nr., 3 Uhrzeiten, Einsatzindikation, Einsatz im, Wurden NFS nachalarmiert?
-- Wurden NFS nachalarmiert?: Ja/Nein-Checkboxen, bei Ja Textfeld rechts daneben (Platzhalter „Namen eingeben“, ohne Label)
-- Pflichtfelder mit gelber Hervorhebung
-- Zeitwähler mit Eingabemodus als Standard, 24h-Format
-- Kein Auto-Enable – nur sichtbar wenn Admin das Modul freischaltet und ins Menü aufnimmt
+| lib/screens/einsatzprotokoll_nfs_screen.dart | Formular |
+| lib/screens/einsatzprotokoll_nfs_druck_screen.dart | PDF |
+| lib/screens/einsatzprotokoll_nfs_einstellungen_screen.dart | Einstellungen |
+| lib/screens/einsatzprotokoll_nfs_uebersicht_screen.dart | Übersicht |
+| lib/services/einsatzprotokoll_nfs_service.dart | Firestore-Service |
+| firestore.rules | Regeln für einsatzprotokoll-nfs (kein update) |
+| .cursor/rules/pdf-zeichen-sanitisierung.mdc | PDF-Zeichen ersetzen |

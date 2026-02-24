@@ -53,8 +53,21 @@ service cloud.firestore {
         }
       }
 
-      match /{document=**} {
+      // Einsatzprotokoll NFS: create, read, delete – kein Update (laufendeInterneNr unveränderbar)
+      match /einsatzprotokoll-nfs/{docId} {
+        allow create, read, delete: if canAccessCompany(kundenId);
+        allow update: if false;
+      }
+
+      match /einsatzprotokoll-nfs-zähler/{docId} {
         allow read, write: if canAccessCompany(kundenId);
+      }
+
+      match /{document=**} {
+        allow read: if canAccessCompany(kundenId);
+        allow create, delete: if canAccessCompany(kundenId);
+        allow update: if canAccessCompany(kundenId) &&
+          request.path[2] != 'einsatzprotokoll-nfs';
       }
     }
 

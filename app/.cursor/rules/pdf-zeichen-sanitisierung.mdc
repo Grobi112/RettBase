@@ -1,0 +1,36 @@
+---
+description: PDF- und Druck-Text: problematische Zeichen durch Bindestrich ersetzen
+globs: lib/**/*druck*.dart, lib/**/*_druck_*.dart
+alwaysApply: false
+---
+
+# Zeichen-Sanitisierung für PDF/Druck
+
+**Problem:** In PDFs erscheinen nicht unterstützte Unicode-Zeichen als umrandetes X (Fehlerglyph). Diese Zeichen sind zu vermeiden und durch `-` (ASCII 45) zu ersetzen.
+
+## Zu ersetzende Zeichen
+
+| Zeichen | Unicode | Ersetzen durch |
+|---------|---------|----------------|
+| En-Dash | U+2013 (–) | `-` |
+| Em-Dash | U+2014 (—) | `-` |
+| Bullet | U+2022 (•) | `-` |
+| Check/Box | U+2610, U+2612, U+2713, U+2714 | `-` |
+| Replacement Char | U+FFFD (�) | `-` |
+
+## Umsetzung
+
+Bei allen dynamischen Texten, die in PDFs ausgegeben werden, eine Sanitisierungsfunktion verwenden:
+
+```dart
+String _str(dynamic v) {
+  final s = (v == null || v.toString().trim().isEmpty) ? '-' : v.toString().trim();
+  if (s == '-') return s;
+  return s
+      .replaceAll(RegExp(r'[\u2013\u2014]'), '-')   // En-Dash, Em-Dash
+      .replaceAll(RegExp(r'[\u2022\u2610\u2612\u2713\u2714]'), '-')
+      .replaceAll('\uFFFD', '-');                   // Replacement Character
+}
+```
+
+**Wichtig:** Leere Werte und Platzhalter immer als `-` (ASCII 45) ausgeben, nie als `–` oder `—`.
