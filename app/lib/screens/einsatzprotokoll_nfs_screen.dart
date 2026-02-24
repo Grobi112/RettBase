@@ -71,6 +71,9 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
   String? _einsatzindikation;
   bool _einsatzOeffentlich = false;
   bool _einsatzPrivat = false;
+  bool _nfsNachalarmiertJa = false;
+  bool _nfsNachalarmiertNein = false;
+  final _nfsNachalarmiertNamenCtrl = TextEditingController();
 
   bool _einsatzdatenExpanded = true;
   bool _einsatzberichtExpanded = true;
@@ -87,6 +90,7 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _einsatzNrCtrl.dispose();
+    _nfsNachalarmiertNamenCtrl.dispose();
     super.dispose();
   }
 
@@ -249,15 +253,17 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
     );
   }
 
-  Widget _field(TextEditingController ctrl, String label, {List<TextInputFormatter>? inputFormatters, String? hintText, bool required = false}) => Padding(
+  Widget _field(TextEditingController ctrl, String label, {List<TextInputFormatter>? inputFormatters, String? hintText, bool required = false, int maxLines = 1}) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(
           controller: ctrl,
           inputFormatters: inputFormatters,
+          maxLines: maxLines,
           onChanged: required ? (_) => setState(() {}) : null,
           decoration: _inputDecoration.copyWith(
             labelText: label,
             hintText: hintText,
+            alignLabelWithHint: maxLines > 1,
             fillColor: required && ctrl.text.trim().isEmpty ? _pflichtfeldGelb : Colors.white,
           ),
         ),
@@ -401,9 +407,64 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
                 onChanged: (v) => setState(() => _einsatzindikation = v),
               ),
               const SizedBox(height: 16),
-              Text('Einsatz im:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
-              _checkboxRow('öffentlichen Bereich', _einsatzOeffentlich, (v) => setState(() => _einsatzOeffentlich = v), required: true, groupFulfilled: _einsatzOeffentlich || _einsatzPrivat),
-              _checkboxRow('privaten Bereich', _einsatzPrivat, (v) => setState(() => _einsatzPrivat = v), required: true, groupFulfilled: _einsatzOeffentlich || _einsatzPrivat),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Einsatz im:', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                        _checkboxRow('öffentlichen Bereich', _einsatzOeffentlich, (v) => setState(() => _einsatzOeffentlich = v), required: true, groupFulfilled: _einsatzOeffentlich || _einsatzPrivat),
+                        _checkboxRow('privaten Bereich', _einsatzPrivat, (v) => setState(() => _einsatzPrivat = v), required: true, groupFulfilled: _einsatzOeffentlich || _einsatzPrivat),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Wurden NFS nachalarmiert?', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _checkboxRow('Ja', _nfsNachalarmiertJa, (v) => setState(() {
+                                  _nfsNachalarmiertJa = v;
+                                  if (v) _nfsNachalarmiertNein = false;
+                                })),
+                                _checkboxRow('Nein', _nfsNachalarmiertNein, (v) => setState(() {
+                                  _nfsNachalarmiertNein = v;
+                                  if (v) _nfsNachalarmiertJa = false;
+                                })),
+                              ],
+                            ),
+                            if (_nfsNachalarmiertJa) ...[
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: TextField(
+                                    controller: _nfsNachalarmiertNamenCtrl,
+                                    maxLines: 2,
+                                    decoration: _inputDecoration.copyWith(
+                                      hintText: 'Namen eingeben',
+                                      alignLabelWithHint: true,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         );

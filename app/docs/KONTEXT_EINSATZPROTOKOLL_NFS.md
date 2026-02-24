@@ -39,7 +39,10 @@ kunden/{companyId}/
 
 **Unter beiden Spalten:**
 - Einsatzindikation (Dropdown): bitte auswählen …, ÜTN, häuslicher Todesfall, frustrane Reanimation, Suizid, Verkehrsunfall, Arbeitsunfall, Schuleinsatz, Brand/Explosion/Unwetter, Gewalttat/Verbrechen, Große Einsatzlage, plötzlicher Kindstod, sonstiges
-- Einsatz im: öffentlicher Bereich, privater Bereich (Checkboxen)
+- Einsatz im (links) + Wurden NFS nachalarmiert? (rechts, nebeneinander):
+  - Einsatz im: öffentlicher Bereich, privater Bereich (Checkboxen)
+  - Wurden NFS nachalarmiert?: Ja, Nein (Checkboxen, gegenseitig ausschließend)
+  - Bei Ja: Textfeld rechts neben den Checkboxen, über beide Zeilen, Platzhalter „Namen eingeben“ (ohne Label – Ausnahme)
 
 **Weitere Details:**
 - Alle Felder Pflichtfelder mit gelber Hervorhebung (_pflichtfeldGelb)
@@ -72,7 +75,8 @@ kunden/{companyId}/
 ## 8. Letzte Änderungen (Feb 2026)
 
 - Modul erstellt mit 4 Bereichen (Einsatzdaten, Einsatzbericht, Einsatzverlauf, Sonstiges)
-- Einsatzdaten vollständig: Name, Alarmierung, Datum, Einsatz-Nr., 3 Uhrzeiten, Einsatzindikation, Einsatz im
+- Einsatzdaten vollständig: Name, Alarmierung, Datum, Einsatz-Nr., 3 Uhrzeiten, Einsatzindikation, Einsatz im, Wurden NFS nachalarmiert?
+- Wurden NFS nachalarmiert?: Ja/Nein-Checkboxen, bei Ja Textfeld rechts daneben (Platzhalter „Namen eingeben“, ohne Label)
 - Pflichtfelder mit gelber Hervorhebung
 - Zeitwähler mit Eingabemodus als Standard, 24h-Format
 - Kein Auto-Enable – nur sichtbar wenn Admin das Modul freischaltet und ins Menü aufnimmt
