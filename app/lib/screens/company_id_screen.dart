@@ -112,27 +112,32 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    final keyboardVisible = viewInsets.bottom > 0;
     return Scaffold(
       backgroundColor: AppTheme.headerBg,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: Responsive.horizontalPadding(context),
-              vertical: 20,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Image.asset(
-                    'img/rettbase_splash.png',
-                    height: Responsive.isCompact(context) ? 100 : 140,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(height: 48),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            left: Responsive.horizontalPadding(context),
+            right: Responsive.horizontalPadding(context),
+            top: keyboardVisible ? 12 : 20,
+            bottom: keyboardVisible ? viewInsets.bottom + 16 : 20,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Image.asset(
+                  'img/rettbase_splash.png',
+                  height: keyboardVisible ? 64 : (Responsive.isCompact(context) ? 100 : 140),
+                  fit: BoxFit.contain,
+                ),
+                SizedBox(height: keyboardVisible ? 20 : 48),
                   if (widget.retryHint != null) ...[
                     Text(
                       widget.retryHint!,
@@ -144,15 +149,6 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
                     ),
                     const SizedBox(height: 16),
                   ],
-                  Text(
-                    'Kunden-ID',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                   TextField(
                     controller: _controller,
                     focusNode: _focusNode,
@@ -164,8 +160,9 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
                     ],
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                     decoration: InputDecoration(
-                      hintText: 'z.B. admin',
+                      hintText: 'Kunden-ID eingeben',
                       hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                      floatingLabelBehavior: FloatingLabelBehavior.never,
                       errorText: _error,
                       errorStyle: TextStyle(color: Colors.red.shade300, fontSize: 13),
                       errorMaxLines: 2,
@@ -189,7 +186,7 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
                     ),
                     onSubmitted: (_) => _saveAndContinue(),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: keyboardVisible ? 20 : 32),
                   FilledButton(
                     onPressed: _loading ? null : _saveAndContinue,
                     style: FilledButton.styleFrom(
@@ -212,7 +209,6 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 }

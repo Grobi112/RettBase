@@ -212,7 +212,7 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 - **Verwendung:** Splash-Screen, Login-Screen, Kunden-ID-Screen (CompanyIdScreen)
 
 ### Größen
-- **Splash:** `height: narrow ? 100 : 140` (MediaQuery.width < 400 = narrow)
+- **Splash:** `height: 120` (einheitlich mit HTML-Platzhalter für nahtlosen Übergang)
 - **Login & Kunden-ID:** `height: Responsive.isCompact(context) ? 100 : 140`
 
 ### Hintergrund
@@ -220,6 +220,12 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 
 ### Dateien
 - `lib/screens/splash_screen.dart`, `lib/screens/login_screen.dart`, `lib/screens/company_id_screen.dart`
+
+### Login- und Kunden-ID-UI (Feb 2026)
+- **Keine Labels** über Feldern – nur hintText; `floatingLabelBehavior: FloatingLabelBehavior.never`
+- **Tastatur-Layout:** resizeToAvoidBottomInset, viewInsets.bottom-Padding, kompaktes Layout bei Tastatur (kleineres Logo)
+- **Scrollen:** AlwaysScrollableScrollPhysics() für SingleChildScrollView
+- **Kontext:** docs/KONTEXT_LOGIN_DASHBOARD.md §8
 
 ---
 

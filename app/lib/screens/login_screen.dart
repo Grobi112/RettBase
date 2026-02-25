@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -8,6 +9,7 @@ import '../app_config.dart';
 import '../theme/app_theme.dart';
 import '../services/login_service.dart';
 import '../utils/ensure_users_doc_cache.dart';
+import '../utils/web_version_check.dart';
 import '../services/push_notification_service.dart';
 import 'company_id_screen.dart';
 import 'dashboard_screen.dart';
@@ -78,6 +80,24 @@ class _LoginScreenState extends State<LoginScreen> {
     return message;
   }
 
+  Future<void> _runPostLoginBackground(String companyId, String? effectiveCompanyId, String uid) async {
+    try {
+      final prefsProm = effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)
+          ? SharedPreferences.getInstance().then((p) => p.setString('rettbase_company_id', effectiveCompanyId))
+          : Future.value();
+      final ensureProm = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('ensureUsersDoc')
+          .call({'companyId': companyId});
+      await Future.wait([prefsProm, ensureProm]);
+      EnsureUsersDocCache.record(companyId);
+      final u = FirebaseAuth.instance.currentUser;
+      if (u != null) {
+        unawaited(u.getIdToken(false));
+        unawaited(PushNotificationService().saveToken(companyId, uid));
+      }
+    } catch (_) {}
+  }
+
   Future<void> _login() async {
     final userInput = _userController.text.trim();
     final password = _passwordController.text;
@@ -116,17 +136,12 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       if (!mounted) return;
       final user = FirebaseAuth.instance.currentUser!;
-      final prefsProm = effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)
-          ? SharedPreferences.getInstance().then((p) => p.setString('rettbase_company_id', effectiveCompanyId!))
-          : Future.value();
-      final ensureProm = FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('ensureUsersDoc')
-          .call({'companyId': dashboardCompanyId});
-      await Future.wait([prefsProm, ensureProm]);
-      EnsureUsersDocCache.record(dashboardCompanyId);
+      // Sofort navigieren – ensureUsersDoc + prefs im Hintergrund (Dashboard ruft ensureUsersDoc ggf. erneut)
+      unawaited(_runPostLoginBackground(dashboardCompanyId!, effectiveCompanyId, user.uid));
       if (!mounted) return;
-      unawaited(user.getIdToken(false));
-      unawaited(PushNotificationService().saveToken(dashboardCompanyId!, user.uid));
+      if (kIsWeb) {
+        await updateWebVersionFromServer();
+      }
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -156,17 +171,11 @@ class _LoginScreenState extends State<LoginScreen> {
           final companyId = effectiveCompanyId != null && effectiveCompanyId.isNotEmpty
               ? effectiveCompanyId!
               : _normalizeCompanyId(widget.companyId);
-          final prefsProm = effectiveCompanyId != null && effectiveCompanyId != _normalizeCompanyId(widget.companyId)
-              ? SharedPreferences.getInstance().then((p) => p.setString('rettbase_company_id', effectiveCompanyId!))
-              : Future.value();
-          final ensureProm = FirebaseFunctions.instanceFor(region: 'europe-west1')
-              .httpsCallable('ensureUsersDoc')
-              .call({'companyId': companyId});
-          await Future.wait([prefsProm, ensureProm]);
-          EnsureUsersDocCache.record(companyId);
+          unawaited(_runPostLoginBackground(companyId, effectiveCompanyId, userCredential.user!.uid));
           if (!mounted) return;
-          unawaited(userCredential.user?.getIdToken(false));
-          unawaited(PushNotificationService().saveToken(companyId, userCredential.user!.uid));
+          if (kIsWeb) {
+            await updateWebVersionFromServer();
+          }
           if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
@@ -295,36 +304,32 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    final keyboardVisible = viewInsets.bottom > 0;
     return Scaffold(
       backgroundColor: AppTheme.headerBg,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: Responsive.horizontalPadding(context),
-              vertical: 20,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Image.asset(
-                    'img/rettbase_splash.png',
-                    height: Responsive.isCompact(context) ? 100 : 140,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(height: 48),
-                  Text(
-                    'E-Mail oder Personalnummer',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(
+            left: Responsive.horizontalPadding(context),
+            right: Responsive.horizontalPadding(context),
+            top: keyboardVisible ? 12 : 20,
+            bottom: keyboardVisible ? viewInsets.bottom + 16 : 20,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Image.asset(
+                  'img/rettbase_splash.png',
+                  height: keyboardVisible ? 64 : (Responsive.isCompact(context) ? 100 : 140),
+                  fit: BoxFit.contain,
+                ),
+                SizedBox(height: keyboardVisible ? 20 : 48),
                   TextField(
                     controller: _userController,
                     focusNode: _userFocus,
@@ -333,8 +338,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     textInputAction: TextInputAction.next,
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                     decoration: InputDecoration(
-                      hintText: 'z.B. 112 oder deine@email.de',
+                      hintText: 'Email oder Personalnummer eingeben',
                       hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                      floatingLabelBehavior: FloatingLabelBehavior.never,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -350,16 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     onSubmitted: (_) => _passwordFocus.requestFocus(),
                   ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Passwort',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: keyboardVisible ? 12 : 20),
                   TextField(
                     controller: _passwordController,
                     focusNode: _passwordFocus,
@@ -369,6 +366,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       hintText: 'Passwort eingeben',
                       hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                      floatingLabelBehavior: FloatingLabelBehavior.never,
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded,
@@ -400,7 +398,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     onSubmitted: (_) => _login(),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: keyboardVisible ? 20 : 32),
                   FilledButton(
                     onPressed: _loading ? null : _login,
                     style: FilledButton.styleFrom(
@@ -418,15 +416,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           )
                         : const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: keyboardVisible ? 12 : 20),
                   Center(
                     child: TextButton(
                       onPressed: _loading ? null : _forgotPassword,
                       style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
-                      child: const Text('Passwort vergessen?', style: TextStyle(fontSize: 14)),
+                      child: const Text('Passwort vergessen?', style: TextStyle(fontSize: 14)                      ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: keyboardVisible ? 12 : 24),
                   Center(
                     child: TextButton.icon(
                       onPressed: _loading ? null : _switchCompany,
@@ -442,7 +440,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-      ),
     );
   }
 }

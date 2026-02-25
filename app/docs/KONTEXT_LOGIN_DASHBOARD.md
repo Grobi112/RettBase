@@ -141,7 +141,25 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 - `dense: true`, `contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0)`
 - Abstand zu „Abmelden“ darüber: 24 px
 
-## 8. Letzte Session-Änderungen (Feb 2026)
+## 8. Login- und Kunden-ID-UI (Feb 2026)
+
+### Labels entfernt
+- **Keine Labels** über den Eingabefeldern – nur Platzhalter (hintText): „Kunden-ID eingeben“, „Email oder Personalnummer eingeben“, „Passwort eingeben“
+- `floatingLabelBehavior: FloatingLabelBehavior.never` in allen InputDecorations (login_screen, company_id_screen, main.dart _buildCompanyIdForm)
+
+### Tastatur-Layout (Kunden-ID + Login)
+- `resizeToAvoidBottomInset: true` – Inhalt verschiebt sich bei Tastatur nach oben
+- Bei Tastatur sichtbar: kompaktes Layout (kleineres Logo, reduzierte Abstände)
+- `viewInsets.bottom` als unteres Padding, damit Feld und „Weiter“/„Login“-Button nicht von der schwarzen Up/Down-Toolbar verdeckt werden
+- `Center` entfernt – Inhalt oben ausgerichtet, kein manuelles Scrollen nötig
+
+### Scrollen
+- `AlwaysScrollableScrollPhysics()` für SingleChildScrollView – Login und Kunden-ID-Screens sind immer scrollbar
+
+### Betroffene Dateien
+- `lib/screens/login_screen.dart`, `lib/screens/company_id_screen.dart`, `lib/main.dart`
+
+## 9. Letzte Session-Änderungen (Feb 2026)
 
 - **Cloud Functions:** kundeExists, _resolveToDocId, ensureUsersDoc – Firestore-Queries parallel mit Promise.all
 - **Web Build:** `--tree-shake-icons` in build_web.sh, deploy_web.sh, fw
@@ -152,7 +170,7 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 - **Profil:** Gelöschte/geleerte Felder senden FieldValue.delete() – werden in Firestore korrekt entfernt (nicht mehr durch merge erhalten)
 - **Web Version-Check:** Nur **einmal** beim App-Start im Ladefenster (vor Dashboard/Login); keine periodische Prüfung mehr – stört Session-Ablauf. Reload nur wenn Server-Version > Client; 2 Min Cooldown; robustes JSON-Parsing (leere/ungültige Antwort). `runWebVersionCheckOnce` in main.dart/_RettBaseHomeState
 
-## 9. Hinweis zu Firestore-Daten
+## 10. Hinweis zu Firestore-Daten
 
 Die **tatsächlichen Inhalte** von Firestore (Dokumente, Werte) sind nicht in diesem Repo. Bei Problemen:
 - Struktur und Pfade aus Code/ diesem Doc ableiten
