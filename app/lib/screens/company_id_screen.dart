@@ -126,8 +126,9 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
             top: keyboardVisible ? 12 : 20,
             bottom: keyboardVisible ? viewInsets.bottom + 16 : 20,
           ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -209,6 +210,7 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
             ),
           ),
         ),
+      ),
     );
   }
 }

@@ -225,6 +225,7 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 - **Keine Labels** über Feldern – nur hintText; `floatingLabelBehavior: FloatingLabelBehavior.never`
 - **Tastatur-Layout:** resizeToAvoidBottomInset, viewInsets.bottom-Padding, kompaktes Layout bei Tastatur (kleineres Logo)
 - **Scrollen:** AlwaysScrollableScrollPhysics() für SingleChildScrollView
+- **Zentrierung:** Center um ConstrainedBox – horizontal zentriert auf Desktop, Tablet, Mobil-Querformat
 - **Kontext:** docs/KONTEXT_LOGIN_DASHBOARD.md §8
 
 ---

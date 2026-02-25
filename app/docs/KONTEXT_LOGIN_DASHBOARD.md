@@ -156,6 +156,9 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 ### Scrollen
 - `AlwaysScrollableScrollPhysics()` für SingleChildScrollView – Login und Kunden-ID-Screens sind immer scrollbar
 
+### Horizontale Zentrierung (Desktop, Tablet, Querformat)
+- `Center` um den ConstrainedBox – Formular ist auf breiten Screens (Desktop, Tablet, Mobil-Querformat) horizontal zentriert
+
 ### Betroffene Dateien
 - `lib/screens/login_screen.dart`, `lib/screens/company_id_screen.dart`, `lib/main.dart`
 
