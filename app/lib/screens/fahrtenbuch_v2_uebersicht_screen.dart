@@ -125,7 +125,10 @@ class _FahrtenbuchV2UebersichtScreenState extends State<FahrtenbuchV2UebersichtS
             title: const Text('Fahrtenübersicht', style: TextStyle(fontWeight: FontWeight.w600)),
             subtitle: const Text('Alle Fahrten mit Filter anzeigen'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => setState(() => _showFahrtenuebersicht = true),
+            onTap: () {
+              setState(() => _showFahrtenuebersicht = true);
+              _loadFilterData(); // Standorte/Fahrzeuge neu laden, damit neu angelegte Standorte im Filter erscheinen
+            },
           ),
         ),
         if (FahrtenbuchV2UebersichtScreen.canPrint(widget.userRole))
@@ -185,11 +188,14 @@ class _FahrtenbuchV2UebersichtScreenState extends State<FahrtenbuchV2UebersichtS
             Expanded(
               child: list.isEmpty
                   ? Center(child: Text('Keine Einträge.', style: TextStyle(color: Colors.grey[600])))
-                  : ListView.builder(
+                  : RefreshIndicator(
+                      onRefresh: _loadFilterData,
+                      child: ListView.builder(
                       padding: const EdgeInsets.all(16),
                       itemCount: list.length,
                       itemBuilder: (_, i) => _buildEintragCard(list[i]),
                     ),
+                  ),
             ),
           ],
         );

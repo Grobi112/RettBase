@@ -15,6 +15,8 @@ class HomeScreen extends StatefulWidget {
   final String? vorname;
   final List<AppModule?> shortcuts;
   final ValueListenable<int>? chatUnreadListenable;
+  /// Ungelesene E-Mails im Posteingang (Badge für E-Mail-Modul)
+  final ValueListenable<int>? emailUnreadListenable;
   /// Anzahl pending Meldungen im Schichtplan NFS (Badge für Admin/Koordinator)
   final ValueListenable<int>? schichtplanNfsMeldungenListenable;
   final void Function(int index)? onShortcutTap;
@@ -32,6 +34,7 @@ class HomeScreen extends StatefulWidget {
     this.vorname,
     this.shortcuts = const [],
     this.chatUnreadListenable,
+    this.emailUnreadListenable,
     this.schichtplanNfsMeldungenListenable,
     this.onShortcutTap,
     this.containerSlotsListenable,
@@ -223,6 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 height: buttonHeight,
                                 module: mod,
                                 chatUnreadListenable: widget.chatUnreadListenable,
+                                emailUnreadListenable: widget.emailUnreadListenable,
                                 schichtplanNfsMeldungenListenable: widget.schichtplanNfsMeldungenListenable,
                                 onTap: () => widget.onShortcutTap?.call(origIndex),
                               ),
@@ -298,6 +302,7 @@ class _ShortcutButton extends StatefulWidget {
   final double height;
   final AppModule? module;
   final ValueListenable<int>? chatUnreadListenable;
+  final ValueListenable<int>? emailUnreadListenable;
   final ValueListenable<int>? schichtplanNfsMeldungenListenable;
   final VoidCallback? onTap;
 
@@ -307,6 +312,7 @@ class _ShortcutButton extends StatefulWidget {
     required this.height,
     this.module,
     this.chatUnreadListenable,
+    this.emailUnreadListenable,
     this.schichtplanNfsMeldungenListenable,
     this.onTap,
   });
@@ -325,6 +331,7 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
   void initState() {
     super.initState();
     widget.chatUnreadListenable?.addListener(_onBadgeChanged);
+    widget.emailUnreadListenable?.addListener(_onBadgeChanged);
     widget.schichtplanNfsMeldungenListenable?.addListener(_onBadgeChanged);
   }
 
@@ -332,14 +339,17 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
   void didUpdateWidget(covariant _ShortcutButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     oldWidget.chatUnreadListenable?.removeListener(_onBadgeChanged);
+    oldWidget.emailUnreadListenable?.removeListener(_onBadgeChanged);
     oldWidget.schichtplanNfsMeldungenListenable?.removeListener(_onBadgeChanged);
     widget.chatUnreadListenable?.addListener(_onBadgeChanged);
+    widget.emailUnreadListenable?.addListener(_onBadgeChanged);
     widget.schichtplanNfsMeldungenListenable?.addListener(_onBadgeChanged);
   }
 
   @override
   void dispose() {
     widget.chatUnreadListenable?.removeListener(_onBadgeChanged);
+    widget.emailUnreadListenable?.removeListener(_onBadgeChanged);
     widget.schichtplanNfsMeldungenListenable?.removeListener(_onBadgeChanged);
     super.dispose();
   }
@@ -347,7 +357,8 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
   IconData? _getIconDataForModule(String? id) {
     switch (id) {
       case 'chat': return Icons.chat_bubble_outline;
-      case 'office': return Icons.mail_outline;
+      case 'office':
+      case 'email': return Icons.mail_outline;
       case 'neuermangel': return Icons.build;
       case 'fahrzeugmanagement': return Icons.directions_car;
       case 'schichtanmeldung':
@@ -407,10 +418,13 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
     final textColor = widget.module != null ? Colors.white : AppTheme.textMuted;
     final iconWidget = _buildIconForModule(widget.module?.id, textColor);
     final chatUnread = widget.chatUnreadListenable?.value ?? 0;
+    final emailUnread = widget.emailUnreadListenable?.value ?? 0;
     final nfsMeldungen = widget.schichtplanNfsMeldungenListenable?.value ?? 0;
     final badgeCount = widget.module?.id == 'chat'
         ? chatUnread
-        : (widget.module?.id == 'schichtplannfs' ? nfsMeldungen : 0);
+        : (widget.module?.id == 'email' || widget.module?.id == 'office')
+            ? emailUnread
+            : (widget.module?.id == 'schichtplannfs' ? nfsMeldungen : 0);
     final showBadge = badgeCount > 0;
 
     return MouseRegion(

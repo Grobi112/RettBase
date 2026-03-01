@@ -18,6 +18,7 @@ class EmailItem {
   final String? groupId;
   final String? groupName;
   final bool isExternal;
+  final String? inReplyTo;
 
   EmailItem({
     required this.id,
@@ -37,6 +38,7 @@ class EmailItem {
     this.groupId,
     this.groupName,
     this.isExternal = false,
+    this.inReplyTo,
   });
 
   factory EmailItem.fromFirestore(String id, Map<String, dynamic> d) {
@@ -63,6 +65,7 @@ class EmailItem {
       groupId: d['groupId']?.toString(),
       groupName: d['groupName']?.toString(),
       isExternal: d['isExternal'] == true,
+      inReplyTo: d['inReplyTo']?.toString(),
     );
   }
 }

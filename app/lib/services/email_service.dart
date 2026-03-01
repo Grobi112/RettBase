@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../app_config.dart';
 import '../models/email_model.dart';
 
 /// E-Mail-Service – gleiche Firestore-Struktur wie rettbase/module/office/email.js
@@ -92,6 +93,11 @@ class EmailService {
     });
   }
 
+  /// Ungelesene E-Mails im Posteingang – für Badge (Schnellstart, Drawer).
+  Stream<int> streamUnreadCount(String companyId) {
+    return streamInbox(companyId).map((emails) => emails.where((e) => !e.read).length);
+  }
+
   Stream<List<EmailItem>> streamSent(String companyId) {
     final uid = _userId;
     if (uid == null) return Stream.value([]);
@@ -105,7 +111,7 @@ class EmailService {
         .map((snap) {
       final list = snap.docs
           .map((d) => EmailItem.fromFirestore(d.id, d.data()))
-          .where((e) => !e.draft && !e.deleted && (e.isGroupEmail ? e.to == null : e.to != null))
+          .where((e) => !e.draft && !e.deleted && (e.isGroupEmail ? e.to == null : (e.to != null || e.isExternal)))
           .toList();
       list.sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
       return list;
@@ -225,6 +231,11 @@ class EmailService {
 
   Future<void> deleteEmail(String companyId, String emailId) async {
     await _db.collection('kunden').doc(companyId).collection('emails').doc(emailId).update({'deleted': true});
+  }
+
+  /// Löscht E-Mail endgültig aus Firestore (nur für Papierkorb).
+  Future<void> deleteEmailPermanently(String companyId, String emailId) async {
+    await _db.collection('kunden').doc(companyId).collection('emails').doc(emailId).delete();
   }
 
   Future<void> deleteDraft(String companyId, String emailId) async {
@@ -347,7 +358,7 @@ class EmailService {
     final fromName = fromNameOverride ?? await _getSenderName(companyId);
     final fromEmail = fromEmailOverride ?? await _getSenderEmail(companyId);
 
-    await _db.collection('kunden').doc(companyId).collection('emails').add({
+    final docRef = await _db.collection('kunden').doc(companyId).collection('emails').add({
       'from': uid,
       'fromName': fromName,
       'fromEmail': fromEmail,
@@ -363,15 +374,20 @@ class EmailService {
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-    final effectiveFromEmail = fromEmail.isNotEmpty ? fromEmail : 'mail@rettbase.de';
+    final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
+    // From immer mail@rettbase.de – Strato/SMTP verlangt Übereinstimmung mit Auth-Konto
+    final effectiveFromEmail = 'mail@${AppConfig.rootDomain}';
+    // Message-ID für Zuordnung von Antworten (In-Reply-To) – kein Reply-To nötig, Zustellung bleibt stabil
+    final messageId = fromEmailOverride != 'noreply@rettbase.de'
+        ? 'rettbase.${companyId}.${docRef.id}@${AppConfig.rootDomain}'
+        : null;
     await functions.httpsCallable('sendEmail').call({
       'to': toEmail.trim(),
       'subject': subject,
       'body': body,
       'fromEmail': effectiveFromEmail,
       'fromName': fromName,
-      if (replyTo != null) 'replyTo': replyTo,
+      if (messageId != null) 'messageId': messageId,
     });
   }
 }

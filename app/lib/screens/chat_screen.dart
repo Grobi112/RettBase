@@ -730,7 +730,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           return ListTile(
                             leading: CircleAvatar(child: Text(_getInitials(m.name))),
                             title: Text(m.name),
-                            subtitle: m.email.isNotEmpty ? Text(m.email, style: const TextStyle(fontSize: 12)) : null,
                             onTap: () => _startDirectChat(m),
                           );
                         },

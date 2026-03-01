@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/email_model.dart';
@@ -16,17 +17,53 @@ class EmailScreen extends StatefulWidget {
 class _EmailScreenState extends State<EmailScreen> with SingleTickerProviderStateMixin {
   final _emailService = EmailService();
   late TabController _tabController;
+  StreamSubscription<List<EmailItem>>? _inboxSub;
+
+  int _lastSeenInboxCount = 0;
+  int _lastKnownInboxCount = 0;
+  bool _showNewEmailBanner = false;
+  int _newEmailCount = 0;
+  bool _hasSeenInitialInbox = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_onTabChanged);
+    _inboxSub = _emailService.streamInbox(widget.companyId).listen((emails) {
+      if (!mounted) return;
+      final count = emails.length;
+      _lastKnownInboxCount = count;
+      if (!_hasSeenInitialInbox) {
+        _hasSeenInitialInbox = true;
+        _lastSeenInboxCount = count;
+        setState(() {});
+      } else if (count > _lastSeenInboxCount && !_showNewEmailBanner) {
+        _newEmailCount = count - _lastSeenInboxCount;
+        setState(() => _showNewEmailBanner = true);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _inboxSub?.cancel();
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (_tabController.index == 0 && _showNewEmailBanner && mounted) {
+      _dismissNewEmailBanner();
+    }
+  }
+
+  void _dismissNewEmailBanner() {
+    setState(() {
+      _showNewEmailBanner = false;
+      _lastSeenInboxCount = _lastKnownInboxCount;
+    });
   }
 
   String _stripHtmlForPreview(String html) {
@@ -67,11 +104,36 @@ class _EmailScreenState extends State<EmailScreen> with SingleTickerProviderStat
           indicatorColor: AppTheme.primary,
           labelColor: AppTheme.primary,
           unselectedLabelColor: AppTheme.textSecondary,
-          tabs: const [
-            Tab(text: 'Posteingang'),
-            Tab(text: 'Gesendet'),
-            Tab(text: 'Entwürfe'),
-            Tab(text: 'Papierkorb'),
+          tabs: [
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Posteingang'),
+                  if (_showNewEmailBanner) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                      child: Center(
+                        child: Text(
+                          _newEmailCount > 99 ? '99+' : '$_newEmailCount',
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const Tab(text: 'Gesendet'),
+            const Tab(text: 'Entwürfe'),
+            const Tab(text: 'Papierkorb'),
           ],
         ),
         actions: [
@@ -91,16 +153,14 @@ class _EmailScreenState extends State<EmailScreen> with SingleTickerProviderStat
           ),
         ],
       ),
-      body: SizedBox.expand(
-        child: TabBarView(
-          controller: _tabController,
-          children: [
+      body: TabBarView(
+        controller: _tabController,
+        children: [
           _buildEmailList('inbox'),
           _buildEmailList('sent'),
           _buildEmailList('drafts'),
           _buildEmailList('trash'),
         ],
-        ),
       ),
     );
   }
@@ -259,7 +319,7 @@ class _EmailListItemState extends State<_EmailListItem> {
                               child: Text(
                                 otherName.isNotEmpty ? otherName : '(Unbekannt)',
                                 style: TextStyle(
-                                  fontWeight: (isInbox && !e.read) ? FontWeight.bold : FontWeight.w600,
+                                  fontWeight: (isInbox && !e.read) ? FontWeight.bold : FontWeight.normal,
                                   fontSize: 15,
                                 ),
                                 maxLines: 1,
@@ -361,22 +421,47 @@ class _EmailViewScreen extends StatelessWidget {
               onPressed: onReply,
             ),
           IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Löschen',
+            icon: Icon(tab == 'trash' ? Icons.delete_forever : Icons.delete_outline),
+            tooltip: tab == 'trash' ? 'Endgültig löschen' : 'Löschen',
             onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Löschen'),
-                  content: Text(tab == 'drafts' ? 'Entwurf endgültig löschen?' : 'Nachricht in den Papierkorb verschieben?'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Abbrechen')),
-                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Löschen')),
-                  ],
-                ),
-              );
+              final bool? confirm;
+              if (tab == 'trash') {
+                confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Endgültig löschen'),
+                    content: const Text(
+                      'Diese Nachricht wird unwiderruflich gelöscht. '
+                      'Alle Daten werden rückstandslos aus der Datenbank entfernt.\n\n'
+                      'Diese Aktion kann nicht rückgängig gemacht werden.',
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Abbrechen')),
+                      FilledButton(
+                        style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Endgültig löschen'),
+                      ),
+                    ],
+                  ),
+                );
+              } else {
+                confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Löschen'),
+                    content: Text(tab == 'drafts' ? 'Entwurf endgültig löschen?' : 'Nachricht in den Papierkorb verschieben?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Abbrechen')),
+                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Löschen')),
+                    ],
+                  ),
+                );
+              }
               if (confirm == true) {
-                if (tab == 'drafts') {
+                if (tab == 'trash') {
+                  await emailService.deleteEmailPermanently(companyId, email.id);
+                } else if (tab == 'drafts') {
                   await emailService.deleteDraft(companyId, email.id);
                 } else {
                   await emailService.deleteEmail(companyId, email.id);
@@ -533,7 +618,6 @@ class _EmailComposeScreenState extends State<_EmailComposeScreen> {
         if (EmailService.isValidEmail(part)) {
           await widget.emailService.sendExternalEmail(
             widget.companyId, part, part, subject, bodyHtml,
-            replyTo: subject.toLowerCase().startsWith('re:') ? null : null,
           );
           external++;
           continue;
@@ -579,7 +663,6 @@ class _EmailComposeScreenState extends State<_EmailComposeScreen> {
           msg = 'Nachricht gesendet (${parts2.join(', ')})!';
         }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-        widget.onBack();
         Navigator.of(context).pop(true);
       }
     } catch (e) {
