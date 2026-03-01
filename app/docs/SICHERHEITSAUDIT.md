@@ -1,6 +1,6 @@
 # Sicherheitsaudit RettBase Flutter-App
 
-Stand: Februar 2026
+Stand: März 2026 (Commit 0436b75: Audit-Fixes, rettbase/ entfernt)
 
 ## Übersicht
 
@@ -83,7 +83,7 @@ Dieses Dokument fasst das Ergebnis der Sicherheitsüberprüfung des Projekts zus
 
 **Status: ✅ Unkritisch**
 
-- `dokumente_service.dart` nutzt `file.path.split(RegExp(r'[/\\]')).last` – nur Dateiname, kein Pfad-Escape.
+- `dokumente_service.dart` nutzt `fileName.split(RegExp(r'[/\\]')).last` – nur Dateiname, kein Pfad-Escape (Path-Traversal-Schutz).
 - Firebase Storage behandelt `..` in Pfadsegmenten als Literal, kein Directory-Traversal.
 
 ---
@@ -91,6 +91,9 @@ Dieses Dokument fasst das Ergebnis der Sicherheitsüberprüfung des Projekts zus
 ## 7. Zusammenfassung der durchgeführten Korrekturen
 
 1. **Storage-Regeln:** Pfade `dokumente` und `uebergriffsmeldung-attachments` ergänzt – Uploads waren zuvor durch Catch-all blockiert.
+2. **Path-Traversal-Schutz:** `dokumente_service.uploadDokument` nutzt `fileName.split(RegExp(r'[/\\]')).last` – nur Dateiname im Storage-Pfad (März 2026).
+3. **H2 Superadmin-Regex-Bypass:** Nur exakte E-Mail-Domains (`admin@rettbase.de`, `admin@rettbase`, `112@admin.rettbase.de`) – kein `contains('rettbase')` mehr (März 2026).
+4. **K7 Root firestore.rules:** `menus` erfordert jetzt `request.auth != null` (März 2026).
 
 ---
 
@@ -126,7 +129,7 @@ Dieses Dokument fasst das Ergebnis der Sicherheitsüberprüfung des Projekts zus
 |---------|----------|---------|
 | **Hardcoded Credentials** | ✅ | Keine Passwörter/Secrets im Code; API-Keys nur Firebase (üblich) |
 | **XSS** | ✅ | Kein `innerHTML`/`eval` in `app/lib` |
-| **Path Traversal (Upload)** | ⚠️ Niedrig | `dokumente_service.dart` nutzt `fileName` direkt im Storage-Pfad. Firebase behandelt `..` als Literal; dennoch: `fileName` sollte auf Dateiname beschränkt werden (z.B. `fileName.split(RegExp(r'[/\\]')).last`) |
+| **Path Traversal (Upload)** | ✅ | `dokumente_service.dart` nutzt `fileName.split(RegExp(r'[/\\]')).last` – nur Dateiname, kein Pfad-Escape (Korrektur März 2026) |
 | **IDOR** | ✅ | Firestore/Storage-Regeln prüfen `canAccessCompany` |
 | **Debug-Logs** | ✅ | Keine Passwörter; sensible Daten nur in `kDebugMode` |
 | **URL-Handling** | ✅ | `launchUrl`/`canLaunchUrl` für externe Links; `doc.fileUrl` aus eigenem Storage |
@@ -137,5 +140,41 @@ Dieses Dokument fasst das Ergebnis der Sicherheitsüberprüfung des Projekts zus
 
 1. **App Check** – aktuell nicht verwendet; Rate-Limit (5/min) reicht aus
 2. **API-Key-Einschränkung** in der Google Cloud Console – siehe **`SICHERHEIT_SETUP_RUNBOOK.md`**; SHA-1 per `scripts/get_android_sha1.sh`
-3. **fileName-Sanitisierung** (optional): In `dokumente_service.uploadDokument` nur `fileName.split(RegExp(r'[/\\]')).last` verwenden
+3. ~~**fileName-Sanitisierung**~~ ✅ Erledigt: `dokumente_service.uploadDokument` nutzt `fileName.split(RegExp(r'[/\\]')).last`
 4. Regelmäßige Überprüfung der Firestore-/Storage-Regeln bei neuen Collections/Pfaden
+
+---
+
+## 9. Externes Audit – Zuordnung (März 2026)
+
+Externes Sicherheitsaudit hat u.a. K1–K8, H1–H8 identifiziert. **Wichtig:** Die Flutter-App nutzt ausschließlich `app/`; `rettbase/` wurde März 2026 entfernt (Legacy-Code).
+
+### 9.1 rettbase/ – Legacy, nicht relevant
+
+| ID | Thema | Datei | Status |
+|----|-------|-------|--------|
+| K4 | Unauthentifizierter Lesezugriff mitarbeiter | rettbase/firestore.rules | `rettbase/` nicht verwendet; `app/firestore.rules` hat `canAccessCompany` |
+| K5 | Cross-Company Datenzugriff | rettbase/firestore.rules | `rettbase/` nicht verwendet; `app/firestore.rules` hat `canAccessCompany` |
+| K6 | Storage ohne Firmen-Check | rettbase/storage.rules | `rettbase/` nicht verwendet; `app/storage.rules` hat `canAccessCompany` |
+| K8 | TLS rejectUnauthorized: false | rettbase/module/office/functions | `rettbase/` nicht verwendet |
+| H1 | tempPassword in Firestore | rettbase/auth.js | `rettbase/` nicht verwendet; Flutter nutzt nur Firebase Auth |
+| H3 | postMessage Wildcard-Origin | rettbase/dashboard.js | `rettbase/` nicht verwendet |
+| H4 | Sensible Daten im localStorage | rettbase/dashboard.js | `rettbase/` nicht verwendet |
+
+### 9.2 app/ – bereits behoben
+
+| ID | Thema | Status |
+|----|-------|--------|
+| H2 | Superadmin-Regex-Bypass (admin@evil-rettbase.com) | ✅ Behoben: Nur exakte `admin@rettbase.de`, `admin@rettbase`, `112@admin.rettbase.de` |
+
+### 9.3 app/ – geprüft, unkritisch
+
+| ID | Thema | Status |
+|----|-------|--------|
+| H5 | IDOR bei Passwort-Reset (Cross-Company) | ✅ `updateMitarbeiterPassword` prüft: `_requireAdminRole(companyId)` + Zielnutzer muss in `kunden/{cid}/users` oder `mitarbeiter` sein |
+
+### 9.4 WebView / Custom-Links
+
+- **WebView** wird nur für Custom-Links (type: `custom` im Menü) genutzt; derzeit keine Custom-Links aktiv.
+- Code bleibt erhalten für kundenspezifische Links (z.B. externe Module).
+- K3 (Token in URL): Nur relevant, wenn Custom-Links aktiviert werden – Token ist kurzlebig und einmalig.

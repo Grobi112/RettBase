@@ -1,7 +1,9 @@
+// Legacy/Backup – wird von app/firebase.json nicht deployed.
+// Falls verwendet: Auth erforderlich (K7-Sicherheitsfix).
 service cloud.firestore {
   match /databases/{database}/documents {
     match /menus/{menuId} {
-      allow read, write: if true; // oder deine spezifischen Bedingungen
+      allow read, write: if request.auth != null;
     }
   }
 }

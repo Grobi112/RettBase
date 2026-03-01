@@ -6,22 +6,20 @@ import '../app_config.dart';
 class AuthDataService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// admin@rettbase.de / admin@rettbase = Superadmin für JEDEN Kunden (übergreifend)
+  /// admin@rettbase.de / admin@rettbase = Superadmin für JEDEN Kunden (übergreifend).
+  /// Nur exakte Domains – kein Regex-Bypass (z.B. admin@evil-rettbase.com).
   static bool _isGlobalSuperadmin(String email) {
     final e = email.trim().toLowerCase();
-    return e == 'admin@rettbase.de' ||
-        e == 'admin@rettbase' ||
-        (e.startsWith('admin@') && e.contains('rettbase'));
+    return e == 'admin@rettbase.de' || e == 'admin@rettbase';
   }
 
   /// Personalnummer 112 = Superadmin bei Kunde Admin (Login nur mit companyId=admin).
   /// Admin-Superadmins (users/mitarbeiter in admin mit role superadmin) haben uneingeschränkten Zugriff auf jede Company.
+  /// Nur exakte Domains – kein Regex-Bypass.
   static bool _isAdminOnlySuperadmin(String companyId, String email) {
     if (companyId.trim().toLowerCase() != 'admin') return false;
     final e = email.trim().toLowerCase();
-    return e == '112@admin.rettbase.de' ||
-        e.startsWith('112@admin') ||
-        (e.startsWith('112@') && e.contains('admin'));
+    return e == '112@admin.rettbase.de';
   }
 
   Future<AuthData> getAuthData(String uid, String email, String companyId) async {

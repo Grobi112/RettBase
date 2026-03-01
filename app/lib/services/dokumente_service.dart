@@ -128,6 +128,7 @@ class DokumenteService {
 
   /// Datei hochladen (Bytes + Dateiname – Web- und Native-kompatibel)
   /// Der Dateititel wird aus dem Dateinamen übernommen.
+  /// fileName wird auf den reinen Dateinamen beschränkt (Path-Traversal-Schutz).
   Future<DokumenteDatei> uploadDokument({
     required String companyId,
     required String folderId,
@@ -138,7 +139,9 @@ class DokumenteService {
     required String createdBy,
     required String createdByName,
   }) async {
-    final path = 'kunden/$companyId/dokumente/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+    final safeFileName = fileName.split(RegExp(r'[/\\]')).last;
+    if (safeFileName.isEmpty) throw ArgumentError('fileName ungültig');
+    final path = 'kunden/$companyId/dokumente/${DateTime.now().millisecondsSinceEpoch}_$safeFileName';
     final ref = _storage.ref().child(path);
     await ref.putData(bytes);
     final url = await ref.getDownloadURL();
@@ -147,7 +150,7 @@ class DokumenteService {
     final data = DokumenteDatei(
       id: docRef.id,
       folderId: folderId,
-      name: fileName,
+      name: safeFileName,
       fileUrl: url,
       filePath: path,
       priority: priority,

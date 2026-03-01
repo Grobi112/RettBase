@@ -9,10 +9,10 @@ import '../app_config.dart';
 class LoginService {
   final _functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
 
+  /// Nur admin@rettbase.de / admin@rettbase – kein Regex-Bypass (z.B. admin@evil-rettbase.com).
   static bool _isGlobalSuperadmin(String s) {
     final e = s.trim().toLowerCase();
-    return e == 'admin@rettbase.de' || e == 'admin@rettbase' ||
-        (e.startsWith('admin@') && e.contains('rettbase'));
+    return e == 'admin@rettbase.de' || e == 'admin@rettbase';
   }
 
   /// Liefert die E-Mail für signInWithEmailAndPassword (Kompatibilität).

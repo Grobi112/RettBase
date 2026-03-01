@@ -1,10 +1,10 @@
 # Flutter WebApp – zentrale Hostung und Deployment
 
-Die WebApp kann **zentral** auf einer Domain gehostet werden (z.B. `app.rettbase.de`), nicht als Subdomain pro Kunde. Die Kunden-ID wird wie in der nativen App gewählt.
+Die WebApp wird **zentral** auf einer Domain gehostet (z.B. `app.rettbase.de`). Die Kunden-ID wird in der App gewählt – keine Kunden-Subdomains mehr.
 
 ---
 
-## 1. Cloud Function deployen (einmalig)
+## 1. Cloud Functions deployen (einmalig)
 
 ```bash
 cd /Users/mikefullbeck/RettBase/app
@@ -14,19 +14,13 @@ firebase deploy --project rett-fe0fa --only functions
 
 ---
 
-## 2. auth-callback.html deployen
+## 2. Firebase-Projekt
 
-Die Datei `rettbase/auth-callback.html` muss mit der RettBase-Web-App auf alle Kunden-Subdomains deployed werden (admin.rettbase.de, firma.rettbase.de, …).
-
----
-
-## 3. Firebase-Projekt
-
-Alle RettBase-Systeme nutzen **rett-fe0fa** (firebase-config.js, auth-callback.html, Office-Functions).
+Alle RettBase-Systeme nutzen **rett-fe0fa**.
 
 ---
 
-## 4. Flutter WebApp deployen
+## 3. Flutter WebApp deployen
 
 ```bash
 cd /Users/mikefullbeck/RettBase/app
@@ -38,7 +32,7 @@ Die App liegt dann z.B. unter `rett-fe0fa.web.app` oder Ihrer konfigurierten Dom
 
 ---
 
-## 5. Firebase-Tools aktuell halten
+## 4. Firebase-Tools aktuell halten
 
 ```bash
 npm install -g firebase-tools
@@ -46,7 +40,7 @@ npm install -g firebase-tools
 
 ---
 
-## 6. Authorized Domains in Firebase
+## 5. Authorized Domains in Firebase
 
 Unter [Firebase Console → Authentication → Authorized domains](https://console.firebase.google.com/project/rett-fe0fa/authentication/settings) müssen alle Domains eingetragen sein, auf denen die WebApp läuft:
 

@@ -79,8 +79,8 @@ async function _requireAdminRole(context, companyId) {
   const uid = context.auth.uid;
   const email = (context.auth.token?.email || "").toString().toLowerCase();
   const adminRoles = ["superadmin", "admin", "leiterssd", "koordinator"];
-  const isGlobalSuperadmin = email === "admin@rettbase.de" || (email.startsWith("admin@") && email.includes("rettbase"));
-  const is112Admin = companyId === "admin" && (email === "112@admin.rettbase.de" || (email.startsWith("112@admin") && email.includes("rettbase")));
+  const isGlobalSuperadmin = email === "admin@rettbase.de" || email === "admin@rettbase";
+  const is112Admin = companyId === "admin" && email === "112@admin.rettbase.de";
   if (isGlobalSuperadmin || is112Admin) return;
   // Admin-Superadmins (users/mitarbeiter in admin mit role superadmin) dürfen in allen Firmen Admin-Aktionen ausführen
   if (companyId !== "admin") {
@@ -225,7 +225,7 @@ exports.resolveLoginInfo = functions.region("europe-west1").https.onCall(async (
   const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input);
   const isGlobalSuperadmin = (s) => {
     const e = s.trim().toLowerCase();
-    return e === "admin@rettbase.de" || e === "admin@rettbase" || (e.startsWith("admin@") && e.includes("rettbase"));
+    return e === "admin@rettbase.de" || e === "admin@rettbase";
   };
 
   if (isGlobalSuperadmin(input)) {
@@ -356,8 +356,8 @@ async function _requireSuperadminRole(context) {
   }
   const uid = context.auth.uid;
   const email = (context.auth.token?.email || "").toString().toLowerCase();
-  if (email === "admin@rettbase.de" || (email.startsWith("admin@") && email.includes("rettbase"))) return;
-  if (email === "112@admin." + ROOT_DOMAIN || (email.startsWith("112@admin") && email.includes(ROOT_DOMAIN))) return;
+  if (email === "admin@rettbase.de" || email === "admin@rettbase") return;
+  if (email === "112@admin." + ROOT_DOMAIN) return;
   const adminUser = await db.collection("kunden").doc("admin").collection("users").doc(uid).get();
   if (adminUser.exists && (adminUser.data()?.role || "").toString().toLowerCase() === "superadmin") return;
   const mitSnap = await db.collection("kunden").doc("admin").collection("mitarbeiter").where("uid", "==", uid).limit(1).get();
@@ -445,8 +445,8 @@ exports.ensureUsersDoc = functions.region("europe-west1").https.onCall(async (da
   const companyId = (await _resolveToDocId(inputCompanyId)) || inputCompanyId.toLowerCase();
   const uid = context.auth.uid;
   const email = (context.auth.token?.email || "").toString();
-  const isGlobalSuperadmin = email === "admin@rettbase.de" || (email.startsWith("admin@") && email.includes("rettbase"));
-  const is112Admin = email.startsWith("112@admin") && email.includes("rettbase");
+  const isGlobalSuperadmin = email === "admin@rettbase.de" || email === "admin@rettbase";
+  const is112Admin = email === "112@admin.rettbase.de";
   let isAdminCompanySuperadmin = false;
   if (!isGlobalSuperadmin && !is112Admin) {
     const [adminUser, byUidAdmin] = await Promise.all([

@@ -1,5 +1,5 @@
 ---
-description: Nur Flutter-App nutzen – rettbase/ JS-Web-App ignorieren
+description: Nur Flutter-App – rettbase/ wurde entfernt (März 2026)
 alwaysApply: true
 ---
 
@@ -7,11 +7,10 @@ alwaysApply: true
 
 **Projekt-Fokus:** Es wird ausschließlich die **Flutter-App** (`app/`) weiterentwickelt.
 
-## Nicht mehr relevant
+## Legacy entfernt
 
-- Der Ordner **`rettbase/`** (standalone JavaScript/HTML-Web-App, PWA) wird **nicht** mehr verwendet.
+- Der Ordner **`rettbase/`** (standalone JS/HTML-Web-App) wurde März 2026 gelöscht – keine Kunden-Subdomains mehr.
 - Bei Änderungen oder neuen Features: **nur** `app/lib/` und die Flutter-Struktur bearbeiten.
-- Code in `rettbase/` (dashboard.js, home.js, module/chat/, etc.) **nicht** anpassen oder referenzieren.
 
 ## Zielplattformen der Flutter-App
 

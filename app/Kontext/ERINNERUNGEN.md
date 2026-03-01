@@ -7,7 +7,7 @@
 ## 1. Projekt-Fokus
 
 - **Nur Flutter-App** (`app/`) wird weiterentwickelt
-- **rettbase/** (standalone JS/HTML-Web-App) wird **nicht mehr** verwendet – ignorieren
+- **rettbase/** wurde entfernt (März 2026) – Legacy JS/HTML-Web-App gelöscht, keine Kunden-Subdomains mehr. Commit: 0436b75
 - **Zielplattformen:** iOS, Android, macOS, Web (`flutter build web`)
 - **Firebase-Projekt:** rett-fe0fa (einheitlich für alle Plattformen)
 
@@ -386,6 +386,7 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 - **Erledigt (Punkt 1–3):** Collection-Group-Regeln entfernt (waren zu permissiv); Storage: Company-Prüfung per Custom Claims (companyId, superadmin) – ensureUsersDoc setzt diese; Settings: Schreibzugriff nur noch für isSuperadmin(); Lesezugriff weiterhin für alle eingeloggten Nutzer. Token-Refresh nach ensureUsersDoc (getIdToken(true)) für gültige Claims bei Storage-Zugriff.
 - **Erledigt (Punkt 4–5):** App Check **nicht verwendet** – Rate-Limit (5/min) reicht. API-Keys: docs/SICHERHEIT_API_KEYS_APP_CHECK.md, docs/SICHERHEIT_SETUP_RUNBOOK.md
 - **Sicherheitsaudit:** docs/SICHERHEITSAUDIT.md; Storage-Regeln: `dokumente`, `uebergriffsmeldung-attachments` ergänzt
+- **Externes Audit (März 2026):** K4–K6, K8, H1, H3, H4 betreffen `rettbase/` (Legacy, nicht verwendet). H2 behoben. H5 geprüft – `updateMitarbeiterPassword` hat Firmen-Check. Siehe SICHERHEITSAUDIT.md §9.
 
 ---
 
