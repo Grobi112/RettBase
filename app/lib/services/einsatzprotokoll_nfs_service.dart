@@ -10,8 +10,17 @@ class EinsatzprotokollNfsService {
   DocumentReference<Map<String, dynamic>> _counterDoc(String companyId, int year) =>
       _db.collection('kunden').doc(companyId).collection('einsatzprotokoll-nfs-zähler').doc(year.toString());
 
+  /// Vorschau der nächsten laufenden Nr. (ohne Zähler zu erhöhen). Für Anzeige im Formular.
+  Future<String> getNextLaufendeInterneNrPreview(String companyId) async {
+    final year = DateTime.now().year;
+    final ref = _counterDoc(companyId, year);
+    final snap = await ref.get();
+    final next = (snap.data()?['lastNumber'] as int? ?? 0) + 1;
+    return '$year${next.toString().padLeft(4, '0')}';
+  }
+
   /// Nächste laufende interne Nummer für das aktuelle Jahr (Format: YYYYNNNN, z.B. 20260001).
-  /// Reserviert die Nummer (erhöht Zähler). Muss beim Speichern mit übergeben werden.
+  /// Wird nur beim Speichern aufgerufen – erhöht den Zähler.
   Future<String> getNextLaufendeInterneNr(String companyId) async {
     final year = DateTime.now().year;
     return _db.runTransaction<String>((tx) async {
@@ -24,16 +33,14 @@ class EinsatzprotokollNfsService {
   }
 
   /// Protokoll erstellen. Gibt (docId, laufendeInterneNr) zurück.
-  /// Wenn data['laufendeInterneNr'] gesetzt ist, wird diese verwendet (bereits beim Formular-Load reserviert).
+  /// Nummer wird erst beim Speichern vergeben.
   Future<({String id, String laufendeInterneNr})> create(
     String companyId,
     Map<String, dynamic> data, {
     String? creatorUid,
     String? creatorName,
   }) async {
-    final laufendeNr = (data['laufendeInterneNr']?.toString().trim().isNotEmpty == true)
-        ? data['laufendeInterneNr']!.toString().trim()
-        : await getNextLaufendeInterneNr(companyId);
+    final laufendeNr = await getNextLaufendeInterneNr(companyId);
     final clean = Map<String, dynamic>.from(data);
     clean['laufendeInterneNr'] = laufendeNr;
     clean['createdAt'] = FieldValue.serverTimestamp();
@@ -43,9 +50,29 @@ class EinsatzprotokollNfsService {
     return (id: ref.id, laufendeInterneNr: laufendeNr);
   }
 
-  /// Protokoll löschen
-  Future<void> delete(String companyId, String docId) async {
+  /// Protokoll löschen. Wenn laufendeInterneNr die letzte vergebene Nr. ist, wird sie wieder freigegeben.
+  Future<void> delete(String companyId, String docId, {String? laufendeInterneNr}) async {
     await _col(companyId).doc(docId).delete();
+    if (laufendeInterneNr != null && laufendeInterneNr.length >= 8) {
+      await _releaseLaufendeNrIfLast(companyId, laufendeInterneNr);
+    }
+  }
+
+  /// Wenn die gelöschte Nr. die letzte vergebene war, Zähler zurücksetzen (Nr. wiederverwendbar).
+  Future<void> _releaseLaufendeNrIfLast(String companyId, String laufendeInterneNr) async {
+    final yearStr = laufendeInterneNr.substring(0, 4);
+    final numStr = laufendeInterneNr.substring(4);
+    final year = int.tryParse(yearStr);
+    final num = int.tryParse(numStr);
+    if (year == null || num == null) return;
+    await _db.runTransaction((tx) async {
+      final ref = _counterDoc(companyId, year);
+      final snap = await tx.get(ref);
+      final last = snap.data()?['lastNumber'] as int? ?? 0;
+      if (last == num && num > 0) {
+        tx.set(ref, {'lastNumber': num - 1});
+      }
+    });
   }
 
   /// Alle Protokolle streamen (neueste zuerst)

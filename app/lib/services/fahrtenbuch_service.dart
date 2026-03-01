@@ -121,6 +121,61 @@ class FahrtenbuchService {
     return null;
   }
 
+  /// Wie getLetzterKmEndeByKennzeichenOderRufname, aber liefert (km, datum) für Vergleich mit anderen Quellen.
+  /// [ohneManuelleKmKorrektur]: wenn true, werden manuelle KM-Korrekturen (aus Checkliste) ausgeschlossen
+  Future<({int km, DateTime datum})?> getLetzterKmEndeByKennzeichenOderRufnameMitDatum(
+    String companyId,
+    String? kennzeichenOderRufname, {
+    String? fahrzeugRufnameAlternativ,
+    String? fahrzeugId,
+    bool ohneManuelleKmKorrektur = false,
+  }) async {
+    final keys = <String>{
+      if (kennzeichenOderRufname != null && kennzeichenOderRufname.trim().isNotEmpty) kennzeichenOderRufname.trim(),
+      if (fahrzeugRufnameAlternativ != null && fahrzeugRufnameAlternativ.trim().isNotEmpty) fahrzeugRufnameAlternativ.trim(),
+      if (fahrzeugId != null && fahrzeugId.trim().isNotEmpty) fahrzeugId.trim(),
+    };
+    if (keys.isEmpty) return null;
+
+    int? _parseKm(Map<String, dynamic> d) {
+      final kmE = d['kmEnde'] ?? d['km_ende'] ?? d['KmEnde'] ?? d['endKm'];
+      if (kmE == null) return null;
+      return (kmE is num) ? kmE.toInt() : int.tryParse(kmE.toString());
+    }
+
+    for (final cid in [companyId.trim().toLowerCase(), companyId]) {
+      if (cid.isEmpty) continue;
+      try {
+        final snap = await _eintraege(cid)
+            .orderBy('datum', descending: true)
+            .limit(300)
+            .get();
+        int? bestKm;
+        DateTime? bestDatum;
+        for (final doc in snap.docs) {
+          final d = doc.data();
+          if (ohneManuelleKmKorrektur && d['manuellKmKorrektur'] == true) continue;
+          final kz = (d['kennzeichen'] ?? '').toString().trim();
+          final fk = (d['fahrzeugkennung'] ?? '').toString().trim();
+          final fid = (d['fahrzeugId'] ?? '').toString().trim();
+          if (!keys.contains(kz) && !keys.contains(fk) && !keys.contains(fid)) continue;
+          final km = _parseKm(d);
+          if (km == null) continue;
+          final datum = d['datum'];
+          DateTime? dt;
+          if (datum is Timestamp) dt = datum.toDate();
+          if (datum is DateTime) dt = datum;
+          if (dt != null && (bestDatum == null || dt.isAfter(bestDatum))) {
+            bestKm = km;
+            bestDatum = dt;
+          }
+        }
+        if (bestKm != null && bestDatum != null) return (km: bestKm, datum: bestDatum);
+      } catch (_) {}
+    }
+    return null;
+  }
+
   /// Manuelle KM-Korrektur aus Checkliste speichern (z.B. wenn Fahrt nicht eingetragen wurde)
   /// Wird als Fahrtenbucheintrag gespeichert mit "Fehlender Fahrtenbucheintrag. Hier fehlen X km"
   Future<String> createManuelleKmKorrektur(

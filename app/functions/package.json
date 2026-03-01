@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "deploy": "firebase deploy --only functions",
-    "check-fcm": "node scripts/check_fcm_tokens.js"
+    "check-fcm": "node scripts/check_fcm_tokens.js",
+    "reset-nfs-zähler": "node scripts/reset_nfs_laufende_nr.js"
   },
   "dependencies": {
     "firebase-admin": "^11.8.0",

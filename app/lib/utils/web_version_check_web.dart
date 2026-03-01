@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:js_interop';
+
+import 'package:web/web.dart' as web;
 
 import '../app_config.dart';
 
@@ -41,11 +44,14 @@ Future<void> runWebVersionCheckOnce(void Function() onUpdateAvailable) async {
       if (DateTime.now().millisecondsSinceEpoch - t < reloadCooldownMs) return;
     }
 
+    // Cache-Bypass: fetch mit cache:'no-store' umgeht SW- und HTTP-Cache (PWA-Handy)
     final url = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
-    final res = await html.HttpRequest.request(url, method: 'GET')
+    final res = await web.window
+        .fetch(url.toJS, web.RequestInit(cache: 'no-store'))
+        .toDart
         .timeout(const Duration(seconds: 10));
     if (res.status != 200) return;
-    final raw = (res.responseText ?? '').trim();
+    final raw = (await res.text().toDart.timeout(const Duration(seconds: 10))).toDart.trim();
     if (raw.isEmpty || !raw.startsWith('{')) return;
     Map<String, dynamic>? data;
     try {
@@ -63,5 +69,44 @@ Future<void> runWebVersionCheckOnce(void Function() onUpdateAvailable) async {
     html.window.sessionStorage['rettbase_version_reload'] =
         '${DateTime.now().millisecondsSinceEpoch}';
     onUpdateAvailable();
+  } catch (_) {}
+}
+
+/// Web: Version von Server holen und Meta-Tag aktualisieren – kein Reload.
+/// Wird beim Dashboard-Laden aufgerufen, Nutzer bleibt angemeldet.
+Future<void> updateWebVersionFromServer() async {
+  final host = html.window.location.hostname;
+  if (host == 'localhost' || host == '127.0.0.0' || host == '127.0.0.1') return;
+
+  final baseUrl = AppConfig.androidUpdateCheckUrl;
+  if (baseUrl == null || baseUrl.isEmpty) return;
+
+  try {
+    // Cache-Bypass: fetch mit cache:'no-store' umgeht SW- und HTTP-Cache (PWA-Handy)
+    final url = '$baseUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+    final res = await web.window
+        .fetch(url.toJS, web.RequestInit(cache: 'no-store'))
+        .toDart
+        .timeout(const Duration(seconds: 10));
+    if (res.status != 200) return;
+    final raw = (await res.text().toDart.timeout(const Duration(seconds: 10))).toDart.trim();
+    if (raw.isEmpty || !raw.startsWith('{')) return;
+    Map<String, dynamic>? data;
+    try {
+      data = jsonDecode(raw) as Map<String, dynamic>?;
+    } catch (_) {
+      return;
+    }
+    if (data == null) return;
+    final serverVer = ((data['version'] as String?) ?? '').trim();
+    if (serverVer.isEmpty) return;
+
+    var meta = html.document.querySelector('meta[name="rettbase-version"]');
+    if (meta == null) {
+      meta = html.document.createElement('meta');
+      meta.setAttribute('name', 'rettbase-version');
+      html.document.head?.append(meta);
+    }
+    meta.setAttribute('content', serverVer);
   } catch (_) {}
 }

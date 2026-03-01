@@ -179,9 +179,11 @@ class FleetService {
   }
 
   /// Standorte aus Schichtplan laden (für Wache-Dropdown)
+  /// companyId wird normalisiert – nur Daten des aktuellen Kunden.
   Future<List<Standort>> loadStandorte(String companyId) async {
     try {
-      final snap = await _db.collection('kunden').doc(companyId).collection('schichtplanStandorte').get();
+      final cid = companyId.trim().toLowerCase();
+      final snap = await _db.collection('kunden').doc(cid).collection('schichtplanStandorte').get();
       final list = <Standort>[];
       for (final d in snap.docs) {
         final data = d.data();

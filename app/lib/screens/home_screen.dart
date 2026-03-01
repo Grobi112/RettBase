@@ -7,7 +7,7 @@ import '../models/app_module.dart';
 import '../models/information_model.dart';
 import '../widgets/info_container_card.dart';
 
-final _emptyContainerSlotsNotifier = ValueNotifier<List<String?>>([null, null]);
+final _emptyContainerSlotsNotifier = ValueNotifier<List<String?>>(List.filled(6, null));
 final _emptyInfoItemsNotifier = ValueNotifier<List<Information>>([]);
 
 class HomeScreen extends StatefulWidget {
@@ -15,6 +15,8 @@ class HomeScreen extends StatefulWidget {
   final String? vorname;
   final List<AppModule?> shortcuts;
   final ValueListenable<int>? chatUnreadListenable;
+  /// Anzahl pending Meldungen im Schichtplan NFS (Badge für Admin/Koordinator)
+  final ValueListenable<int>? schichtplanNfsMeldungenListenable;
   final void Function(int index)? onShortcutTap;
   /// Aktualisierbare Container-Reihenfolge: 'informationen', 'verkehrslage' oder null
   final ValueListenable<List<String?>>? containerSlotsListenable;
@@ -30,6 +32,7 @@ class HomeScreen extends StatefulWidget {
     this.vorname,
     this.shortcuts = const [],
     this.chatUnreadListenable,
+    this.schichtplanNfsMeldungenListenable,
     this.onShortcutTap,
     this.containerSlotsListenable,
     this.informationenItemsListenable,
@@ -220,6 +223,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 height: buttonHeight,
                                 module: mod,
                                 chatUnreadListenable: widget.chatUnreadListenable,
+                                schichtplanNfsMeldungenListenable: widget.schichtplanNfsMeldungenListenable,
                                 onTap: () => widget.onShortcutTap?.call(origIndex),
                               ),
                             );
@@ -230,6 +234,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         LayoutBuilder(
                           builder: (context, bc) {
                             final isNarrow = bc.maxWidth < 600;
+                            final spacing = 12.0;
+                            // 1 Container = volle Breite; schmal = 1 Spalte; sonst max. 2 nebeneinander
+                            final singleContainer = containerTypes.length == 1;
+                            final crossAxisCount = (singleContainer || isNarrow) ? 1 : 2;
+                            final childWidth = (singleContainer || isNarrow)
+                                ? bc.maxWidth
+                                : (bc.maxWidth - spacing * (crossAxisCount - 1)) / crossAxisCount;
                             if (isNarrow) {
                               return Column(
                                 children: containerTypes.map((t) => Padding(
@@ -247,25 +258,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                 )).toList(),
                               );
                             }
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: containerTypes.asMap().entries.map((e) {
-                                return Expanded(
-                                  child: Padding(
-                                    padding: EdgeInsets.only(right: e.key < containerTypes.length - 1 ? 12 : 0),
-                                    child: ValueListenableBuilder<List<Information>>(
-                                      valueListenable: infoListenable,
-                                      builder: (_, items, __) => InfoContainerCard(
-                                        type: e.value,
-                                        informationenItems: items,
-                                        companyId: widget.companyId,
-                                        userRole: widget.userRole,
-                                        onInfoDeleted: widget.onInfoDeleted,
-                                      ),
-                                    ),
+                            return Wrap(
+                              spacing: spacing,
+                              runSpacing: spacing,
+                              children: containerTypes.map((t) => SizedBox(
+                                width: childWidth,
+                                child: ValueListenableBuilder<List<Information>>(
+                                  valueListenable: infoListenable,
+                                  builder: (_, items, __) => InfoContainerCard(
+                                    type: t,
+                                    informationenItems: items,
+                                    companyId: widget.companyId,
+                                    userRole: widget.userRole,
+                                    onInfoDeleted: widget.onInfoDeleted,
                                   ),
-                                );
-                              }).toList(),
+                                ),
+                              )).toList(),
                             );
                           },
                         ),
@@ -290,6 +298,7 @@ class _ShortcutButton extends StatefulWidget {
   final double height;
   final AppModule? module;
   final ValueListenable<int>? chatUnreadListenable;
+  final ValueListenable<int>? schichtplanNfsMeldungenListenable;
   final VoidCallback? onTap;
 
   const _ShortcutButton({
@@ -298,6 +307,7 @@ class _ShortcutButton extends StatefulWidget {
     required this.height,
     this.module,
     this.chatUnreadListenable,
+    this.schichtplanNfsMeldungenListenable,
     this.onTap,
   });
 
@@ -309,26 +319,30 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
   bool _hover = false;
   bool _pressed = false;
 
+  void _onBadgeChanged() => setState(() {});
+
   @override
   void initState() {
     super.initState();
-    widget.chatUnreadListenable?.addListener(_onChatUnreadChanged);
+    widget.chatUnreadListenable?.addListener(_onBadgeChanged);
+    widget.schichtplanNfsMeldungenListenable?.addListener(_onBadgeChanged);
   }
 
   @override
   void didUpdateWidget(covariant _ShortcutButton oldWidget) {
     super.didUpdateWidget(oldWidget);
-    oldWidget.chatUnreadListenable?.removeListener(_onChatUnreadChanged);
-    widget.chatUnreadListenable?.addListener(_onChatUnreadChanged);
+    oldWidget.chatUnreadListenable?.removeListener(_onBadgeChanged);
+    oldWidget.schichtplanNfsMeldungenListenable?.removeListener(_onBadgeChanged);
+    widget.chatUnreadListenable?.addListener(_onBadgeChanged);
+    widget.schichtplanNfsMeldungenListenable?.addListener(_onBadgeChanged);
   }
 
   @override
   void dispose() {
-    widget.chatUnreadListenable?.removeListener(_onChatUnreadChanged);
+    widget.chatUnreadListenable?.removeListener(_onBadgeChanged);
+    widget.schichtplanNfsMeldungenListenable?.removeListener(_onBadgeChanged);
     super.dispose();
   }
-
-  void _onChatUnreadChanged() => setState(() {});
 
   IconData? _getIconDataForModule(String? id) {
     switch (id) {
@@ -337,7 +351,8 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
       case 'neuermangel': return Icons.build;
       case 'fahrzeugmanagement': return Icons.directions_car;
       case 'schichtanmeldung':
-      case 'schichtuebersicht': return Icons.calendar_today;
+      case 'schichtuebersicht':
+      case 'schichtplannfs': return Icons.calendar_today;
       default: return null;
     }
   }
@@ -372,6 +387,14 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
         colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
       );
     }
+    if (id == 'ssd' || id == 'einsatzprotokollnfs') {
+      return SvgPicture.asset(
+        'img/icon_einsatzprotokoll_nfs.svg',
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      );
+    }
     return null;
   }
 
@@ -384,7 +407,11 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
     final textColor = widget.module != null ? Colors.white : AppTheme.textMuted;
     final iconWidget = _buildIconForModule(widget.module?.id, textColor);
     final chatUnread = widget.chatUnreadListenable?.value ?? 0;
-    final showBadge = widget.module?.id == 'chat' && chatUnread > 0;
+    final nfsMeldungen = widget.schichtplanNfsMeldungenListenable?.value ?? 0;
+    final badgeCount = widget.module?.id == 'chat'
+        ? chatUnread
+        : (widget.module?.id == 'schichtplannfs' ? nfsMeldungen : 0);
+    final showBadge = badgeCount > 0;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
@@ -412,46 +439,39 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
             height: widget.height,
             child: Center(
               child: iconWidget != null && widget.module != null
-                  ? Stack(
-                      clipBehavior: Clip.none,
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            iconWidget,
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                widget.module!.label,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: textColor,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                        iconWidget,
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            widget.module!.label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: textColor,
                             ),
-                          ],
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        if (showBadge)
-                          Positioned(
-                            top: -6,
-                            right: -6,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.all(Radius.circular(10)),
-                              ),
-                              child: Text(
-                                chatUnread > 99 ? '99+' : '$chatUnread',
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
-                              ),
+                        if (showBadge) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.all(Radius.circular(10)),
+                            ),
+                            child: Text(
+                              badgeCount > 99 ? '99+' : '$badgeCount',
+                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
                             ),
                           ),
+                        ],
                       ],
                     )
                   : Text(

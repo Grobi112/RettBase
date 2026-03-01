@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/app_theme.dart';
 import '../models/kunde_model.dart';
 import '../services/kundenverwaltung_service.dart';
+import '../services/module_variants_service.dart';
 import '../app_config.dart';
+import 'dashboard_screen.dart';
 
 /// Native Kundenverwaltung – lädt Kunden (Firmen) aus Firebase, Liste, Bearbeiten, Löschen.
 /// Nur für Superadmin-Rolle.
@@ -28,6 +31,7 @@ class KundenverwaltungScreen extends StatefulWidget {
 
 class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
   final _service = KundenverwaltungService();
+  final _variantsService = ModuleVariantsService();
   final _searchController = TextEditingController();
 
   List<Kunde> _allKunden = [];
@@ -144,9 +148,62 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
     );
   }
 
+  Future<void> _openCreate() async {
+    final allModuleDefs = await _service.getMergedModuleDefs();
+    if (!mounted) return;
+    final newKunde = Kunde(id: '_new', name: '', kundenId: '', status: 'active');
+    final result = await Navigator.of(context, rootNavigator: true).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (ctx) => _EditKundeScreen(
+          kunde: newKunde,
+          enabledModules: {},
+          allModuleDefs: allModuleDefs,
+          moduleVariants: {},
+          isCreate: true,
+        ),
+      ),
+    );
+    if (result != null && mounted) {
+      try {
+        final mods = result.remove('_modules') as Map<String, bool>?;
+        final variants = result.remove('_moduleVariants') as Map<String, String>?;
+        final kundenId = (result['kundenId'] as String?)?.trim().toLowerCase() ?? '';
+        if (kundenId.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kunden-ID ist erforderlich.'), backgroundColor: Colors.red));
+          return;
+        }
+        await _service.createKunde(kundenId, result);
+        if (mods != null && mods.isNotEmpty) {
+          await _service.setCompanyModules(kundenId, mods);
+        }
+        if (variants != null && variants.isNotEmpty) {
+          await _variantsService.setModuleVariants(kundenId, variants);
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Kunde angelegt.'),
+              action: SnackBarAction(
+                label: 'Zum Kunden wechseln',
+                onPressed: () => _switchToKunde(kundenId),
+              ),
+            ),
+          );
+          _load();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red));
+        }
+      }
+    }
+  }
+
   Future<void> _openEdit(Kunde kunde) async {
     final enabledModules = await _service.getCompanyModules(kunde.id);
-    final allModuleDefs = await _service.getAllModuleDefs();
+    final allModuleDefs = await _service.getMergedModuleDefs();
+    final moduleVariants = await _variantsService.getModuleVariants(kunde.id);
     if (!mounted) return;
     final result = await Navigator.of(context, rootNavigator: true).push<Map<String, dynamic>>(
       MaterialPageRoute(
@@ -155,15 +212,20 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
           kunde: kunde,
           enabledModules: enabledModules,
           allModuleDefs: allModuleDefs,
+          moduleVariants: moduleVariants,
         ),
       ),
     );
     if (result != null && mounted) {
       try {
         final mods = result.remove('_modules') as Map<String, bool>?;
+        final variants = result.remove('_moduleVariants') as Map<String, String>?;
         await _service.updateKunde(kunde, result);
         if (mods != null) {
           await _service.setCompanyModules(kunde.id, mods);
+        }
+        if (variants != null) {
+          await _variantsService.setModuleVariants(kunde.id, variants);
         }
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kunde gespeichert.')));
@@ -226,6 +288,28 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
     } catch (_) {}
   }
 
+  /// Wechselt zur Ansicht des angegebenen Kunden (leere Schicht-/Standortverwaltung etc.).
+  Future<void> _switchToKunde(String kundenId) async {
+    final cid = kundenId.trim().toLowerCase();
+    if (cid.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('rettbase_company_id', cid);
+      await prefs.setBool('rettbase_company_configured', true);
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => DashboardScreen(companyId: cid)),
+        (_) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler beim Wechseln: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scaffold = Scaffold(
@@ -233,6 +317,20 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
       appBar: AppTheme.buildModuleAppBar(
         title: widget.title ?? 'Kundenverwaltung',
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
+        actions: [
+          if (Responsive.isCompact(context))
+            IconButton(
+              onPressed: _openCreate,
+              icon: const Icon(Icons.add),
+              tooltip: 'Neuer Kunde',
+            )
+          else
+            FilledButton.icon(
+              onPressed: _openCreate,
+              icon: const Icon(Icons.add, size: 20),
+              label: const Text('Neuer Kunde'),
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -298,6 +396,7 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
   Widget _buildStatusDropdown() {
     return DropdownButtonFormField<String>(
       value: _statusFilter,
+      isExpanded: true,
       decoration: InputDecoration(
         filled: true,
         fillColor: Colors.white,
@@ -317,6 +416,7 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
   Widget _buildSortDropdown() {
     return DropdownButtonFormField<String>(
       value: _sortBy,
+      isExpanded: true,
       decoration: InputDecoration(
         filled: true,
         fillColor: Colors.white,
@@ -418,6 +518,11 @@ class _KundenverwaltungScreenState extends State<KundenverwaltungScreen> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         TextButton.icon(
+                          onPressed: () => _switchToKunde(k.id),
+                          icon: const Icon(Icons.open_in_new, size: 18),
+                          label: const Text('Zum Kunden wechseln'),
+                        ),
+                        TextButton.icon(
                           onPressed: () => _openEdit(k),
                           icon: const Icon(Icons.edit, size: 18),
                           label: const Text('Bearbeiten'),
@@ -485,11 +590,15 @@ class _EditKundeScreen extends StatefulWidget {
   final Kunde kunde;
   final Map<String, bool> enabledModules;
   final Map<String, Map<String, dynamic>> allModuleDefs;
+  final Map<String, String> moduleVariants;
+  final bool isCreate;
 
   const _EditKundeScreen({
     required this.kunde,
     required this.enabledModules,
     required this.allModuleDefs,
+    this.moduleVariants = const {},
+    this.isCreate = false,
   });
 
   @override
@@ -506,6 +615,7 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
   late String _status;
   late String? _bereich;
   late Map<String, bool> _modules;
+  late String _fahrtenbuchVariant;
 
   @override
   void initState() {
@@ -520,6 +630,7 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
     _bereich = widget.kunde.bereich;
     if (_bereich != null && !KundenBereich.ids.contains(_bereich)) _bereich = null;
     _modules = Map<String, bool>.from(widget.enabledModules);
+    _fahrtenbuchVariant = widget.moduleVariants['fahrtenbuch'] == 'v2' ? 'v2' : 'v1';
   }
 
   @override
@@ -549,6 +660,10 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
     modulesToSave['home'] = true;
     modulesToSave['admin'] = true;
 
+    final variantsToSave = <String, String>{
+      'fahrtenbuch': _fahrtenbuchVariant,
+    };
+
     Navigator.of(context).pop(<String, dynamic>{
       'name': _nameCtrl.text.trim(),
       'address': _addressCtrl.text.trim(),
@@ -559,21 +674,93 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
       'bereich': _bereich,
       'status': _status,
       '_modules': modulesToSave,
+      '_moduleVariants': variantsToSave,
     });
   }
 
+  static const _excludedModuleIds = ['home', 'admin', 'kundenverwaltung', 'modulverwaltung', 'menueverwaltung'];
+
+  Widget _buildFahrtenbuchCard(Map<String, Map<String, dynamic>> defs) {
+    final fahrtenbuchEnabled = _modules['fahrtenbuch'] == true || _modules['fahrtenbuchuebersicht'] == true;
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.directions_car, color: AppTheme.primary, size: 28),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Fahrtenbuch',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        'Einträge erfassen, Übersicht pro Fahrzeug',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+                Checkbox(
+                  value: fahrtenbuchEnabled,
+                  onChanged: (v) {
+                    setState(() {
+                      _modules['fahrtenbuch'] = v ?? false;
+                      _modules['fahrtenbuchuebersicht'] = v ?? false;
+                    });
+                  },
+                ),
+              ],
+            ),
+            if (fahrtenbuchEnabled) ...[
+              const Divider(height: 24),
+              DropdownButtonFormField<String>(
+                value: _fahrtenbuchVariant,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Variante',
+                  hintText: 'Version 1 oder Version 2',
+                  isDense: true,
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'v1', child: Text('Version 1 (Standard)')),
+                  DropdownMenuItem(value: 'v2', child: Text('Version 2 (erweiterte Felder)')),
+                ],
+                onChanged: (v) => setState(() => _fahrtenbuchVariant = v ?? 'v1'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const _moduleGroups = [
+    ('Schicht', ['schichtanmeldung', 'schichtuebersicht', 'schichtplannfs']),
+    ('Wachbuch', ['wachbuch', 'wachbuchuebersicht']),
+    ('Dokumente & Meldungen', ['dokumente', 'unfallbericht', 'maengelmelder', 'schnittstellenmeldung', 'uebergriffsmeldung']),
+    ('Fahrzeuge & Sonstiges', ['fahrzeugmanagement', 'fahrzeugstatus', 'checklisten', 'informationssystem']),
+    ('Kommunikation', ['telefonliste', 'chat', 'email']),
+    ('Einstellungen', ['einstellungen']),
+    ('Schulsanitätsdienst', ['ssd']),
+    ('Notfallseelsorge', ['telefonlistenfs', 'einsatzprotokollnfs']),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final configurableModules = widget.allModuleDefs.entries
-        .where((e) => !['home', 'admin', 'kundenverwaltung'].contains(e.key))
-        .where((e) => e.value['active'] != false)
-        .toList()
-      ..sort((a, b) => ((a.value['order'] as num?) ?? 999).compareTo((b.value['order'] as num?) ?? 999));
+    final defs = widget.allModuleDefs;
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppBar(
-        title: const Text('Kunde bearbeiten'),
+        title: Text(widget.isCreate ? 'Neuer Kunde' : 'Kunde bearbeiten'),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
@@ -622,15 +809,16 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
             const SizedBox(height: 12),
             DropdownButtonFormField<String?>(
               value: _bereich,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Bereich',
                 hintText: 'Definiert das Menü (Rettungsdienst, Notfallseelsorge, …)',
               ),
               items: [
-                const DropdownMenuItem(value: null, child: Text('— Kein Bereich —')),
+                const DropdownMenuItem(value: null, child: Text('— Kein Bereich —', overflow: TextOverflow.ellipsis, maxLines: 1)),
                 ...KundenBereich.ids.map((id) => DropdownMenuItem(
                   value: id,
-                  child: Text(KundenBereich.labels[id] ?? id),
+                  child: Text(KundenBereich.labels[id] ?? id, overflow: TextOverflow.ellipsis, maxLines: 1),
                 )),
               ],
               onChanged: (v) => setState(() => _bereich = v),
@@ -638,6 +826,7 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: _status,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Status'),
               items: const [
                 DropdownMenuItem(value: 'active', child: Text('Aktiv')),
@@ -647,15 +836,53 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
               onChanged: (v) => setState(() => _status = v ?? 'active'),
             ),
             const SizedBox(height: 24),
-            Text('Module freischalten', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            ...configurableModules.map((e) {
-              final id = e.key;
-              final label = (e.value['label'] ?? id).toString();
-              return CheckboxListTile(
-                title: Text(label),
-                value: _modules[id] == true,
-                onChanged: (v) => setState(() => _modules[id] = v ?? false),
+            Text(
+              'Module & Varianten',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Module freischalten und kundenspezifische Varianten festlegen.',
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            _buildFahrtenbuchCard(defs),
+            const SizedBox(height: 20),
+            ..._moduleGroups.map((group) {
+              final (groupTitle, moduleIds) = group;
+              final items = moduleIds
+                  .where((id) => defs.containsKey(id) && defs[id]!['active'] != false)
+                  .map((id) => MapEntry(id, (defs[id]!['label'] ?? id).toString()))
+                  .toList();
+              if (items.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      groupTitle,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Card(
+                      child: Column(
+                        children: items.map((e) {
+                          final id = e.key;
+                          final label = e.value;
+                          return CheckboxListTile(
+                            title: Text(label),
+                            value: _modules[id] == true,
+                            onChanged: (v) => setState(() => _modules[id] = v ?? false),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
               );
             }),
             const SizedBox(height: 24),

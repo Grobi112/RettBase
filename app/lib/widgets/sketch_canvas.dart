@@ -134,39 +134,72 @@ class SketchCanvasState extends State<SketchCanvas> {
               color: Colors.grey.shade200,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             ),
-            child: Row(
-              children: [
-                _ToolButton(
-                  icon: Icons.edit,
-                  label: 'Stift',
-                  selected: !_isEraser,
-                  onTap: _pen,
-                ),
-                if (!_hasProtectedBackground) ...[
-                  const SizedBox(width: 8),
-                  _ToolButton(
-                    icon: Icons.cleaning_services,
-                    label: 'Radierer',
-                    selected: _isEraser,
-                    onTap: _eraser,
+            child: Responsive.isCompact(context)
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: _pen,
+                        icon: Icon(Icons.edit, color: !_isEraser ? AppTheme.primary : Colors.grey.shade700),
+                        tooltip: 'Stift',
+                        style: IconButton.styleFrom(
+                          backgroundColor: !_isEraser ? AppTheme.primary.withOpacity(0.2) : null,
+                        ),
+                      ),
+                      if (!_hasProtectedBackground)
+                        IconButton(
+                          onPressed: _eraser,
+                          icon: Icon(Icons.cleaning_services, color: _isEraser ? AppTheme.primary : Colors.grey.shade700),
+                          tooltip: 'Radierer',
+                          style: IconButton.styleFrom(
+                            backgroundColor: _isEraser ? AppTheme.primary.withOpacity(0.2) : null,
+                          ),
+                        ),
+                      IconButton(
+                        onPressed: _strokes.isNotEmpty ? _undo : null,
+                        icon: Icon(Icons.undo, color: _strokes.isNotEmpty ? Colors.grey.shade700 : Colors.grey.shade400),
+                        tooltip: 'Rückgängig',
+                      ),
+                      IconButton(
+                        onPressed: _strokes.isNotEmpty ? _clear : null,
+                        icon: Icon(Icons.delete_outline, color: _strokes.isNotEmpty ? Colors.grey.shade700 : Colors.grey.shade400),
+                        tooltip: 'Löschen',
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      _ToolButton(
+                        icon: Icons.edit,
+                        label: 'Stift',
+                        selected: !_isEraser,
+                        onTap: _pen,
+                      ),
+                      if (!_hasProtectedBackground) ...[
+                        const SizedBox(width: 8),
+                        _ToolButton(
+                          icon: Icons.cleaning_services,
+                          label: 'Radierer',
+                          selected: _isEraser,
+                          onTap: _eraser,
+                        ),
+                      ],
+                      const SizedBox(width: 8),
+                      _ToolButton(
+                        icon: Icons.undo,
+                        label: 'Rückgängig',
+                        onTap: _undo,
+                        enabled: _strokes.isNotEmpty,
+                      ),
+                      const SizedBox(width: 8),
+                      _ToolButton(
+                        icon: Icons.delete_outline,
+                        label: 'Löschen',
+                        onTap: _clear,
+                        enabled: _strokes.isNotEmpty,
+                      ),
+                    ],
                   ),
-                ],
-                const SizedBox(width: 8),
-                _ToolButton(
-                  icon: Icons.undo,
-                  label: 'Rückgängig',
-                  onTap: _undo,
-                  enabled: _strokes.isNotEmpty,
-                ),
-                const SizedBox(width: 8),
-                _ToolButton(
-                  icon: Icons.delete_outline,
-                  label: 'Löschen',
-                  onTap: _clear,
-                  enabled: _strokes.isNotEmpty,
-                ),
-              ],
-            ),
           ),
           // Canvas (ggf. mit Hintergrundbild – 1:1 Ausrichtung, Figuren größer)
           SizedBox(

@@ -120,6 +120,23 @@ class ModulverwaltungService {
     } catch (_) {}
   }
 
+  /// Stellt sicher, dass das Modul Fahrzeugstatus in Firestore existiert (für Menü-Verwaltung).
+  Future<void> ensureFahrzeugstatusModuleExists() async {
+    try {
+      await _db.collection('settings').doc('modules').set({'_exists': true}, SetOptions(merge: true));
+      await _items.doc('fahrzeugstatus').set({
+        'label': 'Fahrzeugstatus',
+        'url': '',
+        'icon': 'default',
+        'roles': _ssdRoles,
+        'free': true,
+        'order': 35,
+        'active': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
   /// Lädt alle Modul-Definitionen (ohne orderBy – manche Docs könnten order fehlen)
   Future<Map<String, Map<String, dynamic>>> getAllModules() async {
     try {

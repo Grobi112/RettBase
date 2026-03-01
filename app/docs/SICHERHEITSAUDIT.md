@@ -94,8 +94,48 @@ Dieses Dokument fasst das Ergebnis der Sicherheitsüberprüfung des Projekts zus
 
 ---
 
-## 8. Empfohlene nächste Schritte
+## 8. Sicherheitsrelevante Lücken (Abfrage Feb 2026)
+
+### 8.1 Geprüft – unkritisch
+
+| Bereich | Status | Hinweis |
+|---------|--------|---------|
+| **Firestore-Regeln** | ✅ | `canAccessCompany` verhindert IDOR; kein Fallback |
+| **Storage-Regeln** | ✅ | Company-Claims; Catch-all blockiert unbekannte Pfade |
+| **Cloud Functions** | ✅ | Rate-Limit, Admin-Checks; keine Auth bei Pre-Login nötig |
+| **XSS** | ✅ | Kein `innerHTML`/`eval` in `app/lib` |
+| **Path Traversal** | ✅ | Dokumente-Service nutzt nur Dateiname |
+| **Debug-Logs** | ✅ | Keine Passwörter; E-Mail/CompanyId nur in kDebugMode |
+| **SharedPreferences** | ✅ | Nur Company-ID, keine Passwörter; unverschlüsselt, aber geringes Risiko |
+
+### 8.2 Bekannte Schwachstellen (niedriges Risiko)
+
+| Lücke | Risiko | Empfehlung |
+|-------|--------|------------|
+| **API-Keys/VAPID clientseitig** | Niedrig | Üblich bei Firebase. Einschränkung in Google Cloud Console empfohlen (siehe Abschnitt 5). |
+| **createAuthUser ohne Mitarb.-Check** | Niedrig | Admin kann Auth-Nutzer anlegen; ohne Mitarb.-Eintrag kein sinnvoller Login (siehe 3.3). |
+
+### 8.3 Nach Lade-Optimierung (Login → Dashboard)
+
+- **ensureUsersDoc im Hintergrund:** Login navigiert sofort; `ensureUsersDoc` läuft asynchron. Das Dashboard ruft `ensureUsersDoc` in `_load` erneut auf. Theoretische Race: Wenn beide parallel laufen, kann einer zuerst fertig sein – unkritisch, da idempotent.
+- **EnsureUsersDocCache:** Verhindert doppelte Aufrufe innerhalb von 15 s. Kein Sicherheitsrisiko.
+
+### 8.4 Sicherheitstest (aktuelle Prüfung)
+
+| Prüfung | Ergebnis | Details |
+|---------|----------|---------|
+| **Hardcoded Credentials** | ✅ | Keine Passwörter/Secrets im Code; API-Keys nur Firebase (üblich) |
+| **XSS** | ✅ | Kein `innerHTML`/`eval` in `app/lib` |
+| **Path Traversal (Upload)** | ⚠️ Niedrig | `dokumente_service.dart` nutzt `fileName` direkt im Storage-Pfad. Firebase behandelt `..` als Literal; dennoch: `fileName` sollte auf Dateiname beschränkt werden (z.B. `fileName.split(RegExp(r'[/\\]')).last`) |
+| **IDOR** | ✅ | Firestore/Storage-Regeln prüfen `canAccessCompany` |
+| **Debug-Logs** | ✅ | Keine Passwörter; sensible Daten nur in `kDebugMode` |
+| **URL-Handling** | ✅ | `launchUrl`/`canLaunchUrl` für externe Links; `doc.fileUrl` aus eigenem Storage |
+| **Input-Validierung** | ✅ | Company-ID, Kunden-ID: `RegExp`-Filter; Telefonnummern bereinigt |
+| **Passwort-Übertragung** | ✅ | Nur an Firebase Auth; keine Weitergabe an Dritte |
+
+### 8.5 Empfohlene nächste Schritte
 
 1. **App Check** – aktuell nicht verwendet; Rate-Limit (5/min) reicht aus
 2. **API-Key-Einschränkung** in der Google Cloud Console – siehe **`SICHERHEIT_SETUP_RUNBOOK.md`**; SHA-1 per `scripts/get_android_sha1.sh`
-3. Regelmäßige Überprüfung der Firestore-/Storage-Regeln bei neuen Collections/Pfaden
+3. **fileName-Sanitisierung** (optional): In `dokumente_service.uploadDokument` nur `fileName.split(RegExp(r'[/\\]')).last` verwenden
+4. Regelmäßige Überprüfung der Firestore-/Storage-Regeln bei neuen Collections/Pfaden

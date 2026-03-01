@@ -24,6 +24,8 @@ class InformationAnlegenScreen extends StatefulWidget {
   final String? defaultTyp;
   /// Beim Bearbeiten: Löschen-Button anzeigen (für berechtigte Rollen)
   final bool canDelete;
+  /// Nur anzeigen, keine Bearbeitung (für User mit Lese-Recht)
+  final bool readOnly;
   /// Optionale Container-Typen (id → label); sonst Standard-Typen
   final List<String>? containerTypeIds;
   final Map<String, String>? containerTypeLabels;
@@ -39,6 +41,7 @@ class InformationAnlegenScreen extends StatefulWidget {
     this.initialInfo,
     this.defaultTyp,
     this.canDelete = false,
+    this.readOnly = false,
     this.containerTypeIds,
     this.containerTypeLabels,
   });
@@ -151,14 +154,15 @@ class _InformationAnlegenScreenState extends State<InformationAnlegenScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isReadOnly = widget.readOnly;
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
-        title: widget.initialInfo != null ? 'Information bearbeiten' : 'Neue Information',
+        title: isReadOnly ? 'Information' : (widget.initialInfo != null ? 'Information bearbeiten' : 'Neue Information'),
         onBack: widget.onBack,
         leadingIcon: Icons.close,
         actions: [
-          if (widget.canDelete && widget.initialInfo != null)
+          if (!isReadOnly && widget.canDelete && widget.initialInfo != null)
             IconButton(
               icon: Icon(Icons.delete_outline, color: Colors.red[700]),
               tooltip: 'Löschen',
@@ -190,11 +194,12 @@ class _InformationAnlegenScreenState extends State<InformationAnlegenScreen> {
                 }
               },
             ),
-          FilledButton(
-            onPressed: _saving ? null : _speichern,
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
-            child: _saving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Speichern'),
-          ),
+          if (!isReadOnly)
+            FilledButton(
+              onPressed: _saving ? null : _speichern,
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
+              child: _saving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Speichern'),
+            ),
           const SizedBox(width: 16),
         ],
       ),
@@ -211,7 +216,7 @@ class _InformationAnlegenScreenState extends State<InformationAnlegenScreen> {
                     leading: const Icon(Icons.calendar_today, color: AppTheme.primary),
                     title: const Text('Datum'),
                     subtitle: Text(_formatDate(_datum)),
-                    onTap: () async {
+                    onTap: isReadOnly ? null : () async {
                       final d = await showDatePicker(context: context, initialDate: _datum, firstDate: DateTime(2020), lastDate: DateTime(2030));
                       if (d != null && mounted) setState(() => _datum = d);
                     },
@@ -223,7 +228,7 @@ class _InformationAnlegenScreenState extends State<InformationAnlegenScreen> {
                     leading: const Icon(Icons.access_time, color: AppTheme.primary),
                     title: const Text('Uhrzeit'),
                     subtitle: Text('${_uhrzeit.hour.toString().padLeft(2, '0')}:${_uhrzeit.minute.toString().padLeft(2, '0')}'),
-                    onTap: () async {
+                    onTap: isReadOnly ? null : () async {
                       final t = await showTimePicker(context: context, initialTime: _uhrzeit);
                       if (t != null && mounted) setState(() => _uhrzeit = t);
                     },
@@ -245,12 +250,13 @@ class _InformationAnlegenScreenState extends State<InformationAnlegenScreen> {
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: _laufzeit,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Gültigkeit', border: OutlineInputBorder()),
                     items: _laufzeitOptions.entries.map((e) => DropdownMenuItem(
                       value: e.key,
-                      child: Text(e.value),
+                      child: Text(e.value, overflow: TextOverflow.ellipsis, maxLines: 1),
                     )).toList(),
-                    onChanged: (v) => setState(() => _laufzeit = v ?? _laufzeit),
+                    onChanged: isReadOnly ? null : (v) => setState(() => _laufzeit = v ?? _laufzeit),
                   ),
                 ),
               ],
@@ -258,46 +264,51 @@ class _InformationAnlegenScreenState extends State<InformationAnlegenScreen> {
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _typ,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Typ (Container)', border: OutlineInputBorder()),
               items: (widget.containerTypeIds ?? InformationssystemService.containerTypes).map((id) {
                 final label = widget.containerTypeLabels?[id] ?? InformationssystemService.containerLabels[id] ?? id;
-                return DropdownMenuItem(value: id, child: Text(label));
+                return DropdownMenuItem(value: id, child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1));
               }).toList(),
-              onChanged: (v) => setState(() => _typ = v ?? _typ),
+              onChanged: isReadOnly ? null : (v) => setState(() => _typ = v ?? _typ),
             ),
             const SizedBox(height: 16),
             if (widget.kategorien.isNotEmpty) ...[
               DropdownButtonFormField<String>(
                 value: _kategorie.isEmpty ? null : _kategorie,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Kategorie', border: OutlineInputBorder()),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('— Keine —')),
-                  ...widget.kategorien.map((k) => DropdownMenuItem(value: k, child: Text(k))),
+                  const DropdownMenuItem(value: null, child: Text('— Keine —', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                  ...widget.kategorien.map((k) => DropdownMenuItem(value: k, child: Text(k, overflow: TextOverflow.ellipsis, maxLines: 1))),
                 ],
-                onChanged: (v) => setState(() => _kategorie = v ?? ''),
+                onChanged: isReadOnly ? null : (v) => setState(() => _kategorie = v ?? ''),
               ),
               const SizedBox(height: 16),
             ],
             DropdownButtonFormField<String>(
               value: _prioritaet,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Priorität', border: OutlineInputBorder()),
               items: const [
-                DropdownMenuItem(value: 'normal', child: Text('Normal')),
-                DropdownMenuItem(value: 'sehr_wichtig', child: Text('Sehr wichtig (rot in Übersicht)')),
+                DropdownMenuItem(value: 'normal', child: Text('Normal', overflow: TextOverflow.ellipsis, maxLines: 1)),
+                DropdownMenuItem(value: 'sehr_wichtig', child: Text('Sehr wichtig (rot in Übersicht)', overflow: TextOverflow.ellipsis, maxLines: 1)),
               ],
-              onChanged: (v) => setState(() => _prioritaet = v ?? 'normal'),
+              onChanged: isReadOnly ? null : (v) => setState(() => _prioritaet = v ?? 'normal'),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _betreffCtrl,
               decoration: const InputDecoration(labelText: 'Betreff / Überschrift', border: OutlineInputBorder()),
               maxLines: 1,
+              readOnly: isReadOnly,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _textCtrl,
               decoration: const InputDecoration(labelText: 'Information', border: OutlineInputBorder(), alignLabelWithHint: true),
               maxLines: 6,
+              readOnly: isReadOnly,
             ),
           ],
         ),

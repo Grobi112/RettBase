@@ -10,17 +10,17 @@
 2. **Android** danach (Play Store)
 3. **iOS** danach (ebenso)
 
-## Automatische Versionserhöhung (Web)
+## Versionserhöhung (Web)
 
-Bei `./flutter build web` (oder `./fw`) wird **automatisch**:
-- `version` in version.json erhöht (z.B. 1.0.1 → 1.0.2)
+Bei `flutter build web` (oder `./fw`, `./scripts/build_web.sh`, `./scripts/deploy_web.sh`) wird **automatisch**:
+- `version` in version.json erhöht (z.B. 1.0.9 → 1.0.10)
 - `index.html` (meta rettbase-version) aktualisiert
 
 `buildNumber` bleibt unverändert – APK-Updates laufen über den Play Store. Die Version in `pubspec.yaml` wird bei nativen Builds separat gepflegt.
 
 ## version.json
 
-Wird vom Skript `web/increment_version.js` automatisch gepflegt (bei ./fw, ./scripts/build_web.sh):
+Wird vom Skript `web/increment_version.js` automatisch gepflegt (bei flutter build web, ./fw, ./scripts/build_web.sh, ./scripts/deploy_web.sh).
 
 ```json
 {

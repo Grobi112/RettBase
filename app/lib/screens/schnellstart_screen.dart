@@ -62,7 +62,9 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
       if (menuStructure.isEmpty) {
         menuStructure = await _menuService.loadLegacyGlobalMenu();
       }
-      final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
+      final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure)
+          .where((id) => id != 'schichtuebersicht') // Nur über Schichtanmeldung → Einstellungen
+          .toList();
       var modules = await _modulesService.getModulesForSchnellstart(
         widget.companyId,
         authData.role,
@@ -91,6 +93,7 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
         widget.companyId,
         authData.role,
         bereich: bereich,
+        menuModuleIds: menuModuleIds,
       );
       if (mounted) {
         setState(() {
@@ -140,7 +143,7 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
               padding: const EdgeInsets.all(20),
               children: [
                 Text(
-                  'Die Hauptseite zeigt standardmäßig alle für Ihre Rolle und Ihren Bereich freigegebenen Module. Hier können Sie optional bis zu 6 Module auswählen – dann wird nur diese Auswahl angezeigt. Zum Zurücksetzen: alle Positionen auf „— Kein Modul —“ setzen und speichern.',
+                  'Die Hauptseite zeigt standardmäßig die Module aus dem Menü. Hier können Sie optional bis zu 6 Module auswählen – dann wird nur diese Auswahl angezeigt. Zum Zurücksetzen: alle Positionen auf „— Kein Modul —“ setzen und speichern.',
                   style: TextStyle(
                     fontSize: 14,
                     color: AppTheme.textSecondary,
@@ -152,7 +155,9 @@ class _SchnellstartScreenState extends State<SchnellstartScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: DropdownButtonFormField<String>(
-                      value: _slots[i] != null && _slots[i]!.isNotEmpty ? _slots[i] : null,
+                      value: _slots[i] != null && _slots[i]!.isNotEmpty && _allModules.any((m) => m.id == _slots[i])
+                          ? _slots[i]
+                          : null,
                       isExpanded: true,
                       decoration: InputDecoration(
                         labelText: 'Position ${i + 1}',

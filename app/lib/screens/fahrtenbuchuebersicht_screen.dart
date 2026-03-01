@@ -5,17 +5,20 @@ import '../models/fahrtenbuch_model.dart';
 import '../services/fahrtenbuch_service.dart';
 import 'fahrtenbuch_screen.dart';
 import 'fahrtenbuch_druck_screen.dart';
+import 'fahrtenbuch_v2_uebersicht_screen.dart';
 
 /// Fahrtenbuchübersicht – Übersicht aller Fahrtenbücher und Einträge
 class FahrtenbuchuebersichtScreen extends StatefulWidget {
   final String companyId;
   final String? title;
   final VoidCallback onBack;
+  final String? userRole;
 
   const FahrtenbuchuebersichtScreen({
     required this.companyId,
     this.title,
     required this.onBack,
+    this.userRole,
   });
 
   @override
@@ -312,36 +315,38 @@ class _FahrtenbuchuebersichtScreenState extends State<FahrtenbuchuebersichtScree
               icon: const Icon(Icons.clear_all, size: 18),
               label: const Text('Zurücksetzen'),
             ),
-            const SizedBox(width: 8),
-            Tooltip(
-              message: 'Drucken / Als PDF speichern',
-              child: IconButton(
-                onPressed: filteredList.isEmpty
-                    ? null
-                    : () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => FahrtenbuchDruckScreen(
-                              eintraege: filteredList,
-                              kennzeichen: _selectedFahrzeug?.displayLabel ?? 'Fahrtenbuch',
-                              filterVon: _filterVon,
-                              filterBis: _filterBis,
-                              onBack: () => Navigator.of(context).pop(),
+            if (FahrtenbuchV2UebersichtScreen.canPrint(widget.userRole)) ...[
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Drucken / Als PDF speichern',
+                child: IconButton(
+                  onPressed: filteredList.isEmpty
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => FahrtenbuchDruckScreen(
+                                eintraege: filteredList,
+                                kennzeichen: _selectedFahrzeug?.displayLabel ?? 'Fahrtenbuch',
+                                filterVon: _filterVon,
+                                filterBis: _filterBis,
+                                onBack: () => Navigator.of(context).pop(),
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                icon: SvgPicture.asset(
-                  'img/icon_print.svg',
-                  width: 24,
-                  height: 24,
-                  colorFilter: ColorFilter.mode(
-                    filteredList.isEmpty ? Colors.grey : AppTheme.primary,
-                    BlendMode.srcIn,
+                          );
+                        },
+                  icon: SvgPicture.asset(
+                    'img/icon_print.svg',
+                    width: 24,
+                    height: 24,
+                    colorFilter: ColorFilter.mode(
+                      filteredList.isEmpty ? Colors.grey : AppTheme.primary,
+                      BlendMode.srcIn,
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
             const SizedBox(width: 24),
           ],
         ),
@@ -504,6 +509,7 @@ class _FahrtenbuchuebersichtScreenState extends State<FahrtenbuchuebersichtScree
           onBack: () => Navigator.of(context).pop(),
           initialVorlage: null,
           initialEintrag: e,
+          userRole: widget.userRole,
         ),
       ),
     ).then((_) => setState(() {}));

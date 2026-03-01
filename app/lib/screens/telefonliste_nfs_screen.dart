@@ -70,13 +70,22 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
   List<Mitarbeiter> _filter(List<Mitarbeiter> list) {
     final active = list.where((m) => m.active).toList();
     final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return active;
-    return active.where((m) {
-      final name = '${m.nachname ?? ''} ${m.vorname ?? ''}'.toLowerCase();
-      final ort = (m.ort ?? '').toLowerCase();
-      final tel = (m.telefon ?? m.handynummer ?? '').toLowerCase();
-      return name.contains(q) || ort.contains(q) || tel.contains(q);
-    }).toList();
+    final filtered = q.isEmpty
+        ? active
+        : active.where((m) {
+            final name = '${m.nachname ?? ''} ${m.vorname ?? ''}'.toLowerCase();
+            final ort = (m.ort ?? '').toLowerCase();
+            final tel = (m.telefon ?? m.handynummer ?? '').toLowerCase();
+            return name.contains(q) || ort.contains(q) || tel.contains(q);
+          }).toList();
+    filtered.sort((a, b) {
+      final na = (a.nachname ?? '').toLowerCase();
+      final nb = (b.nachname ?? '').toLowerCase();
+      final cmp = na.compareTo(nb);
+      if (cmp != 0) return cmp;
+      return (a.vorname ?? '').toLowerCase().compareTo((b.vorname ?? '').toLowerCase());
+    });
+    return filtered;
   }
 
   Future<void> _launchTel(String number) async {
@@ -181,7 +190,10 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
                     ),
                   );
                 }
-                final useCompactLayout = Responsive.isPhone(context);
+                final isPortrait = MediaQuery.orientationOf(context) == Orientation.portrait;
+                final isPhone = Responsive.isPhone(context);
+                final useStackedLayout = isPortrait && isPhone;
+                final useSingleLinePhone = !isPortrait;
                 return ListView(
                   padding: EdgeInsets.fromLTRB(
                     Responsive.horizontalPadding(context),
@@ -190,8 +202,8 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
                     MediaQuery.paddingOf(context).bottom + 16,
                   ),
                   children: [
-                    _buildHeader(useCompactLayout),
-                    ...list.map((m) => _buildRow(m, useCompactLayout)),
+                    if (!useStackedLayout) _buildHeader(!isPhone),
+                    ...list.map((m) => _buildRow(m, useStackedLayout: useStackedLayout, useSingleLinePhone: useSingleLinePhone, isCompact: isPhone)),
                   ],
                 );
               },
@@ -227,7 +239,12 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
     );
   }
 
-  Widget _buildRow(Mitarbeiter m, bool compact) {
+  Widget _buildRow(
+    Mitarbeiter m, {
+    required bool useStackedLayout,
+    required bool useSingleLinePhone,
+    required bool isCompact,
+  }) {
     final nachname = m.nachname ?? '';
     final vorname = m.vorname ?? '';
     final wohnort = _wohnort(m);
@@ -236,26 +253,27 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
     Widget _phoneLink(String text) {
       final display = text.trim().isEmpty ? '' : text;
       final hasNumber = RegExp(r'\d').hasMatch(text);
-      final formatted = formatPhoneForDisplay(display);
+      final formatted = useSingleLinePhone
+          ? formatPhoneForDisplaySingleLine(display)
+          : formatPhoneForDisplay(display);
+      final content = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Text(
+          display.isEmpty ? '-' : formatted,
+          style: TextStyle(
+            fontSize: 14,
+            color: hasNumber ? AppTheme.primary : Colors.grey[600],
+            decoration: hasNumber ? TextDecoration.underline : null,
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: useSingleLinePhone ? 1 : 2,
+          textAlign: useStackedLayout ? TextAlign.left : TextAlign.center,
+        ),
+      );
       return InkWell(
         onTap: hasNumber ? () => _launchTel(text) : null,
         borderRadius: BorderRadius.circular(8),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Text(
-              display.isEmpty ? '-' : formatted,
-              style: TextStyle(
-                fontSize: 14,
-                color: hasNumber ? AppTheme.primary : Colors.grey[600],
-                decoration: hasNumber ? TextDecoration.underline : null,
-              ),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 2,
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
+        child: useStackedLayout ? Align(alignment: Alignment.centerLeft, child: content) : Center(child: content),
       );
     }
 
@@ -264,11 +282,91 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
     const textStyle = TextStyle(fontSize: 14);
     final textStyleMuted = TextStyle(fontSize: 14, color: Colors.grey[700]);
 
+    if (useStackedLayout) {
+      final hasNumber = RegExp(r'\d').hasMatch(tel);
+      final formatted = formatPhoneForDisplaySingleLine(tel);
+      return Card(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  m.displayName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (wohnort.isNotEmpty) ...[
+                      Expanded(
+                        child: Text(
+                          wohnort,
+                          style: textStyleMuted.copyWith(fontSize: 13),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                      if (tel.trim().isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text('-', style: textStyleMuted.copyWith(fontSize: 13)),
+                        const SizedBox(width: 8),
+                      ],
+                    ],
+                    Expanded(
+                      child: InkWell(
+                        onTap: hasNumber ? () => _launchTel(tel) : null,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.phone_outlined,
+                              size: 18,
+                              color: hasNumber ? AppTheme.primary : Colors.grey[500],
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                tel.trim().isEmpty ? '-' : formatted,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: hasNumber ? AppTheme.primary : Colors.grey[600],
+                                  decoration: hasNumber ? TextDecoration.underline : null,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: compact
+        child: isCompact
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [

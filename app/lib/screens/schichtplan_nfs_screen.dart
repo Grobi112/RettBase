@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_data_service.dart';
 import '../services/auth_service.dart';
+import '../services/schichtplan_nfs_service.dart';
 import 'schichtplan_nfs_stundenplan_screen.dart';
 import 'schichtplan_nfs_meldungen_body.dart';
 import 'schichtplan_nfs_einstellungen_screen.dart';
@@ -40,13 +42,15 @@ class SchichtplanNfsScreen extends StatefulWidget {
   State<SchichtplanNfsScreen> createState() => _SchichtplanNfsScreenState();
 }
 
-class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
-    with SingleTickerProviderStateMixin {
+class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen> {
   final List<void Function()> _refreshCallbacks = [];
-  late TabController _tabController;
+  int _selectedTabIndex = 0; // 0 = Monat, 1 = Meldungen
   final _authService = AuthService();
   final _authDataService = AuthDataService();
+  final _schichtplanService = SchichtplanNfsService();
   String? _effectiveRole;
+  int _meldungenCount = 0;
+  StreamSubscription<int>? _meldungenCountSub;
 
   void _refreshAllBodies() {
     for (final cb in _refreshCallbacks) {
@@ -57,16 +61,29 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
   @override
   void initState() {
     super.initState();
-    // Zunächst restriktiv (nur Monat) – Rolle wird asynchron geladen
-    _tabController = TabController(length: 1, vsync: this, initialIndex: 0);
-    _tabController.addListener(() => setState(() {}));
     _loadRole();
+  }
+
+  void _startMeldungenCountStream() {
+    if (!_canSeeMeldungen(_role)) return;
+    _meldungenCountSub?.cancel();
+    _meldungenCountSub = _schichtplanService
+        .streamMeldungenCount(widget.companyId)
+        .listen((count) {
+      if (mounted) setState(() => _meldungenCount = count);
+    });
+  }
+
+  void _stopMeldungenCountStream() {
+    _meldungenCountSub?.cancel();
+    _meldungenCountSub = null;
   }
 
   Future<void> _loadRole() async {
     final user = _authService.currentUser;
     if (user == null) {
       if (mounted) setState(() => _effectiveRole = widget.userRole);
+      _startMeldungenCountStream();
       return;
     }
     final authData = await _authDataService.getAuthData(
@@ -79,10 +96,10 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
     final hadMeldungen = _canSeeMeldungen(_effectiveRole ?? widget.userRole);
     final hasMeldungen = _canSeeMeldungen(newRole);
     setState(() => _effectiveRole = newRole);
-    if (hadMeldungen != hasMeldungen) {
-      _tabController.dispose();
-      _tabController = TabController(length: hasMeldungen ? 2 : 1, vsync: this, initialIndex: 0);
-      _tabController.addListener(() => setState(() {}));
+    if (hasMeldungen) {
+      _startMeldungenCountStream();
+    } else {
+      _stopMeldungenCountStream();
     }
   }
 
@@ -90,7 +107,7 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _stopMeldungenCountStream();
     super.dispose();
   }
 
@@ -153,6 +170,76 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
     );
   }
 
+  PreferredSizeWidget _buildTabBar() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(48),
+      child: Container(
+        color: Colors.white,
+        child: Row(
+          children: [
+            _buildTab(0, 'Monat'),
+            _buildTab(1, 'Meldungen', badgeCount: _meldungenCount),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTab(int index, String label, {int badgeCount = 0}) {
+    final isSelected = _selectedTabIndex == index;
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _selectedTabIndex = index),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isSelected ? AppTheme.primary : Colors.transparent,
+                  width: 3,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected ? AppTheme.primary : AppTheme.textMuted,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+                if (badgeCount > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.all(Radius.circular(10)),
+                    ),
+                    child: Text(
+                      badgeCount > 99 ? '99+' : '$badgeCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,17 +247,18 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
       appBar: AppTheme.buildModuleAppBar(
         title: widget.title ?? 'Schichtplan',
         onBack: widget.onBack,
+        bottom: _canSeeMeldungen(_role) ? _buildTabBar() : null,
         actions: [
-          TextButton.icon(
+          IconButton(
             onPressed: _openOffeneSchichtMelden,
-            icon: const Icon(Icons.person_add_outlined, size: 20),
-            label: const Text('Verfügbarkeit angeben'),
+            icon: const Icon(Icons.person_add_outlined),
+            tooltip: 'Verfügbarkeit angeben',
           ),
           if (_canEditEinstellungen(_role)) ...[
-            TextButton.icon(
+            IconButton(
               onPressed: _openSchichtAnlegen,
-              icon: const Icon(Icons.add_circle_outline, size: 20),
-              label: const Text('Schicht anlegen'),
+              icon: const Icon(Icons.add_circle_outline),
+              tooltip: 'Schicht anlegen',
             ),
             IconButton(
               icon: const Icon(Icons.settings),
@@ -180,47 +268,28 @@ class _SchichtplanNfsScreenState extends State<SchichtplanNfsScreen>
           ],
         ],
       ),
-      body: Column(
-        children: [
-          if (_canSeeMeldungen(_role))
-            TabBar(
-              controller: _tabController,
-              labelColor: AppTheme.primary,
-              unselectedLabelColor: AppTheme.textMuted,
-              indicatorColor: AppTheme.primary,
-              tabs: const [
-                Tab(text: 'Monat'),
-                Tab(text: 'Meldungen'),
+      body: _canSeeMeldungen(_role)
+          ? IndexedStack(
+              index: _selectedTabIndex,
+              children: [
+                SchichtplanNfsMonatsuebersichtBody(
+                  companyId: widget.companyId,
+                  userRole: _role,
+                  onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
+                ),
+                SchichtplanNfsMeldungenBody(
+                  companyId: widget.companyId,
+                  userRole: _role,
+                  onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
+                  onMeldungAngenommen: _refreshAllBodies,
+                ),
               ],
             )
-          else
-            const SizedBox.shrink(),
-          Expanded(
-            child: _canSeeMeldungen(_role)
-                ? TabBarView(
-                    controller: _tabController,
-                    children: [
-                      SchichtplanNfsMonatsuebersichtBody(
-                        companyId: widget.companyId,
-                        userRole: _role,
-                        onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
-                      ),
-                      SchichtplanNfsMeldungenBody(
-                        companyId: widget.companyId,
-                        userRole: _role,
-                        onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
-                        onMeldungAngenommen: _refreshAllBodies,
-                      ),
-                    ],
-                  )
-                : SchichtplanNfsMonatsuebersichtBody(
-                    companyId: widget.companyId,
-                    userRole: _role,
-                    onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
-                  ),
-          ),
-        ],
-      ),
+          : SchichtplanNfsMonatsuebersichtBody(
+              companyId: widget.companyId,
+              userRole: _role,
+              onRegisterRefresh: (fn) => _refreshCallbacks.add(fn),
+            ),
     );
   }
 }

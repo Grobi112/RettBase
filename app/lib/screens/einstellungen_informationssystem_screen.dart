@@ -30,7 +30,7 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
   final _authService = AuthService();
   final _authDataService = AuthDataService();
 
-  List<String?> _slots = [null, null];
+  List<String?> _slots = List.filled(InformationssystemService.maxContainerSlots, null);
   List<String> _kategorien = [];
   List<String> _containerTypeIds = InformationssystemService.defaultContainerTypeIds;
   Map<String, String> _containerLabels = InformationssystemService.defaultContainerLabels;
@@ -102,10 +102,14 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
           _containerTypeIds = (results[2] as List<String>).isNotEmpty ? results[2] as List<String> : InformationssystemService.defaultContainerTypeIds;
           _containerLabels = (results[3] as Map<String, String>).isNotEmpty ? results[3] as Map<String, String> : InformationssystemService.defaultContainerLabels;
           final rawSlots = results[0] as List<String?>;
-          _slots = rawSlots.map((s) {
-            if (s == null || s.isEmpty) return null;
+          _slots = rawSlots.take(InformationssystemService.maxContainerSlots).map((s) {
+            if (s == null || s.isEmpty || s.toString().trim() == 'null') return null;
             return _containerTypeIds.contains(s) ? s : null;
           }).toList();
+          while (_slots.length < InformationssystemService.maxContainerSlots) {
+            _slots.add(null);
+          }
+          _slots = _slots.take(InformationssystemService.maxContainerSlots).toList();
           _kategorien = results[1] as List<String>;
           if (_kategorien.isNotEmpty && _formKategorie.isEmpty) _formKategorie = _kategorien.first;
           if (_containerTypeIds.isNotEmpty && !_containerTypeIds.contains(_formTyp)) _formTyp = _containerTypeIds.first;
@@ -115,7 +119,7 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
     } catch (_) {
       if (mounted) {
         setState(() {
-          _slots = [null, null];
+          _slots = List.filled(InformationssystemService.maxContainerSlots, null);
           _kategorien = [];
           _loading = false;
         });
@@ -201,9 +205,10 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
 
   void _ensureNoDuplicate(String? selected, int changedIndex) {
     if (selected == null || selected.isEmpty) return;
-    final other = changedIndex == 0 ? 1 : 0;
-    if (_slots[other] == selected) {
-      _slots[other] = null;
+    for (var i = 0; i < _slots.length; i++) {
+      if (i != changedIndex && _slots[i] == selected) {
+        _slots[i] = null;
+      }
     }
   }
 
@@ -219,6 +224,7 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
         titleWidget: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             SvgPicture.asset(
               'img/icon_informationssystem.svg',
@@ -227,7 +233,14 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
               colorFilter: ColorFilter.mode(AppTheme.primary, BlendMode.srcIn),
             ),
             const SizedBox(width: 10),
-            Text('Informationssystem', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: Text(
+                'Informationssystem',
+                style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ],
         ),
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
@@ -248,38 +261,32 @@ class _EinstellungenInformationssystemScreenState extends State<EinstellungenInf
                 _ExpandableSectionCard(
                   icon: Icons.swap_horiz,
                   title: 'Sortierung Container Hauptseite',
-                  subtitle: 'Container auf der Hauptseite (Informationen, Verkehrslage) anordnen',
+                  subtitle: 'Container auf der Hauptseite anordnen (max. ${InformationssystemService.maxContainerSlots})',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Wählen Sie pro Position (von links nach rechts), welcher Container angezeigt werden soll.',
+                        'Wählen Sie pro Position, welcher Container angezeigt werden soll. „— Kein Container —“ = nicht anzeigen.',
                         style: TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
                       ),
                       const SizedBox(height: 16),
-                      _SlotDropdown(
-                        label: 'Position 1 (links)',
-                        value: _slots[0],
-                        containerTypeIds: _containerTypeIds,
-                        containerLabels: _containerLabels,
-                        onChanged: (v) => setState(() {
-                          _slots = [_slots[0], _slots[1]];
-                          _slots[0] = v;
-                          _ensureNoDuplicate(v, 0);
-                        }),
-                      ),
-                      const SizedBox(height: 12),
-                      _SlotDropdown(
-                        label: 'Position 2 (rechts)',
-                        value: _slots[1],
-                        containerTypeIds: _containerTypeIds,
-                        containerLabels: _containerLabels,
-                        onChanged: (v) => setState(() {
-                          _slots = [_slots[0], _slots[1]];
-                          _slots[1] = v;
-                          _ensureNoDuplicate(v, 1);
-                        }),
-                      ),
+                      ...List.generate(InformationssystemService.maxContainerSlots, (i) {
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: i < InformationssystemService.maxContainerSlots - 1 ? 12 : 0),
+                          child: _SlotDropdown(
+                            label: 'Position ${i + 1}',
+                            value: i < _slots.length ? _slots[i] : null,
+                            containerTypeIds: _containerTypeIds,
+                            containerLabels: _containerLabels,
+                            onChanged: (v) => setState(() {
+                              _slots = List<String?>.from(_slots);
+                              while (_slots.length <= i) _slots.add(null);
+                              _slots[i] = v;
+                              _ensureNoDuplicate(v, i);
+                            }),
+                          ),
+                        );
+                      }),
                     ],
                   ),
                 ),

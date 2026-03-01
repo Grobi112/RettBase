@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/fahrtenbuch_vorlage.dart';
+import '../models/fahrtenbuch_v2_vorlage.dart';
 import '../services/schichtanmeldung_service.dart';
 import '../services/auth_service.dart';
+import '../services/auth_data_service.dart';
 import '../services/fahrtenbuch_service.dart';
+import '../services/fahrtenbuch_v2_service.dart';
+import 'schichtanmeldung_einstellungen_screen.dart';
 
 /// Tätigkeit-Optionen für Dropdown
 const _taetigkeitOptions = ['hauptamtlich', 'nebenamtlich', 'honorar'];
@@ -12,9 +16,12 @@ const _taetigkeitOptions = ['hauptamtlich', 'nebenamtlich', 'honorar'];
 class SchichtanmeldungScreen extends StatefulWidget {
   final String companyId;
   final VoidCallback onBack;
-  final void Function(FahrtenbuchVorlage vorlage)? onFahrtenbuchOpen;
+  final void Function(dynamic vorlage)? onFahrtenbuchOpen;
   final bool hideAppBar;
   final String? title;
+  final String? userRole;
+  /// 'v2' = Fahrtenbuch V2, sonst V1
+  final String? fahrtenbuchVariant;
 
   const SchichtanmeldungScreen({
     required this.companyId,
@@ -22,6 +29,8 @@ class SchichtanmeldungScreen extends StatefulWidget {
     this.onFahrtenbuchOpen,
     this.hideAppBar = false,
     this.title,
+    this.userRole,
+    this.fahrtenbuchVariant,
   });
 
   @override
@@ -31,8 +40,18 @@ class SchichtanmeldungScreen extends StatefulWidget {
 class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
   final _service = SchichtanmeldungService();
   final _authService = AuthService();
+  final _authDataService = AuthDataService();
   final _fahrtenbuchService = FahrtenbuchService();
+  final _fahrtenbuchV2Service = FahrtenbuchV2Service();
   final _bemerkungController = TextEditingController();
+
+  String? _userRole;
+
+  bool get _canAccessEinstellungen {
+    final r = (_userRole ?? widget.userRole ?? '').toLowerCase().trim();
+    return r == 'admin' || r == 'geschaeftsfuehrung' ||
+        r == 'rettungsdienstleitung' || r == 'wachleitung';
+  }
 
   SchichtplanMitarbeiter? _mitarbeiter;
   SchichtanmeldungEintrag? _aktiveSchichtanmeldung;
@@ -54,7 +73,45 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
   String get _dayId =>
       '${_selectedDate.day.toString().padLeft(2, '0')}.${_selectedDate.month.toString().padLeft(2, '0')}.${_selectedDate.year}';
 
-  Future<FahrtenbuchVorlage?> _buildFahrtenbuchVorlage(SchichtanmeldungEintrag e) async {
+  /// Synchron – sofort öffnen, Fahrer/kmAnfang werden im Formular nachgeladen
+  dynamic _buildFahrtenbuchVorlageMinimal(SchichtanmeldungEintrag e) {
+    if (e.datum.isEmpty) return null;
+    DateTime datumTag;
+    try {
+      final p = e.datum.split('.');
+      if (p.length != 3) return null;
+      datumTag = DateTime(int.parse(p[2]), int.parse(p[1]), int.parse(p[0]));
+    } catch (_) {
+      datumTag = _selectedDate;
+    }
+    final fahrzeugKurz = _allFahrzeuge.where((f) => f.id == e.fahrzeugId).firstOrNull;
+    final rufname = fahrzeugKurz?.displayName ?? e.fahrzeugId;
+    final kennzeichen = fahrzeugKurz?.kennzeichen;
+    if (widget.fahrtenbuchVariant == 'v2') {
+      return FahrtenbuchV2Vorlage(
+        fahrzeugId: e.fahrzeugId,
+        fahrzeugRufname: rufname,
+        kennzeichen: kennzeichen,
+        nameFahrer: null,
+        kmAnfang: null,
+        datum: datumTag,
+        fahrerOptionen: const [],
+      );
+    }
+    return FahrtenbuchVorlage(
+      fahrzeugId: e.fahrzeugId,
+      fahrzeugRufname: rufname,
+      kennzeichen: kennzeichen,
+      nameFahrer: null,
+      nameBeifahrer: null,
+      kmAnfang: null,
+      datum: datumTag,
+      fahrerOptionen: const [],
+      beifahrerOptionen: const [],
+    );
+  }
+
+  Future<dynamic> _buildFahrtenbuchVorlage(SchichtanmeldungEintrag e) async {
     DateTime datumTag;
     try {
       final p = e.datum.split('.');
@@ -84,9 +141,7 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
     final fahrer = gruppe.where((a) => a.rolle == 'fahrer').toList();
     final beifahrer = gruppe.where((a) => a.rolle != 'fahrer').toList();
     String? nameFahrer = fahrer.isNotEmpty ? mitarbeiterName(fahrer.first.mitarbeiterId) : null;
-    String? nameBeifahrer = beifahrer.isNotEmpty ? mitarbeiterName(beifahrer.first.mitarbeiterId) : null;
     final fahrerNamen = fahrer.map((a) => mitarbeiterName(a.mitarbeiterId)).where((n) => n != '–' && n.isNotEmpty).toSet().toList();
-    final beifahrerNamen = beifahrer.map((a) => mitarbeiterName(a.mitarbeiterId)).where((n) => n != '–' && n.isNotEmpty).toSet().toList();
     final fahrzeugKurz = _allFahrzeuge.where((f) => f.id == e.fahrzeugId).firstOrNull;
     final rufname = fahrzeugKurz?.displayName ?? e.fahrzeugId;
     var kennzeichen = fahrzeugKurz?.kennzeichen;
@@ -97,6 +152,20 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
         kennzeichen = ff?.kennzeichen;
       } catch (_) {}
     }
+    if (widget.fahrtenbuchVariant == 'v2') {
+      final kmAnfang = await _fahrtenbuchV2Service.getLetzterKmEnde(widget.companyId, rufname);
+      return FahrtenbuchV2Vorlage(
+        fahrzeugId: e.fahrzeugId,
+        fahrzeugRufname: rufname,
+        kennzeichen: kennzeichen,
+        nameFahrer: nameFahrer,
+        kmAnfang: kmAnfang,
+        datum: datumTag,
+        fahrerOptionen: fahrerNamen,
+      );
+    }
+    final nameBeifahrer = beifahrer.isNotEmpty ? mitarbeiterName(beifahrer.first.mitarbeiterId) : null;
+    final beifahrerNamen = beifahrer.map((a) => mitarbeiterName(a.mitarbeiterId)).where((n) => n != '–' && n.isNotEmpty).toSet().toList();
     final kmAnfang = await _fahrtenbuchService.getLetzterKmEnde(widget.companyId, rufname);
     return FahrtenbuchVorlage(
       fahrzeugId: e.fahrzeugId,
@@ -145,6 +214,19 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
     super.dispose();
   }
 
+  void _openEinstellungen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SchichtanmeldungEinstellungenScreen(
+          companyId: widget.companyId,
+          userRole: _userRole ?? widget.userRole ?? 'user',
+          onBack: () => Navigator.pop(context),
+        ),
+      ),
+    );
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -154,6 +236,15 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
       final user = _authService.currentUser;
       final email = user?.email ?? '';
       final uid = user?.uid ?? '';
+
+      if (widget.userRole == null && user != null) {
+        final authData = await _authDataService.getAuthData(
+          user.uid,
+          email,
+          widget.companyId,
+        );
+        if (mounted) _userRole = authData.role;
+      }
 
       final standorte = await _service.loadStandorte(widget.companyId);
       final schichten = await _service.loadSchichten(widget.companyId);
@@ -259,6 +350,15 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
       appBar: AppTheme.buildModuleAppBar(
         title: widget.title ?? 'Schichtanmeldung',
         onBack: widget.onBack,
+        actions: _canAccessEinstellungen
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: _openEinstellungen,
+                  tooltip: 'Einstellungen',
+                ),
+              ]
+            : null,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -384,8 +484,9 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: () async {
-                  final vorlage = await _buildFahrtenbuchVorlage(e);
+                onPressed: () {
+                  // Sofort öffnen mit Minimal-Vorlage (Fahrzeug/Kennzeichen aus _allFahrzeuge)
+                  final vorlage = _buildFahrtenbuchVorlageMinimal(e);
                   if (vorlage != null && mounted) {
                     widget.onFahrtenbuchOpen!(vorlage);
                   }
@@ -555,6 +656,7 @@ class _SchichtanmeldungScreenState extends State<SchichtanmeldungScreen> {
   }) {
     return DropdownButtonFormField<T>(
       value: value,
+      isExpanded: true,
       decoration: InputDecoration(
         labelText: labelText,
         border: const OutlineInputBorder(),

@@ -16,7 +16,7 @@ alwaysApply: true
 
 ## Relevante Stellen
 
-- **Nur Web:** `lib/firebase_options.dart` → `web`; `lib/screens/module_webview_widget.dart` (Auth-Bridge HTML); `lib/screens/webview_screen.dart` (Auth-Bridge); `lib/screens/module_iframe_web.dart` / `module_iframe_stub.dart`.
+- **Nur Web:** `lib/firebase_options.dart` → `web`; `lib/screens/module_webview_widget.dart` (Auth-Bridge HTML); `lib/screens/module_iframe_web.dart` / `module_iframe_stub.dart`.
 - **Nur Native:** `lib/firebase_options.dart` → `android`, `ios`, `macos`.
 - **Gemeinsam (beide nutzen):** z. B. `lib/services/login_service.dart`, `lib/services/modules_service.dart`, allgemeine Screens – hier nur ändern, wenn der Auftrag ausdrücklich beide betrifft oder die Logik für eine Plattform spezifisch ist.
 

@@ -11,6 +11,7 @@ import '../services/auth_data_service.dart';
 import '../services/schicht_status_service.dart';
 import '../services/schichtanmeldung_service.dart';
 import '../services/fahrtenbuch_service.dart';
+import '../services/fahrtenbuch_v2_service.dart';
 import '../services/fleet_service.dart';
 import '../services/mitarbeiter_service.dart';
 import 'fahrzeugmangel_detail_screen.dart';
@@ -147,9 +148,9 @@ class _ChecklisteAusfuellenScreenState extends State<ChecklisteAusfuellenScreen>
       return;
     }
     try {
-      final km = await FahrtenbuchService().getLetzterKmEndeByKennzeichenOderRufname(
+      final km = await FahrtenbuchV2Service().getLetzterKmEndeNurFahrtenbuch(
         widget.companyId,
-        kz?.isNotEmpty == true ? kz : null,
+        kennzeichenOderRufname: kz?.isNotEmpty == true ? kz : null,
         fahrzeugRufnameAlternativ: ruf?.isNotEmpty == true && ruf != kz ? ruf : null,
         fahrzeugId: fzId?.isNotEmpty == true ? fzId : null,
       );
@@ -586,8 +587,9 @@ class _ChecklisteAusfuellenScreenState extends State<ChecklisteAusfuellenScreen>
     final displayValue = value ?? emptyLabel;
     return DropdownButtonFormField<String>(
       value: items.contains(displayValue) ? displayValue : items.first,
+      isExpanded: true,
       decoration: InputDecoration(labelText: label),
-      items: items.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+      items: items.map((s) => DropdownMenuItem(value: s, child: Text(s, overflow: TextOverflow.ellipsis, maxLines: 1))).toList(),
       onChanged: (v) => onChanged(v == emptyLabel ? null : v),
     );
   }

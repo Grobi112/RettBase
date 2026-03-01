@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wrapper: Bei "build web" zuerst Version erhöhen, dann echtes Flutter ausführen.
+# Wrapper: Bei "build web" zuerst Version erhöhen, dann Flutter ausführen.
 # Nutzung: ./flutter build web  (aus dem app/-Verzeichnis)
 if [ "$1" = "build" ] && [ "$2" = "web" ]; then
   cd "$(dirname "$0")"

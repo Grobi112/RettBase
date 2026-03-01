@@ -21,3 +21,19 @@ String formatPhoneForDisplay(String raw) {
     return raw;
   }
 }
+
+/// Formatiert eine Telefonnummer einzeilig (z.B. für Querformat).
+/// Nutzt libphonenumber wie [formatPhoneForDisplay], aber ohne Zeilenumbruch.
+String formatPhoneForDisplaySingleLine(String raw) {
+  if (raw.trim().isEmpty) return raw;
+  try {
+    final phoneUtil = PhoneNumberUtil.instance;
+    final region = raw.trim().startsWith('+') ? '' : 'DE';
+    final parsed = phoneUtil.parse(raw, region);
+    if (!phoneUtil.isPossibleNumber(parsed)) return raw;
+    final national = phoneUtil.format(parsed, PhoneNumberFormat.national);
+    return national.trim();
+  } catch (_) {
+    return raw;
+  }
+}

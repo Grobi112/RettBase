@@ -84,13 +84,22 @@ class _TelefonlisteScreenState extends State<TelefonlisteScreen> {
   List<Mitarbeiter> _filter(List<Mitarbeiter> list) {
     final active = list.where((m) => m.active).toList();
     final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return active;
-    return active.where((m) {
-      final name = '${m.nachname ?? ''} ${m.vorname ?? ''}'.toLowerCase();
-      final qualis = (m.qualifikation ?? []).join(' ').toLowerCase();
-      final tel = (m.telefon ?? '').toLowerCase();
-      return name.contains(q) || qualis.contains(q) || tel.contains(q);
-    }).toList();
+    final filtered = q.isEmpty
+        ? active
+        : active.where((m) {
+            final name = '${m.nachname ?? ''} ${m.vorname ?? ''}'.toLowerCase();
+            final qualis = (m.qualifikation ?? []).join(' ').toLowerCase();
+            final tel = (m.telefon ?? '').toLowerCase();
+            return name.contains(q) || qualis.contains(q) || tel.contains(q);
+          }).toList();
+    filtered.sort((a, b) {
+      final na = (a.nachname ?? '').toLowerCase();
+      final nb = (b.nachname ?? '').toLowerCase();
+      final cmp = na.compareTo(nb);
+      if (cmp != 0) return cmp;
+      return (a.vorname ?? '').toLowerCase().compareTo((b.vorname ?? '').toLowerCase());
+    });
+    return filtered;
   }
 
   Future<void> _launchTel(String number) async {
@@ -431,18 +440,20 @@ class _EditSheetState extends State<_EditSheet> {
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _qualifikation,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Qualifikation'),
                 items: [
                   const DropdownMenuItem(value: null, child: Text('-')),
-                  ...widget.qualifikationen.map((q) => DropdownMenuItem(value: q, child: Text(q))),
+                  ...widget.qualifikationen.map((q) => DropdownMenuItem(value: q, child: Text(q, overflow: TextOverflow.ellipsis, maxLines: 1))),
                 ],
                 onChanged: (v) => setState(() => _qualifikation = v),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _fuehrerschein,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Führerscheinklasse'),
-                items: widget.fuehrerscheinklassen.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
+                items: widget.fuehrerscheinklassen.map((k) => DropdownMenuItem(value: k, child: Text(k, overflow: TextOverflow.ellipsis, maxLines: 1))).toList(),
                 onChanged: (v) => setState(() => _fuehrerschein = v ?? widget.fuehrerscheinklassen.first),
               ),
               const SizedBox(height: 12),

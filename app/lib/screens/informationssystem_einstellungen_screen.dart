@@ -24,6 +24,7 @@ class _InformationssystemEinstellungenScreenState extends State<Informationssyst
 
   List<MapEntry<String, String>> _containerTypes = [];
   List<String> _kategorien = [];
+  List<String?> _slots = List.filled(InformationssystemService.maxContainerSlots, null);
 
   final _neueKategorieCtrl = TextEditingController();
   final _neuerTypIdCtrl = TextEditingController();
@@ -49,17 +50,34 @@ class _InformationssystemEinstellungenScreenState extends State<Informationssyst
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final labels = await _service.loadContainerTypeLabels(widget.companyId);
-      final order = await _service.loadContainerTypeOrder(widget.companyId);
-      final kategorien = await _service.loadKategorien(widget.companyId);
+      final results = await Future.wait([
+        _service.loadContainerTypeLabels(widget.companyId),
+        _service.loadContainerTypeOrder(widget.companyId),
+        _service.loadKategorien(widget.companyId),
+        _service.loadContainerOrder(widget.companyId),
+      ]);
       if (mounted) {
+        final labels = results[0] as Map<String, String>;
+        final order = results[1] as List<String>;
+        final kategorien = results[2] as List<String>;
+        final rawSlots = results[3] as List<String?>;
+        final orderSet = order.toSet();
         setState(() {
-          final orderSet = order.toSet();
           _containerTypes = [
             ...order.map((id) => MapEntry(id, labels[id] ?? id)),
             ...labels.entries.where((e) => !orderSet.contains(e.key)),
           ];
           _kategorien = kategorien;
+          _slots = rawSlots.asMap().entries.map((e) {
+            if (e.key >= InformationssystemService.maxContainerSlots) return null;
+            final s = e.value?.trim();
+            if (s == null || s.isEmpty || s == 'null') return null;
+            return orderSet.contains(s) ? s : null;
+          }).toList();
+          while (_slots.length < InformationssystemService.maxContainerSlots) {
+            _slots.add(null);
+          }
+          _slots = _slots.take(InformationssystemService.maxContainerSlots).toList();
           _loading = false;
         });
       }
@@ -82,6 +100,7 @@ class _InformationssystemEinstellungenScreenState extends State<Informationssyst
         widget.companyId,
         containerTypes: _containerTypes,
         kategorien: _kategorien,
+        containerSlotsOverride: _slots,
       );
       if (mounted) {
         setState(() => _saving = false);
@@ -124,6 +143,15 @@ class _InformationssystemEinstellungenScreenState extends State<Informationssyst
       if (newIndex > oldIndex) newIndex--;
       _kategorien.insert(newIndex, item);
     });
+  }
+
+  void _ensureNoDuplicateSlot(String? selected, int changedIndex) {
+    if (selected == null || selected.isEmpty) return;
+    for (var i = 0; i < _slots.length; i++) {
+      if (i != changedIndex && _slots[i] == selected) {
+        _slots[i] = null;
+      }
+    }
   }
 
   void _addContainerTyp() {
@@ -272,6 +300,49 @@ class _InformationssystemEinstellungenScreenState extends State<Informationssyst
                       children: [
                         Row(
                           children: [
+                            Icon(Icons.dashboard, color: AppTheme.primary, size: 28),
+                            const SizedBox(width: 12),
+                            Text('Container auf Hauptseite', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Welche Container sollen auf der Hauptseite angezeigt werden? (max. ${InformationssystemService.maxContainerSlots})',
+                          style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
+                        ),
+                        const SizedBox(height: 16),
+                        ...List.generate(InformationssystemService.maxContainerSlots, (i) {
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: i < InformationssystemService.maxContainerSlots - 1 ? 12 : 0),
+                            child: _SlotDropdown(
+                              label: 'Position ${i + 1}',
+                              value: i < _slots.length ? _slots[i] : null,
+                              containerTypeIds: _containerTypes.map((e) => e.key).toList(),
+                              containerLabels: {for (var e in _containerTypes) e.key: e.value},
+                              onChanged: (v) => setState(() {
+                                _slots = List<String?>.from(_slots);
+                                while (_slots.length <= i) _slots.add(null);
+                                _slots[i] = v;
+                                _ensureNoDuplicateSlot(v, i);
+                              }),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
                             Icon(Icons.label, color: AppTheme.primary, size: 28),
                             const SizedBox(width: 12),
                             Text('Kategorien', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
@@ -336,6 +407,50 @@ class _InformationssystemEinstellungenScreenState extends State<Informationssyst
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _SlotDropdown extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<String> containerTypeIds;
+  final Map<String, String> containerLabels;
+  final void Function(String?) onChanged;
+
+  const _SlotDropdown({
+    required this.label,
+    required this.value,
+    required this.containerTypeIds,
+    required this.containerLabels,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = [
+      const DropdownMenuItem(value: null, child: Text('— Kein Container —')),
+      ...containerTypeIds.map((id) => DropdownMenuItem(
+            value: id,
+            child: Text(containerLabels[id] ?? id),
+          )),
+    ];
+    final safeValue = value == null || containerTypeIds.contains(value) ? value : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppTheme.textPrimary)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String?>(
+          value: safeValue,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          items: options,
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

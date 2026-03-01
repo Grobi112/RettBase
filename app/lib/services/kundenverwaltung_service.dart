@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import '../models/kunde_model.dart';
+import 'modules_service.dart';
 
 /// Service für Kundenverwaltung – lädt und verwaltet Kunden (Firmen) aus Firestore.
 /// Nur für Superadmin-Rolle.
@@ -11,29 +12,29 @@ class KundenverwaltungService {
   final _functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
 
   /// Lädt alle Kunden (Firmen) aus kunden-Collection.
-  /// Web: Cloud Function (umgeht permission-denied). Mobile: direkter Firestore-Zugriff.
+  /// Web + Native: Cloud Function (umgeht Firestore permission-denied auf Mobile).
   /// Projekt: rett-fe0fa, Collection: kunden.
   Future<List<Kunde>> loadKunden() async {
-    if (kIsWeb) {
-      try {
-        debugPrint('Kundenverwaltung: Lade über Cloud Function (Projekt: rett-fe0fa, Collection: kunden)');
-        final res = await _functions.httpsCallable('loadKunden').call<Map<String, dynamic>>();
-        final data = res.data;
-        if (data == null) {
-          debugPrint('Kundenverwaltung: Cloud Function lieferte kein data');
-          return _loadKundenDirect();
-        }
-        final kundenList = data['kunden'] as List<dynamic>? ?? [];
-        debugPrint('Kundenverwaltung: Cloud Function lieferte ${kundenList.length} Kunden');
-        final result = kundenList.map((m) {
-          final map = Map<String, dynamic>.from(m as Map);
-          final id = map.remove('id') as String? ?? '';
-          return Kunde.fromFirestore(id, map);
-        }).toList();
-        return result;
-      } catch (e, st) {
-        debugPrint('Kundenverwaltung: Cloud Function Fehler: $e');
-        debugPrint('Kundenverwaltung: Stack: $st');
+    try {
+      debugPrint('Kundenverwaltung: Lade über Cloud Function loadKunden');
+      final res = await _functions.httpsCallable('loadKunden').call<Map<String, dynamic>>();
+      final data = res.data;
+      if (data == null) {
+        debugPrint('Kundenverwaltung: Cloud Function lieferte kein data');
+        return _loadKundenDirect();
+      }
+      final kundenList = data['kunden'] as List<dynamic>? ?? [];
+      debugPrint('Kundenverwaltung: Cloud Function lieferte ${kundenList.length} Kunden');
+      final result = kundenList.map((m) {
+        final map = Map<String, dynamic>.from(m as Map);
+        final id = map.remove('id') as String? ?? '';
+        return Kunde.fromFirestore(id, map);
+      }).toList();
+      return result;
+    } catch (e, st) {
+      debugPrint('Kundenverwaltung: Cloud Function Fehler: $e');
+      debugPrint('Kundenverwaltung: Stack: $st');
+      if (kIsWeb) {
         try {
           return await _loadKundenDirect();
         } catch (e2) {
@@ -41,8 +42,8 @@ class KundenverwaltungService {
           rethrow;
         }
       }
+      rethrow;
     }
-    return _loadKundenDirect();
   }
 
   Future<List<Kunde>> _loadKundenDirect() async {
@@ -62,6 +63,44 @@ class KundenverwaltungService {
         .collection('users')
         .get();
     return snap.docs.length;
+  }
+
+  /// Erstellt einen neuen Kunden. docId = kundenId (normalisiert).
+  Future<void> createKunde(String kundenId, Map<String, dynamic> data) async {
+    final docId = kundenId.trim().toLowerCase();
+    if (docId.isEmpty) throw Exception('Kunden-ID ist erforderlich.');
+    if (docId == 'admin') throw Exception('Die Kunden-ID „admin" ist reserviert.');
+    final ref = _db.collection('kunden').doc(docId);
+    final existing = await ref.get();
+    if (existing.exists) {
+      throw Exception('Ein Kunde mit der ID „$docId" existiert bereits.');
+    }
+    final firestoreData = {
+      ...data,
+      'kundenId': docId,
+      'subdomain': docId,
+      'createdAt': FieldValue.serverTimestamp(),
+    };
+    await ref.set(firestoreData);
+
+    // Leere Schnellstart-Slots anlegen – Nutzer sieht keine vorgefüllten Kacheln
+    // Leere Strings statt null (Firestore-Arrays), werden beim Lesen als leer erkannt
+    await ref.collection('settings').doc('schnellstart').set({
+      'slots': ['', '', '', '', '', ''],
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Leere Informationssystem-Container – keine vorgefüllten Container auf Hauptseite
+    await ref.collection('settings').doc('informationssystem').set({
+      'containerSlots': [null, null, null, null, null, null],
+      'containerTypeOrder': ['informationen', 'verkehrslage'],
+      'containerTypes': [
+        {'id': 'informationen', 'label': 'Informationen'},
+        {'id': 'verkehrslage', 'label': 'Verkehrslage'},
+      ],
+      'kategorien': [],
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Aktualisiert Kundendaten.
@@ -137,5 +176,22 @@ class KundenverwaltungService {
     } catch (_) {
       return {};
     }
+  }
+
+  /// Lädt Modul-Definitionen mit Fallback auf defaultNativeModules.
+  /// Stellt sicher, dass alle Module (inkl. Fahrtenbuch) in der Kundenverwaltung erscheinen.
+  Future<Map<String, Map<String, dynamic>>> getMergedModuleDefs() async {
+    final fromFirestore = await getAllModuleDefs();
+    final merged = <String, Map<String, dynamic>>{};
+    for (final m in ModulesService.defaultNativeModules) {
+      final existing = fromFirestore[m.id];
+      merged[m.id] = existing != null
+          ? {...existing, 'id': m.id, 'label': existing['label'] ?? m.label, 'order': existing['order'] ?? m.order}
+          : {'id': m.id, 'label': m.label, 'url': '', 'order': m.order, 'active': true};
+    }
+    for (final e in fromFirestore.entries) {
+      if (!merged.containsKey(e.key)) merged[e.key] = e.value;
+    }
+    return merged;
   }
 }

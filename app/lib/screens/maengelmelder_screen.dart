@@ -36,13 +36,14 @@ class _MaengelmelderScreenState extends State<MaengelmelderScreen> {
   List<String> _menuOrder = List.from(MaengelmelderConfigService.defaultOrder);
   bool _loading = true;
 
+  /// Weiche Trennstellen (\u00AD) für korrekte deutsche Silbentrennung bei Zeilenumbruch
   static const _menuItems = {
-    'fahrzeugmangel': _MenuInfo('Fahrzeugmangel erfassen', 'Fahrzeugmangel melden', Icons.build),
+    'fahrzeugmangel': _MenuInfo('Fahrzeug\u00ADmangel erfassen', 'Fahrzeug\u00ADmangel melden', Icons.build),
     'mpg-mangel': _MenuInfo('MPG-Mangel', 'MPG-relevante Mängel melden', Icons.medical_services_outlined),
     'digitalfunk': _MenuInfo('Digitalfunk', 'Digitalfunk-Mängel melden', Icons.router),
     'sonstiger-mangel': _MenuInfo('Sonstiger Mangel', 'Andere Mängel melden', Icons.miscellaneous_services),
-    'schnittstellenmeldung': _MenuInfo('Schnittstellenmeldung', 'Schnittstellen-Vorkommnisse melden', Icons.cable),
-    'uebergriffsmeldung': _MenuInfo('Übergriffsmeldung', 'Übergriffe und Sachbeschädigungen melden', Icons.warning_amber),
+    'schnittstellenmeldung': _MenuInfo('Schnittstellen\u00ADmeldung', 'Schnittstellen-Vorkommnisse melden', Icons.cable),
+    'uebergriffsmeldung': _MenuInfo('Übergriffs\u00ADmeldung', 'Übergriffe und Sachbeschädi\u00ADgungen melden', Icons.warning_amber),
   };
 
   static const _reorderRoles = ['admin', 'superadmin', 'geschaeftsfuehrung', 'leiterssd', 'koordinator'];
@@ -144,30 +145,80 @@ class _MaengelmelderScreenState extends State<MaengelmelderScreen> {
                 final info = _menuItems[id];
                 if (info == null) return const SizedBox.shrink();
                 return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: AppTheme.primary.withOpacity(0.15),
-                      child: Icon(info.icon, color: AppTheme.primary),
-                    ),
-                    title: Text(info.label, style: const TextStyle(fontWeight: FontWeight.w500)),
-                    subtitle: Text(info.subtitle),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_canReorder) ...[
-                          IconButton(
-                            icon: Icon(Icons.arrow_upward, size: 20, color: i > 0 ? AppTheme.primary : Colors.grey[400]),
-                            onPressed: i > 0 ? () => _moveUp(i) : null,
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.arrow_downward, size: 20, color: i < _menuOrder.length - 1 ? AppTheme.primary : Colors.grey[400]),
-                            onPressed: i < _menuOrder.length - 1 ? () => _moveDown(i) : null,
-                          ),
-                        ],
-                        const Icon(Icons.chevron_right),
-                      ],
-                    ),
+                  child: InkWell(
                     onTap: () => _openItem(id),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: AppTheme.primary.withOpacity(0.15),
+                                radius: 22,
+                                child: Icon(info.icon, color: AppTheme.primary, size: 24),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      info.label,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 16,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      info.subtitle,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey[600],
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_canReorder) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.arrow_upward, size: 20, color: i > 0 ? AppTheme.primary : Colors.grey[400]),
+                                  onPressed: i > 0 ? () => _moveUp(i) : null,
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.arrow_downward, size: 20, color: i < _menuOrder.length - 1 ? AppTheme.primary : Colors.grey[400]),
+                                  onPressed: i < _menuOrder.length - 1 ? () => _moveDown(i) : null,
+                                ),
+                                Icon(Icons.chevron_right, color: AppTheme.primary),
+                              ],
+                            ),
+                          ] else
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Icon(Icons.chevron_right, color: AppTheme.primary),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },

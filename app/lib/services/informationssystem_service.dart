@@ -1,9 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Einstellungen für das Informationssystem
+/// Einstellungen für das Informationssystem.
 /// Firestore: kunden/{companyId}/settings/informationssystem
+///
+/// **Firmenweit:** Pro Firma (companyId = Firestore docId) eine Konfiguration.
+/// Kein Bereich in der Pfadstruktur – alle Bereiche einer Firma nutzen dieselben Container-Typen, Slots und Informationen.
 class InformationssystemService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  static String _normalizeCompanyId(String companyId) =>
+      companyId.trim().toLowerCase();
 
   static const List<String> defaultContainerTypeIds = ['informationen', 'verkehrslage'];
   static const Map<String, String> defaultContainerLabels = {
@@ -11,12 +17,15 @@ class InformationssystemService {
     'verkehrslage': 'Verkehrslage',
   };
 
+  /// Max. Container-Slots auf der Hauptseite
+  static const int maxContainerSlots = 6;
+
   /// Legacy: für Abwärtskompatibilität (informationssystem_screen nutzt ggf. noch loadContainerOrder)
   static List<String> get containerTypes => defaultContainerTypeIds;
   static Map<String, String> get containerLabels => defaultContainerLabels;
 
   DocumentReference<Map<String, dynamic>> _settingsRef(String companyId) =>
-      _db.collection('kunden').doc(companyId).collection('settings').doc('informationssystem');
+      _db.collection('kunden').doc(_normalizeCompanyId(companyId)).collection('settings').doc('informationssystem');
 
   /// Container-Typen laden (id + label), benutzerdefinierte + Standard
   Future<Map<String, String>> loadContainerTypeLabels(String companyId) async {
@@ -55,17 +64,26 @@ class InformationssystemService {
     return List.from(defaultContainerTypeIds);
   }
 
-  /// Container-Reihenfolge laden (2 Slots für Hauptseite)
+  /// Container-Reihenfolge laden (bis zu 6 Slots für Hauptseite)
   Future<List<String?>> loadContainerOrder(String companyId) async {
     try {
       final snap = await _settingsRef(companyId).get();
       final data = snap.data();
       final list = data?['containerSlots'] as List?;
-      if (list != null && list.length >= 2) {
-        return [list[0]?.toString(), list[1]?.toString()];
+      if (list != null && list.isNotEmpty) {
+        final slots = <String?>[];
+        for (var i = 0; i < maxContainerSlots && i < list.length; i++) {
+          final v = list[i]?.toString().trim();
+          slots.add((v != null && v.isNotEmpty && v != 'null') ? v : null);
+        }
+        while (slots.length < maxContainerSlots) {
+          slots.add(null);
+        }
+        return slots.take(maxContainerSlots).toList();
       }
     } catch (_) {}
-    return ['informationen', 'verkehrslage'];
+    // Neue Kunden: leere Slots – keine vorgefüllten Container
+    return List.filled(maxContainerSlots, null);
   }
 
   /// Kategorien laden (Reihenfolge wie gespeichert, von oben nach unten)
@@ -82,42 +100,49 @@ class InformationssystemService {
   }
 
   /// Container-Typen und Kategorien speichern.
-  /// Synchronisiert containerSlots (für HomeScreen/Dashboard): gelöschte Typen werden
-  /// aus den Slots entfernt und durch den ersten verfügbaren Typ ersetzt.
+  /// [containerSlotsOverride]: Optional – explizite Slots für Hauptseite (bis zu 6 Positionen).
+  /// Ohne Override: bestehende Slots werden synchronisiert (ungültige entfernt, leere gefüllt).
   Future<void> saveContainerTypesAndKategorien(
     String companyId, {
     required List<MapEntry<String, String>> containerTypes,
     required List<String> kategorien,
+    List<String?>? containerSlotsOverride,
   }) async {
     final typesList = containerTypes.map((e) => {'id': e.key, 'label': e.value}).toList();
     final orderList = containerTypes.map((e) => e.key).toList();
     final validIds = orderList.toSet();
 
-    // containerSlots für HomeScreen synchronisieren: ungültige Slots ersetzen oder auf null
-    // Bei nur 1 Container-Typ: nur 1 Slot befüllen, Rest null (sonst 2 identische Karten)
-    List<String?> containerSlots = await loadContainerOrder(companyId);
-    final usedIds = <String>{};
-    containerSlots = containerSlots.asMap().entries.map((e) {
-      final slot = e.value;
-      if (slot == null || slot.isEmpty) return null;
-      if (!validIds.contains(slot)) return null; // gelöschter Typ → Slot leeren
-      if (usedIds.contains(slot)) return null;  // doppelten Typ vermeiden
-      usedIds.add(slot);
-      return slot;
-    }).toList();
-    // Ersten leeren Slot mit erstem verfügbaren Typ füllen (wenn noch nicht verwendet)
-    for (var i = 0; i < containerSlots.length && i < 2; i++) {
-      if (containerSlots[i] == null && orderList.isNotEmpty) {
-        final first = orderList.first;
-        if (!usedIds.contains(first)) {
-          containerSlots[i] = first;
-          usedIds.add(first);
-          break; // nur einen zusätzlichen füllen
-        }
+    // containerSlots für HomeScreen
+    List<String?> containerSlots;
+    if (containerSlotsOverride != null && containerSlotsOverride.isNotEmpty) {
+      final usedIds = <String>{};
+      containerSlots = containerSlotsOverride.take(maxContainerSlots).map((s) {
+        final v = s?.trim();
+        if (v == null || v.isEmpty) return null;
+        if (!validIds.contains(v) || usedIds.contains(v)) return null;
+        usedIds.add(v);
+        return v;
+      }).toList();
+      while (containerSlots.length < maxContainerSlots) {
+        containerSlots.add(null);
       }
+    } else {
+      containerSlots = await loadContainerOrder(companyId);
+      final usedIds = <String>{};
+      containerSlots = containerSlots.asMap().entries.map((e) {
+        final slot = e.value;
+        if (slot == null || slot.isEmpty) return null;
+        if (!validIds.contains(slot)) return null; // gelöschter Typ → Slot leeren
+        if (usedIds.contains(slot)) return null;  // doppelten Typ vermeiden
+        usedIds.add(slot);
+        return slot;
+      }).toList();
+      // Keine automatische Befüllung: Nur explizit gewählte Slots bleiben.
+      while (containerSlots.length < maxContainerSlots) {
+        containerSlots.add(null);
+      }
+      containerSlots = containerSlots.take(maxContainerSlots).toList();
     }
-    while (containerSlots.length < 2) containerSlots.add(null);
-    containerSlots = containerSlots.take(2).toList();
 
     await _settingsRef(companyId).set({
       'containerTypes': typesList,

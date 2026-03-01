@@ -85,7 +85,7 @@ class _EinsatzprotokollNfsUebersichtScreenState
     });
   }
 
-  Future<void> _confirmDelete(BuildContext context, String docId, String einsatzNr) async {
+  Future<void> _confirmDelete(BuildContext context, String docId, String einsatzNr, {String? laufendeInterneNr}) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -108,7 +108,7 @@ class _EinsatzprotokollNfsUebersichtScreenState
     );
     if (ok != true || !mounted) return;
     try {
-      await _service.delete(widget.companyId, docId);
+      await _service.delete(widget.companyId, docId, laufendeInterneNr: laufendeInterneNr);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Protokoll gelöscht.')),
@@ -179,6 +179,8 @@ class _EinsatzprotokollNfsUebersichtScreenState
                     final id = p['id'] as String?;
                     final einsatzNr =
                         (p['einsatzNr'] ?? '').toString().trim();
+                    final ln = p['laufendeInterneNr']?.toString().trim();
+                    final laufendeInterneNr = ln != null && ln.isNotEmpty ? ln : null;
                     final name = (p['name'] ?? '').toString().trim();
                     final datum = p['einsatzDatum']?.toString();
                     final createdAt = p['createdAt'] is Timestamp
@@ -214,8 +216,9 @@ class _EinsatzprotokollNfsUebersichtScreenState
                               IconButton(
                                 icon: Icon(Icons.delete_outline,
                                     color: Colors.red[700]),
-                                onPressed: () =>
-                                    _confirmDelete(context, id, einsatzNr),
+                                onPressed: () => _confirmDelete(
+                                    context, id, einsatzNr,
+                                    laufendeInterneNr: laufendeInterneNr),
                                 tooltip: 'Löschen',
                               ),
                             const Icon(Icons.chevron_right),

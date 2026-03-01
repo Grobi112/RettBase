@@ -63,6 +63,23 @@ service cloud.firestore {
         allow read, write: if canAccessCompany(kundenId);
       }
 
+      // Fahrtenbucheinträge: Bearbeiten nur Admin, Geschäftsführung, Rettungsdienstleitung,
+      // Wachleitung oder Erfasser (createdBy). Alle anderen: nur Leserechte.
+      function fahrtenbuchCanEdit(kundenId, docData) {
+        return isSuperadmin()
+          || (docData.createdBy != null && docData.createdBy == request.auth.uid)
+          || (exists(/databases/$(database)/documents/kunden/$(kundenId)/users/$(request.auth.uid))
+              && get(/databases/$(database)/documents/kunden/$(kundenId)/users/$(request.auth.uid)).data.role in ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'wachleitung']);
+      }
+      match /fahrtenbuchEintraege/{docId} {
+        allow read, create: if canAccessCompany(kundenId);
+        allow update, delete: if canAccessCompany(kundenId) && fahrtenbuchCanEdit(kundenId, resource.data);
+      }
+      match /fahrtenbuchEintraegeV2/{docId} {
+        allow read, create: if canAccessCompany(kundenId);
+        allow update, delete: if canAccessCompany(kundenId) && fahrtenbuchCanEdit(kundenId, resource.data);
+      }
+
       match /{document=**} {
         allow read: if canAccessCompany(kundenId);
         allow create, delete: if canAccessCompany(kundenId);

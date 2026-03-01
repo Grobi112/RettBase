@@ -267,6 +267,7 @@ class _SchichtplanNfsOffeneSchichtMeldenSheetState
                   Expanded(
                     child: DropdownButtonFormField<int>(
                       value: _uhrzeitVon,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Uhrzeit von',
                         border: OutlineInputBorder(),
@@ -296,6 +297,7 @@ class _SchichtplanNfsOffeneSchichtMeldenSheetState
                       value: _uhrzeitBis > _uhrzeitVon
                           ? _uhrzeitBis
                           : (_uhrzeitVon < 23 ? _uhrzeitVon + 1 : 24),
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Uhrzeit bis',
                         border: OutlineInputBorder(),
@@ -321,6 +323,7 @@ class _SchichtplanNfsOffeneSchichtMeldenSheetState
               if (_typen.isNotEmpty)
                 DropdownButtonFormField<String>(
                   value: _typId ?? _typen.first.id,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Bereitschaftstyp',
                     border: OutlineInputBorder(),

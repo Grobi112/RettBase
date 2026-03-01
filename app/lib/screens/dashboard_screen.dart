@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../theme/app_theme.dart';
@@ -15,12 +16,19 @@ import '../services/informationen_service.dart';
 import '../services/informationssystem_service.dart';
 import '../services/kundenverwaltung_service.dart';
 import '../services/menueverwaltung_service.dart';
+import '../services/module_variants_service.dart';
+import '../services/fahrtenbuch_v2_service.dart';
 import '../services/push_notification_service.dart';
 import '../app_config.dart';
 import 'home_screen.dart';
 import 'schichtanmeldung_screen.dart';
 import 'schichtuebersicht_screen.dart';
+import 'fahrtenbuch_screen.dart';
 import 'fahrtenbuchuebersicht_screen.dart';
+import 'fahrtenbuch_v2_screen.dart';
+import 'fahrtenbuch_v2_uebersicht_screen.dart';
+import '../models/fahrtenbuch_v2_vorlage.dart';
+import '../models/fahrtenbuch_vorlage.dart';
 import 'wachbuch_screen.dart';
 import 'wachbuch_uebersicht_screen.dart';
 import 'checklisten_uebersicht_screen.dart';
@@ -42,6 +50,7 @@ import 'einsatzprotokoll_nfs_screen.dart';
 import 'schichtplan_nfs_screen.dart';
 import '../services/schichtplan_nfs_service.dart';
 import 'telefonliste_nfs_screen.dart';
+import 'fahrzeugstatus_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
 import 'kundenverwaltung_screen.dart';
@@ -49,6 +58,8 @@ import 'mitarbeiterverwaltung_screen.dart';
 import 'modulverwaltung_screen.dart';
 import 'menueverwaltung_screen.dart';
 import 'package:app/utils/ensure_users_doc_cache.dart';
+import 'package:app/utils/web_version_check.dart';
+import 'package:app/utils/reload_web.dart' show reload;
 import 'package:app/utils/url_hash_stub.dart'
     if (dart.library.html) 'package:app/utils/url_hash_web.dart' as url_hash;
 import 'package:app/utils/visibility_refresh_stub.dart'
@@ -71,6 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _authService = AuthService();
   final _kundenService = KundenverwaltungService();
   final _menuService = MenueverwaltungService();
+  final _variantsService = ModuleVariantsService();
   final _authDataService = AuthDataService();
   final _modulesService = ModulesService();
   final _infoService = InformationenService();
@@ -219,6 +231,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) _goToLogin();
       return;
     }
+    if (kIsWeb) {
+      unawaited(updateWebVersionFromServer());
+      unawaited(runWebVersionCheckOnce(() => reload()));
+    }
     debugPrint('RettBase Dashboard _load: uid=${user.uid} email=${user.email} widget.companyId=${widget.companyId}');
     try {
       try {
@@ -262,7 +278,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // Menü-Module auch für _allModules ergänzen – sonst erscheinen sie im Drawer nicht
       // (z.B. Chat unter Notfallseelsorge, wenn noch nicht explizit in kunden/modules freigeschaltet)
-      final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure);
+      final menuModuleIds = MenueverwaltungService.extractModuleIdsFromMenu(menuStructure)
+          .where((id) => id != 'schichtuebersicht') // Nur über Schichtanmeldung → Einstellungen
+          .toList();
       final modIds = allMods.map((m) => m.id).toSet();
       final roleLower = authData.role.toLowerCase().trim();
       for (final id in menuModuleIds) {
@@ -277,13 +295,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
       allMods.sort((a, b) => a.order.compareTo(b.order));
 
-      // Schnellstart: Alle für Rolle und Bereich freigegebenen Module anzeigen.
-      // Bei gespeicherter Nutzerauswahl (6 Slots): nur diese anzeigen.
-      // menuModuleIds nutzen, damit auch im Menü sichtbare Module (z.B. Chat) in Slots auflösbar sind.
-      final hasCustomSchnellstart = await _modulesService.hasCustomSchnellstart(effectiveCompanyId);
-      List<AppModule?> shortcuts = hasCustomSchnellstart
-          ? await _modulesService.getShortcuts(effectiveCompanyId, authData.role, bereich: bereich, menuModuleIds: menuModuleIds)
-          : allMods.map((m) => m as AppModule?).toList();
+      // Schnellstart: Max. 6 Kacheln. Bei gespeicherter Nutzerauswahl: nur diese (inkl. leere Slots).
+      // Ohne Custom: erste 6 Menü-Module. Mit Custom: gespeicherte Slots (leere = null, werden ausgeblendet).
+      List<AppModule?> shortcuts = await _modulesService.getShortcuts(
+        effectiveCompanyId,
+        authData.role,
+        bereich: bereich,
+        menuModuleIds: menuModuleIds,
+      );
       // Menü-Titel (benutzerdefinierter Label) auf Shortcuts anwenden
       final menuLabels = MenueverwaltungService.extractModuleLabelsFromMenu(menuStructure);
       if (menuLabels.isNotEmpty) {
@@ -467,16 +486,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Öffnet Modul im Body-Bereich (Header bleibt sichtbar)
-  void _openModule(AppModule mod) {
+  Future<void> _openModule(AppModule mod) async {
     Widget screen;
     final onBack = _goToHome;
     switch (mod.id) {
       case 'schichtanmeldung':
+        final fbVariantSchicht = await _variantsService.getModuleVariant(_companyId, 'fahrtenbuch');
         screen = SchichtanmeldungScreen(
           companyId: _companyId,
           title: mod.label,
           onBack: onBack,
           hideAppBar: true,
+          userRole: _userRole,
+          fahrtenbuchVariant: fbVariantSchicht,
           onFahrtenbuchOpen: (v) {
             onBack();
             _openFahrtenbuch(v);
@@ -491,18 +513,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
         break;
       case 'fahrtenbuch':
-        screen = FahrtenbuchuebersichtScreen(
-          companyId: _companyId,
-          title: mod.label,
-          onBack: onBack,
-        );
+        final fbVariant = await _variantsService.getModuleVariant(_companyId, 'fahrtenbuch');
+        screen = fbVariant == 'v2'
+            ? FahrtenbuchV2Screen(companyId: _companyId, onBack: onBack, userRole: _userRole)
+            : FahrtenbuchScreen(companyId: _companyId, onBack: onBack, userRole: _userRole);
         break;
       case 'fahrtenbuchuebersicht':
-        screen = FahrtenbuchuebersichtScreen(
-          companyId: _companyId,
-          title: mod.label,
-          onBack: onBack,
-        );
+        final fbVariant = await _variantsService.getModuleVariant(_companyId, 'fahrtenbuch');
+        screen = fbVariant == 'v2'
+            ? FahrtenbuchV2UebersichtScreen(
+                companyId: _companyId,
+                title: mod.label,
+                onBack: onBack,
+                onAddTap: (_) {
+                  onBack();
+                  _openModule(AppModule(id: 'fahrtenbuch', label: mod.label, url: '', order: 16));
+                },
+                service: FahrtenbuchV2Service(),
+                userRole: _userRole,
+              )
+            : FahrtenbuchuebersichtScreen(
+                companyId: _companyId,
+                title: mod.label,
+                onBack: onBack,
+                userRole: _userRole,
+              );
         break;
       case 'wachbuch':
         screen = WachbuchScreen(
@@ -548,7 +583,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           bereich: _bereich,
           title: mod.label,
           onBack: onBack,
-          onInformationssystemSaved: _load,
           hideAppBar: true,
         );
         break;
@@ -646,6 +680,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onBack: onBack,
         );
         break;
+      case 'fahrzeugstatus':
+        screen = FahrzeugstatusScreen(
+          companyId: _companyId,
+          title: mod.label,
+          onBack: onBack,
+          onOpenSchichtanmeldung: () {
+            unawaited(_openModule(const AppModule(id: 'schichtanmeldung', label: 'Schichtanmeldung', url: '', order: 14)));
+          },
+        );
+        break;
       case 'kundenverwaltung':
         screen = KundenverwaltungScreen(
           companyId: _companyId,
@@ -739,8 +783,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _openFahrtenbuch(dynamic vorlage) {
-    _openModule(const AppModule(id: 'fahrtenbuchuebersicht', label: 'Fahrtenbuch-Übersicht', url: '', order: 17));
+  Future<void> _openFahrtenbuch(dynamic vorlage) async {
+    final variant = await _variantsService.getModuleVariant(_companyId, 'fahrtenbuch');
+    FahrtenbuchV2Vorlage? v2Vorlage;
+    if (vorlage is FahrtenbuchV2Vorlage) {
+      v2Vorlage = vorlage;
+    } else if (vorlage is FahrtenbuchVorlage) {
+      v2Vorlage = FahrtenbuchV2Vorlage(
+        fahrzeugId: vorlage.fahrzeugId,
+        fahrzeugRufname: vorlage.fahrzeugRufname,
+        kennzeichen: vorlage.kennzeichen,
+        nameFahrer: vorlage.nameFahrer,
+        kmAnfang: vorlage.kmAnfang,
+        datum: vorlage.datum,
+        fahrerOptionen: vorlage.fahrerOptionen,
+      );
+    }
+    if (variant == 'v2' && v2Vorlage != null) {
+      _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => FahrtenbuchV2Screen(
+            companyId: _companyId,
+            onBack: _goToHome,
+            initialVorlage: v2Vorlage,
+            userRole: _userRole,
+          ),
+        ),
+        (_) => false,
+      );
+    } else if (variant == 'v2') {
+      _openModule(const AppModule(id: 'fahrtenbuch', label: 'Fahrtenbuch', url: '', order: 16));
+    } else {
+      _bodyNavigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => FahrtenbuchScreen(
+            companyId: _companyId,
+            onBack: _goToHome,
+            initialVorlage: vorlage is FahrtenbuchVorlage ? vorlage : null,
+            userRole: _userRole,
+          ),
+        ),
+        (_) => false,
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -781,10 +866,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
       case 'uebergriffsmeldung': return Icons.warning;
       case 'telefonliste': return Icons.phone;
       case 'telefonlistenfs': return Icons.phone;
+      case 'fahrzeugstatus': return Icons.directions_car;
       case 'chat': return Icons.chat_bubble_outline;
-      case 'ssd': return Icons.medical_services;
       default: return Icons.apps;
     }
+  }
+
+  /// SVG-Icon für alle Einsatzprotokolle (Punkt 2: Dokument mit Stift)
+  Widget _drawerLeadingForModule(String id, {double size = 22}) {
+    const iconColor = Colors.black;
+    if (id == 'ssd' || id == 'einsatzprotokollnfs') {
+      return SvgPicture.asset(
+        'img/icon_einsatzprotokoll_nfs.svg',
+        width: size,
+        height: size,
+        colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+      );
+    }
+    return Icon(_drawerIconForModule(id), size: size);
   }
 
   void _openCustomLink(String label, String? url) {
@@ -873,29 +972,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (cType == 'module') {
             final modId = (c['id'] ?? '').toString();
             if (modId.isEmpty) continue;
+            if (modId == 'schichtuebersicht') continue; // Nur über Schichtanmeldung → Einstellungen
             if (!_userHasModuleAccess(modId)) continue;
             final mod = _moduleFromMenuItem(Map<String, dynamic>.from(c));
-            childTiles.add(ListTile(
-              dense: true,
-              leading: Icon(_drawerIconForModule(mod.id), size: 22),
-              title: Text(mod.label, style: const TextStyle(fontSize: 14)),
-              trailing: mod.id == 'chat' ? _buildChatBadge() : null,
-              onTap: () {
-                Navigator.pop(context);
-                _openModule(mod);
-              },
+            childTiles.add(Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: ListTile(
+                dense: true,
+                leading: _drawerLeadingForModule(mod.id, size: 22),
+                title: Text(mod.label, style: const TextStyle(fontSize: 14)),
+                trailing: mod.id == 'chat' ? _buildChatBadge() : null,
+                onTap: () {
+                  Navigator.pop(context);
+                  _openModule(mod);
+                },
+              ),
             ));
           } else if (cType == 'custom') {
             final cLabel = (c['label'] ?? '').toString();
             final cUrl = c['url']?.toString();
-            childTiles.add(ListTile(
-              dense: true,
-              leading: const Icon(Icons.link, size: 22),
-              title: Text(cLabel.isNotEmpty ? cLabel : 'Link', style: const TextStyle(fontSize: 14)),
-              onTap: () {
-                Navigator.pop(context);
-                _openCustomLink(cLabel, cUrl);
-              },
+            childTiles.add(Padding(
+              padding: const EdgeInsets.only(left: 20),
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.link, size: 22),
+                title: Text(cLabel.isNotEmpty ? cLabel : 'Link', style: const TextStyle(fontSize: 14)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openCustomLink(cLabel, cUrl);
+                },
+              ),
             ));
           }
         }
@@ -913,10 +1019,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       } else if (type == 'module') {
         final modId = (item['id'] ?? '').toString();
         if (modId.isEmpty) continue;
+        if (modId == 'schichtuebersicht') continue; // Nur über Schichtanmeldung → Einstellungen
         if (!_userHasModuleAccess(modId)) continue;
         final mod = _moduleFromMenuItem(item);
         children.add(ListTile(
-          leading: Icon(_drawerIconForModule(mod.id)),
+          leading: _drawerLeadingForModule(mod.id),
           title: Text(mod.label),
           trailing: mod.id == 'chat' ? _buildChatBadge() : null,
           onTap: () {
@@ -1000,8 +1107,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             ..._buildDrawerMenuContent(),
-            if ((_userRole ?? '').toLowerCase().trim() == 'superadmin' &&
-                (_companyId.trim().toLowerCase()) != 'admin') ...[
+            if ((_userRole ?? '').toLowerCase().trim() == 'superadmin') ...[
               const Divider(),
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 8, 16, 4),

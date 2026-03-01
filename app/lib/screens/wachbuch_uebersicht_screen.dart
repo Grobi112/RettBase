@@ -104,6 +104,7 @@ class _WachbuchUebersichtScreenState extends State<WachbuchUebersichtScreen> {
                         Expanded(
                           child: DropdownButtonFormField<int>(
                             value: _month,
+                            isExpanded: true,
                             decoration: const InputDecoration(labelText: 'Monat'),
                             items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text(_monthNames[i]))),
                             onChanged: (v) => setState(() => _month = v ?? _month),

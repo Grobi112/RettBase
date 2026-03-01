@@ -1,35 +1,16 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+/// Ladebildschirm mit determinierter Fortschrittsanzeige (0.0–1.0).
+/// Einfacher Balken, der sich von links nach rechts füllt.
+class SplashScreen extends StatelessWidget {
+  /// Fortschritt 0.0–1.0
+  final double progress;
 
-  @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
+  const SplashScreen({super.key, required this.progress});
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _shimmerAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
-    _shimmerAnimation = Tween<double>(begin: -1.0, end: 2.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  /// Einheitliche Logo-Größe (120px) für nahtlosen Übergang vom HTML-Platzhalter.
+  static const double _logoHeight = 120;
 
   @override
   Widget build(BuildContext context) {
@@ -45,14 +26,11 @@ class _SplashScreenState extends State<SplashScreen>
               children: [
                 Image.asset(
                   'img/rettbase_splash.png',
-                  height: narrow ? 100 : 140,
+                  height: _logoHeight,
                   fit: BoxFit.contain,
                 ),
                 SizedBox(height: narrow ? 24 : 32),
-                _ModernLoadingBar(
-                  shimmerAnimation: _shimmerAnimation,
-                  narrow: narrow,
-                ),
+                _ProgressBar(progress: progress.clamp(0.0, 1.0), narrow: narrow),
               ],
             ),
           ),
@@ -62,41 +40,37 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-class _ModernLoadingBar extends StatelessWidget {
-  final Animation<double> shimmerAnimation;
+/// Determiniert: Balken füllt sich von links nach rechts.
+class _ProgressBar extends StatelessWidget {
+  final double progress;
   final bool narrow;
 
-  const _ModernLoadingBar({required this.shimmerAnimation, this.narrow = false});
+  const _ProgressBar({required this.progress, this.narrow = false});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: narrow ? 180 : 240,
       height: 8,
-      child: AnimatedBuilder(
-        animation: shimmerAnimation,
-        builder: (context, child) {
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: CustomPaint(
-              painter: _LoadingBarPainter(
-                progress: (shimmerAnimation.value + 1) / 3,
-              ),
-            ),
-          );
-        },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: CustomPaint(
+          painter: _ProgressBarPainter(progress: progress),
+          size: Size(narrow ? 180 : 240, 8),
+        ),
       ),
     );
   }
 }
 
-class _LoadingBarPainter extends CustomPainter {
+class _ProgressBarPainter extends CustomPainter {
   final double progress;
 
-  _LoadingBarPainter({required this.progress});
+  _ProgressBarPainter({required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Hintergrund-Track
     final trackPaint = Paint()
       ..color = Colors.white.withOpacity(0.15)
       ..style = PaintingStyle.fill;
@@ -107,31 +81,21 @@ class _LoadingBarPainter extends CustomPainter {
     );
     canvas.drawRRect(trackRRect, trackPaint);
 
-    final barWidth = size.width * 0.42;
-    final x = (size.width + barWidth) * progress - barWidth;
-    final drawRect = Rect.fromLTWH(x.clamp(0.0, size.width - 1), 0, barWidth, size.height);
-    final barRect = RRect.fromRectAndRadius(drawRect, Radius.circular(size.height / 2));
-
-    final gradient = LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [
-        AppTheme.primary.withOpacity(0.4),
-        AppTheme.primary,
-        Colors.white,
-        AppTheme.primary,
-        AppTheme.primary.withOpacity(0.4),
-      ],
-      stops: const [0.0, 0.4, 0.5, 0.6, 1.0],
-    );
-    final barPaint = Paint()
-      ..shader = gradient.createShader(drawRect)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRRect(barRect, barPaint);
+    // Füllung von links nach rechts
+    final fillWidth = size.width * progress.clamp(0.0, 1.0);
+    if (fillWidth > 0) {
+      final fillRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, fillWidth, size.height),
+        Radius.circular(size.height / 2),
+      );
+      final fillPaint = Paint()
+        ..color = AppTheme.primary
+        ..style = PaintingStyle.fill;
+      canvas.drawRRect(fillRect, fillPaint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _LoadingBarPainter oldDelegate) =>
+  bool shouldRepaint(covariant _ProgressBarPainter oldDelegate) =>
       oldDelegate.progress != progress;
 }

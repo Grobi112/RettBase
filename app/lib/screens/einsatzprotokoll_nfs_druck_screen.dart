@@ -285,7 +285,8 @@ class EinsatzprotokollNfsDruckScreen extends StatelessWidget {
     );
     if (ok != true || !context.mounted) return;
     try {
-      await service.delete(companyId, protokollId);
+      final laufendeNr = protokoll['laufendeInterneNr']?.toString().trim() ?? '';
+      await service.delete(companyId, protokollId, laufendeInterneNr: laufendeNr.isNotEmpty ? laufendeNr : null);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Protokoll Nr. ${_str(protokoll['einsatzNr'])} wurde gelöscht.')));
         Navigator.of(context).pop();

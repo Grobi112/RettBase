@@ -48,7 +48,7 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
 
   Future<void> _saveAndContinue() async {
     final raw = _controller.text.trim();
-    final kundenId = raw.isEmpty ? AppConfig.defaultKundenId : _normalizeKundenId(raw);
+    final kundenId = raw.isEmpty ? '' : _normalizeKundenId(raw);
     if (kundenId.isEmpty) {
       setState(() {
         _error = 'Bitte eine gültige Kunden-ID eingeben.';
@@ -110,6 +110,9 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
     }
   }
 
+  /// Logo-Höhe: konstant (kein Wechsel bei Tastatur-Fokus)
+  static const double _logoHeight = 90;
+
   @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.of(context).viewInsets;
@@ -135,7 +138,7 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
               children: [
                 Image.asset(
                   'img/rettbase_splash.png',
-                  height: keyboardVisible ? 64 : (Responsive.isCompact(context) ? 100 : 140),
+                  height: _logoHeight,
                   fit: BoxFit.contain,
                 ),
                 SizedBox(height: keyboardVisible ? 20 : 48),

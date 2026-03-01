@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/kunde_model.dart';
 import 'einstellungen_schichtarten_screen.dart';
-import 'einstellungen_informationssystem_screen.dart';
+import 'einstellungen_modulvarianten_screen.dart';
+
+bool _isAdminCompany(String companyId) =>
+    companyId.trim().toLowerCase() == 'admin';
 
 /// Globale Einstellungen – Übersicht (Hamburger-Menü)
 class EinstellungenScreen extends StatelessWidget {
@@ -10,8 +13,6 @@ class EinstellungenScreen extends StatelessWidget {
   /// Bereich des Kunden – bei Schulsanitätsdienst werden Schicht-/Standortverwaltung ausgeblendet
   final String? bereich;
   final VoidCallback? onBack;
-  /// Wird aufgerufen, wenn Informationssystem-Einstellungen gespeichert wurden
-  final VoidCallback? onInformationssystemSaved;
   final bool hideAppBar;
   final String? title;
 
@@ -20,7 +21,6 @@ class EinstellungenScreen extends StatelessWidget {
     required this.companyId,
     this.bereich,
     this.onBack,
-    this.onInformationssystemSaved,
     this.hideAppBar = false,
     this.title,
   });
@@ -54,6 +54,7 @@ class EinstellungenScreen extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (_) => EinstellungenSchichtartenScreen(
                     companyId: companyId,
+                    bereich: bereich,
                     onBack: () => Navigator.of(context).pop(),
                   ),
                 ),
@@ -61,21 +62,22 @@ class EinstellungenScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          _SettingsCard(
-            icon: Icons.info_outline,
-            title: 'Informationssystem',
-            subtitle: 'Container auf der Hauptseite (Informationen, Verkehrslage) anordnen',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => EinstellungenInformationssystemScreen(
-                  companyId: companyId,
-                  onBack: () => Navigator.of(context).pop(),
-                  onSaved: onInformationssystemSaved,
+          if (_isAdminCompany(companyId)) ...[
+            _SettingsCard(
+              icon: Icons.layers_outlined,
+              title: 'Modul-Varianten',
+              subtitle: 'Fahrtenbuch-Version (V1 oder V2) für Kunden festlegen',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => EinstellungenModulvariantenScreen(
+                    companyId: companyId,
+                    onBack: () => Navigator.of(context).pop(),
+                  ),
                 ),
               ),
-            ).then((_) => onInformationssystemSaved?.call()),
-          ),
-          const SizedBox(height: 12),
+            ),
+            const SizedBox(height: 12),
+          ],
           _SettingsCard(
             icon: Icons.tune,
             title: 'Weitere Einstellungen',

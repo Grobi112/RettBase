@@ -47,6 +47,7 @@ class ModulesService {
     AppModule(id: 'schichtplannfs', label: 'Schichtplan NFS', url: '', order: 32, roles: _defaultRoles),
     AppModule(id: 'telefonlistenfs', label: 'TelefonlisteNFS', url: '', order: 33, roles: ['superadmin', 'admin', 'koordinator', 'user']),
     AppModule(id: 'einsatzprotokollnfs', label: 'Einsatzprotokoll Notfallseelsorge', url: '', order: 34, roles: _defaultRoles),
+    AppModule(id: 'fahrzeugstatus', label: 'Fahrzeugstatus', url: '', order: 35, roles: _defaultRoles),
   ];
 
   /// Lädt Shortcuts für die Dashboard-Kacheln (6 Slots).
@@ -76,19 +77,27 @@ class ModulesService {
     return list;
   }
 
-  /// Lädt Schnellstart-Slot-IDs für Bearbeitung (custom oder Default = erste 6 Module).
-  Future<List<String?>> getSchnellstartSlotIds(String companyId, String role, {String? bereich}) async {
+  /// Lädt Schnellstart-Slot-IDs für Bearbeitung (custom oder Default = erste 6 Menü-Module).
+  /// [menuModuleIds]: Wenn gesetzt, werden Default-Slots aus Menü-Modulen gebildet (wie NFS/SSD).
+  Future<List<String?>> getSchnellstartSlotIds(
+    String companyId,
+    String role, {
+    String? bereich,
+    List<String>? menuModuleIds,
+  }) async {
     final custom = await _getSchnellstartSlots(companyId);
     if (custom != null) return custom;
-    final modules = await getModulesForCompany(companyId, role, bereich: bereich);
+    final modules = menuModuleIds != null && menuModuleIds.isNotEmpty
+        ? await getModulesForSchnellstart(companyId, role, menuModuleIds, bereich: bereich)
+        : await getModulesForCompany(companyId, role, bereich: bereich);
     final list = <String?>[...modules.take(6).map((m) => m.id)];
     while (list.length < 6) list.add(null);
     return list;
   }
 
-  /// Lädt Module für die Schnellstart-Auswahl: Union aus getModulesForCompany und
-  /// Modulen, die im Menü für den Bereich erscheinen (z.B. Chat).
-  /// So kann der Nutzer alle im Menü sichtbaren Module auch im Schnellstart wählen.
+  /// Lädt Module für die Schnellstart-Auswahl – nur solche, die im Menü erscheinen.
+  /// Referenz: Notfallseelsorge, Schulsanitätsdienst – Schnellstart = Menü-Module.
+  /// Bei leerem Menü: Fallback auf getModulesForCompany (Legacy/Migration).
   Future<List<AppModule>> getModulesForSchnellstart(
     String companyId,
     String role,
@@ -96,22 +105,29 @@ class ModulesService {
     String? bereich,
   }) async {
     final modules = await getModulesForCompany(companyId, role, bereich: bereich);
-    final modIds = modules.map((m) => m.id).toSet();
+    final modById = {for (final m in modules) m.id: m};
     final roleLower = role.toLowerCase().trim();
 
     for (final id in menuModuleIds) {
-      if (id.isEmpty || modIds.contains(id)) continue;
+      if (id.isEmpty || modById.containsKey(id)) continue;
       AppModule? def;
       for (final m in defaultNativeModules) {
         if (m.id == id) { def = m; break; }
       }
       if (def != null && def.roles.any((r) => r.toLowerCase() == roleLower)) {
-        modules.add(def);
-        modIds.add(id);
+        modById[id] = def;
       }
     }
-    modules.sort((a, b) => a.order.compareTo(b.order));
-    return modules;
+
+    if (menuModuleIds.isEmpty) {
+      return modules..sort((a, b) => a.order.compareTo(b.order));
+    }
+    final result = <AppModule>[];
+    for (final id in menuModuleIds) {
+      final m = modById[id];
+      if (m != null) result.add(m);
+    }
+    return result;
   }
 
   /// Prüft, ob der Kunde eigene Schnellstart-Slots in Firestore gespeichert hat.
@@ -124,6 +140,8 @@ class ModulesService {
   }
 
   /// Lädt gespeicherte Schnellstart-Slots aus Firestore (intern).
+  /// Wenn Dokument existiert (auch mit leeren Slots): Slots zurückgeben.
+  /// Wenn kein Dokument: null → Fallback auf erste 6 Module (Legacy).
   Future<List<String?>?> _getSchnellstartSlots(String companyId) async {
     try {
       final cid = _normalizeCompanyId(companyId);
@@ -133,10 +151,13 @@ class ModulesService {
           .collection('settings')
           .doc('schnellstart')
           .get();
+      if (!snap.exists) return null;
       final list = snap.data()?['slots'] as List?;
-      if (list != null && list.isNotEmpty) {
+      if (list != null) {
         return List.generate(6, (i) => i < list.length ? list[i]?.toString() : null);
       }
+      // Dokument existiert, aber slots fehlt → explizit leer
+      return List.generate(6, (_) => null);
     } catch (_) {}
     return null;
   }

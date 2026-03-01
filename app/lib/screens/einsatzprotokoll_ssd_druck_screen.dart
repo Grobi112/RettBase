@@ -344,6 +344,7 @@ class EinsatzprotokollSsdDruckScreen extends StatelessWidget {
                   checkLine('Sekretariat', p['sekretariatInformiert'] == true),
                   checkLine('Schulleitung', p['schulleitungInformiert'] == true),
                   checkLine('Lehrer', p['lehrerInformiert'] == true),
+                  if (p['lehrerInformiert'] == true) field('  Name des Lehrers / der Lehrerin', _str(p['lehrerInformiertName'])),
                   checkLine('Leiter SSD', p['leiterSSDInformiert'] == true),
                 ],
               ),

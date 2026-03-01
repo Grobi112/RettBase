@@ -58,4 +58,35 @@ class ChecklistenService {
     final ref = await _ausfuellungen(companyId).add(data);
     return ref.id;
   }
+
+  /// Letzter KM-Stand aus Checkliste für ein Fahrzeug (für Fahrtenbuch-Vorausfüllung)
+  /// Sucht nach kennzeichen in checklistenAusfuellungen, liefert (km, datum) der neuesten Ausfüllung
+  Future<({int km, DateTime datum})?> getLetzterKmStandFuerFahrzeug(
+    String companyId,
+    String kennzeichenOderRufname,
+  ) async {
+    final key = kennzeichenOderRufname.trim();
+    if (key.isEmpty) return null;
+    try {
+      final snap = await _ausfuellungen(companyId)
+          .orderBy('createdAt', descending: true)
+          .limit(300)
+          .get();
+      for (final doc in snap.docs) {
+        final d = doc.data();
+        final kz = (d['kennzeichen'] ?? '').toString().trim();
+        if (kz != key) continue;
+        final km = d['kmStand'];
+        if (km == null) continue;
+        final kmInt = (km is num) ? km.toInt() : int.tryParse(km.toString());
+        if (kmInt == null) continue;
+        final ca = d['createdAt'];
+        DateTime? dt;
+        if (ca is Timestamp) dt = ca.toDate();
+        if (ca is DateTime) dt = ca;
+        if (dt != null) return (km: kmInt, datum: dt);
+      }
+    } catch (_) {}
+    return null;
+  }
 }

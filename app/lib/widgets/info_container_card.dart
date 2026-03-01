@@ -35,7 +35,7 @@ class InfoContainerCard extends StatelessWidget {
   });
 
   static const _deleteAllowedRoles = {
-    'superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'leiterssd', 'wachleitung',
+    'superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'leiterssd', 'wachleitung', 'koordinator',
   };
 
   bool get _canDelete => companyId != null &&

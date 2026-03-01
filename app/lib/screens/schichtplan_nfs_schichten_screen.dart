@@ -407,16 +407,16 @@ class _SchichtplanNfsSchichtenScreenState
         title: 'Schichten',
         onBack: widget.onBack,
         actions: [
-          TextButton.icon(
+          IconButton(
             onPressed: _openOffeneSchichtMelden,
-            icon: const Icon(Icons.person_add_outlined, size: 20),
-            label: const Text('Verfügbarkeit angeben'),
+            icon: const Icon(Icons.person_add_outlined),
+            tooltip: 'Verfügbarkeit angeben',
           ),
           if (_canSchichtenHinzufuegen(widget.userRole))
-            TextButton.icon(
+            IconButton(
               onPressed: _openSchichtHinzufuegen,
-              icon: const Icon(Icons.add_circle_outline, size: 20),
-              label: const Text('Schicht hinzufügen'),
+              icon: const Icon(Icons.add_circle_outline),
+              tooltip: 'Schicht hinzufügen',
             ),
         ],
       ),
@@ -487,10 +487,36 @@ class _SchichtplanNfsSchichtenScreenState
             ),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [for (var h = 0; h < 24; h++) _buildStundenChip(h)],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 8.0;
+              // Bei <400px (z.B. iPhone): nur 4 Spalten für größere Stundenanzeige
+              final width = MediaQuery.sizeOf(context).width;
+              final columns = (width < 400 || MediaQuery.sizeOf(context).shortestSide < 500)
+                  ? 4
+                  : 6;
+              final rows = (24 / columns).ceil();
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var row = 0; row < rows; row++)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: row < rows - 1 ? spacing : 0),
+                      child: Row(
+                        children: [
+                          for (var col = 0; col < columns; col++) ...[
+                            if (col > 0) const SizedBox(width: spacing),
+                            Expanded(
+                              child: _buildStundenChip(row * columns + col),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -500,9 +526,16 @@ class _SchichtplanNfsSchichtenScreenState
   Widget _buildStundenChip(int h) {
     final status = _stundenStatus(h);
     final typCounts = _typCountsForHour(h);
-    final label = h == 23
-        ? '23:00–24:00'
-        : '${h.toString().padLeft(2, '0')}:00–${(h + 1).toString().padLeft(2, '0')}:00';
+    final isCompact = Responsive.isCompact(context) ||
+        MediaQuery.sizeOf(context).shortestSide < 500;
+    // Kompaktes Format (01-02) für Handy – spart Platz, größere Schrift möglich
+    final label = isCompact
+        ? (h == 23
+            ? '23-24'
+            : '${h.toString().padLeft(2, '0')}-${(h + 1).toString().padLeft(2, '0')}')
+        : (h == 23
+            ? '23:00–24:00'
+            : '${h.toString().padLeft(2, '0')}:00–${(h + 1).toString().padLeft(2, '0')}:00');
     final Color bgColor;
     final Color borderColor;
     final Color textColor;
@@ -522,8 +555,8 @@ class _SchichtplanNfsSchichtenScreenState
         borderColor = Colors.red.shade300;
         textColor = Colors.red.shade800;
     }
-    const circleSize = 18.0;
-    const maxCirclesPerRow = 3;
+    final circleSize = isCompact ? 14.0 : 18.0;
+    final maxCirclesPerRow = isCompact ? 2 : 3;
     final typenMitCount = [
       for (final typ in _typen)
         if ((typCounts[typ.id] ?? 0) > 0) (typ: typ, count: typCounts[typ.id]!),
@@ -550,8 +583,8 @@ class _SchichtplanNfsSchichtenScreenState
             alignment: Alignment.center,
             child: Text(
               '$count',
-              style: const TextStyle(
-                fontSize: 9,
+              style: TextStyle(
+                fontSize: isCompact ? 8 : 9,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
               ),
@@ -559,9 +592,12 @@ class _SchichtplanNfsSchichtenScreenState
           ),
         );
 
+    // Kompakt: höherer Chip + größere Schrift für bessere Lesbarkeit auf Handy
+    final chipHeight = isCompact ? 88.0 : 68.0;
+    final labelFontSize = isCompact ? 14.0 : 13.0;
+
     return Container(
-      width: 86,
-      height: 68,
+      height: chipHeight,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       decoration: BoxDecoration(
         color: bgColor,
@@ -575,49 +611,47 @@ class _SchichtplanNfsSchichtenScreenState
           ),
         ],
       ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: textColor,
-              ),
-              textAlign: TextAlign.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: labelFontSize,
+              fontWeight: FontWeight.w600,
+              color: textColor,
             ),
-            SizedBox(
-              height: 44,
-              child: typenMitCount.isEmpty
-                  ? const SizedBox.shrink()
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+          SizedBox(
+            height: isCompact ? 36 : 44,
+            child: typenMitCount.isEmpty
+                ? const SizedBox.shrink()
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: row1.map((e) => _circle(e.typ, e.count)).toList(),
+                      ),
+                      if (row2.isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.center,
-                          children: row1.map((e) => _circle(e.typ, e.count)).toList(),
+                          children: row2.map((e) => _circle(e.typ, e.count)).toList(),
                         ),
-                        if (row2.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: row2.map((e) => _circle(e.typ, e.count)).toList(),
-                          ),
-                        ],
                       ],
-                    ),
-            ),
-          ],
-        ),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -1026,6 +1060,7 @@ class _BearbeitenBereitschaftszeitDialogState
                         value: widget.typen.any((t) => t.id == blk.typId)
                             ? blk.typId
                             : (widget.typen.isNotEmpty ? widget.typen.first.id : null),
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Bereitschaftstyp',
                           border: OutlineInputBorder(),
@@ -1045,7 +1080,7 @@ class _BearbeitenBereitschaftszeitDialogState
                                         ),
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(t.name),
+                                      Flexible(child: Text(t.name, overflow: TextOverflow.ellipsis, maxLines: 1)),
                                     ],
                                   ),
                                 ))
@@ -1243,6 +1278,7 @@ class _ZuweisenStundeSheetState extends State<_ZuweisenStundeSheet> {
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _mitarbeiterId,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Mitarbeiter',
                 border: OutlineInputBorder(),
@@ -1250,7 +1286,7 @@ class _ZuweisenStundeSheetState extends State<_ZuweisenStundeSheet> {
               items: widget.mitarbeiter
                   .map((r) => DropdownMenuItem(
                         value: r.mitarbeiter.id,
-                        child: Text(r.mitarbeiter.displayName),
+                        child: Text(r.mitarbeiter.displayName, overflow: TextOverflow.ellipsis, maxLines: 1),
                       ))
                   .toList(),
               onChanged: (v) => setState(() => _mitarbeiterId = v),
@@ -1259,6 +1295,7 @@ class _ZuweisenStundeSheetState extends State<_ZuweisenStundeSheet> {
             if (widget.typen.isNotEmpty)
               DropdownButtonFormField<String>(
                 value: _typId ?? widget.typen.first.id,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Bereitschafts-Typ',
                   border: OutlineInputBorder(),
@@ -1277,7 +1314,7 @@ class _ZuweisenStundeSheetState extends State<_ZuweisenStundeSheet> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(t.name),
+                              Flexible(child: Text(t.name, overflow: TextOverflow.ellipsis, maxLines: 1)),
                             ],
                           ),
                         ))

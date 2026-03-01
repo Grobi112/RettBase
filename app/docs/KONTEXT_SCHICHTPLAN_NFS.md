@@ -24,7 +24,7 @@ kunden/{companyId}/
 
 | Screen/Widget | Datei | Funktion |
 |---------------|-------|----------|
-| SchichtplanNfsScreen | schichtplan_nfs_screen.dart | Tab-Container (Monat, Meldungen) |
+| SchichtplanNfsScreen | schichtplan_nfs_screen.dart | Reiter-Container (Monat, Meldungen) mit eigener Tab-UI + rotem Badge |
 | SchichtplanNfsMonatsuebersichtBody | schichtplan_nfs_stundenplan_screen.dart | Kalender-Grid, Tag-Status (rot/grün/neutral) |
 | SchichtplanNfsSchichtenScreen | schichtplan_nfs_schichten_screen.dart | Tagesansicht: Stundenübersicht + Eingesetzte Mitarbeiter |
 | SchichtplanNfsMeldungenBody | schichtplan_nfs_meldungen_body.dart | Pending-Meldungen annehmen/ablehnen |
@@ -45,10 +45,10 @@ kunden/{companyId}/
   - Kreise in Typ-Farbe, weiße Zahl innen
   - 1–3 Typen: eine Zeile
   - 4+ Typen: zwei Zeilen (max. 3 Kreise pro Zeile)
-- **Einheitliche Kartenhöhe:** 68 px für alle Chips
+- **Einheitliche Kartenhöhe:** 68 px (Desktop), 88 px (kompakt/Handy)
 - **Datum:** Hinter „Stundenübersicht“ (nicht im AppBar-Header) – responsive
 - **AppBar-Titel:** Nur „Schichten“ (ohne Datum)
-- Zeit-Beschriftung: 13 px
+- **Stundenlabel-Schriftgröße:** 14 px (kompakt/Handy), 13 px (Desktop)
 
 ## 6. Bereitschaftstypen
 
@@ -65,14 +65,16 @@ kunden/{companyId}/
 
 | Datei | Rolle |
 |-------|-------|
-| lib/screens/schichtplan_nfs_screen.dart | Tab-Container, Reiter-Logik |
+| lib/screens/schichtplan_nfs_screen.dart | Reiter-Container (eigene Tab-UI), Meldungen-Badge |
 | lib/screens/schichtplan_nfs_stundenplan_screen.dart | Monatsübersicht, Bereitschaftsplan |
 | lib/screens/schichtplan_nfs_schichten_screen.dart | Tagesansicht, Stunden-Chips, Mitarbeiter-Karten |
 | lib/screens/schichtplan_nfs_meldungen_body.dart | Meldungen annehmen/ablehnen |
 | lib/screens/schichtplan_nfs_schicht_anlegen_sheet.dart | Schicht anlegen |
 | lib/screens/schichtplan_nfs_offene_schicht_melden_sheet.dart | Verfügbarkeit angeben |
-| lib/services/schichtplan_nfs_service.dart | Firestore, loadStundenplanEintraege, loadTageStatusForMonth |
+| lib/services/schichtplan_nfs_service.dart | Firestore, loadStundenplanEintraege, loadTageStatusForMonth, streamMeldungenCount |
 | lib/utils/schichtplan_nfs_bereitschaftstyp_utils.dart | Farben, filterAndSortS1S2B |
+| lib/screens/dashboard_screen.dart | Schnellstart-Badge: _schichtplanNfsMeldungenNotifier, _startSchichtplanNfsMeldungenStream |
+| lib/screens/home_screen.dart | _ShortcutButton: schichtplanNfsMeldungenListenable, Badge rechts neben Label |
 
 ## 9. Firestore-Schreiblogik (wichtig)
 
@@ -83,8 +85,17 @@ kunden/{companyId}/
 - **Betroffene Methoden:** `deleteStundenplanEintraegeForMitarbeiter`, `deleteStundenplanEintraegeForMitarbeiterStunden`, `saveStundenplanEintrag`, `saveStundenplanEintraegeBatch`
 - **Commit:** 08db50f
 
-## 10. Letzte Änderungen (Feb 2026)
+## 10. Meldungen-Badge (Feb 2026)
 
+- **Reiter „Meldungen“:** Rotes Badge mit Anzahl pending-Meldungen rechts neben dem Label (nur Admin/Koordinator/Superadmin)
+- **Schnellstart (Dashboard):** Rotes Badge an der Schichtplan-NFS-Kachel, wenn Meldungen vorhanden – nur für Admin/Koordinator/Superadmin
+- **Technik:** `SchichtplanNfsService.streamMeldungenCount(companyId)` – Firestore-Snapshots auf `schichtplanNfsMeldungen` mit `status == 'pending'`
+- **Tab-UI:** Eigene Implementierung statt TabBar/TabBarView (InkWell + IndexedStack), da Flutter-TabBar Klicks blockierte; Tab-Bar als `PreferredSize` in AppBar.bottom
+- **Schnellstart-Icon:** Schichtplan NFS nutzt `Icons.calendar_today` (in home_screen.dart `_getIconDataForModule`) – nötig für Badge-Anzeige
+
+## 11. Letzte Änderungen (Feb 2026)
+
+- **Stundenlabel:** Schriftgröße im kompakten Modus von 17 px auf 14 px reduziert (bessere Proportionen auf Handy)
 - Monatsübersicht: Schichttypen-Badges entfernt, nur Tag + Status
 - Stundenübersicht: Kreise mit Farben/Anzahl pro Bereitschaftstyp pro Stunde
 - 2 Zeilen für Kreise bei 4+ Typen, einheitliche Kartenhöhe 68 px
@@ -95,7 +106,7 @@ kunden/{companyId}/
 - **Fix Löschen:** Firestore `set()` ohne merge – gelöschte Schichten werden dauerhaft aus DB entfernt (Commit 08db50f)
 - **Performance:** Parallele Firestore-Operationen (Future.wait) – Monatsübersicht, Tagesansicht, Schicht anlegen, Bearbeiten, Meldungen annehmen (Commit f3f9635)
 
-## 11. Performance-Optimierungen (Commit f3f9635)
+## 12. Performance-Optimierungen (Commit f3f9635)
 
 - **loadTageStatusForMonth:** Alle Tage parallel statt 28–31 sequentielle Reads
 - **loadTageMitEintraegen:** Parallele Reads

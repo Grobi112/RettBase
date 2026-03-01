@@ -162,7 +162,16 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 ### Betroffene Dateien
 - `lib/screens/login_screen.dart`, `lib/screens/company_id_screen.dart`, `lib/main.dart`
 
-## 9. Letzte Session-Änderungen (Feb 2026)
+## 9. Kundenverwaltung und Schnellstart (Feb 2026)
+
+### Kundenverwaltung
+- **createKunde()** (KundenverwaltungService): Legt bei neuem Kunden u.a. an: `settings/informationssystem` (leere containerSlots), `settings/schnellstart` (Slots `['','','','','','']`), keine Schicht-/Standort-Daten
+- **Zum Kunden wechseln:** Nach Anlage eines Kunden SnackBar mit Aktion; in der Kundenliste Button „Zum Kunden wechseln“ – setzt companyId und navigiert zum Dashboard
+
+### Schnellstart bei neuem Kunden
+- **getModulesForSchnellstart** (ModulesService): Liefert auch leere Slots – kein Fallback mehr auf erste 6 Module. Bei neuem Kunden: 6 leere Slots statt voreingefüllte Module.
+
+## 10. Letzte Session-Änderungen (Feb 2026)
 
 - **Cloud Functions:** kundeExists, _resolveToDocId, ensureUsersDoc – Firestore-Queries parallel mit Promise.all
 - **Web Build:** `--tree-shake-icons` in build_web.sh, deploy_web.sh, fw
@@ -171,9 +180,32 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 - **APK:** Entfernt – kein downloadUrl mehr in version.json; app_update_service_android gibt immer upToDate; increment_version.js löscht downloadUrl
 - **Push:** permission-blocked nicht mehr als Fehler geloggt; bei denied wird getToken nicht versucht
 - **Profil:** Gelöschte/geleerte Felder senden FieldValue.delete() – werden in Firestore korrekt entfernt (nicht mehr durch merge erhalten)
-- **Web Version-Check:** Nur **einmal** beim App-Start im Ladefenster (vor Dashboard/Login); keine periodische Prüfung mehr – stört Session-Ablauf. Reload nur wenn Server-Version > Client; 2 Min Cooldown; robustes JSON-Parsing (leere/ungültige Antwort). `runWebVersionCheckOnce` in main.dart/_RettBaseHomeState
+- **Web Version-Check:** siehe Abschnitt 10
 
-## 10. Hinweis zu Firestore-Daten
+## 11. Web-Versionsprüfung und Update (PWA, Handy)
+
+**Ablauf (MUSS so bleiben):**
+
+1. Nutzer öffnet PWA → Login erscheint
+2. Nutzer loggt sich ein
+3. **Versionsprüfung und Aktualisierung** (direkt nach erfolgreichem Login)
+4. Nutzer geht z.B. auf EinsatzprotokollSSD → neue Version wird angezeigt
+
+**Implementierung:**
+
+- **Zeitpunkt:** Versionsprüfung läuft **nur nach erfolgreichem Login** (nicht auf dem Login-Bildschirm, kein Reload während der Anmeldung)
+- **LoginScreen:** Nach `signInWithEmailAndPassword` bzw. `createUserWithEmailAndPassword` → `updateWebVersionFromServer()` → `runWebVersionCheckOnce(() => reload())` → dann Navigation zum Dashboard
+- **Dashboard:** Versionsprüfung auch beim ersten Laden (falls Nutzer bereits eingeloggt)
+
+**Technische Details (PWA-Handy):**
+
+- **version.json:** Mit `fetch(..., { cache: 'no-store' })` laden – umgeht Service-Worker- und HTTP-Cache (sonst liefert der alte SW die gecachte alte Version)
+- **reload():** Service Worker deregistrieren → 150 ms Verzögerung → `location.replace()` mit `?_nocache=Timestamp` (Cache-Bypass)
+- **version.json-URL:** `https://app.rettbase.de/version.json` (AppConfig.androidUpdateCheckUrl)
+- **Cooldown:** 2 Min nach Reload keine erneute Prüfung (verhindert Endlosschleife)
+- **Relevante Dateien:** `lib/utils/web_version_check_web.dart`, `lib/utils/reload_web_web.dart`, `lib/screens/login_screen.dart`, `lib/screens/dashboard_screen.dart`
+
+## 12. Hinweis zu Firestore-Daten
 
 Die **tatsächlichen Inhalte** von Firestore (Dokumente, Werte) sind nicht in diesem Repo. Bei Problemen:
 - Struktur und Pfade aus Code/ diesem Doc ableiten

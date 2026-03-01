@@ -166,6 +166,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
         fullscreenDialog: true,
         builder: (ctx) => _MitarbeiterFormScreen(
           companyId: widget.companyId,
+          bereich: widget.bereich,
           roles: _rolesForCompany,
           roleLabels: _roleLabels,
           qualifikationen: _qualifikationen,
@@ -197,6 +198,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
         fullscreenDialog: true,
         builder: (ctx) => _MitarbeiterFormScreen(
           companyId: widget.companyId,
+          bereich: widget.bereich,
           mitarbeiter: m,
           roles: _rolesForCompany,
           roleLabels: _roleLabels,
@@ -525,21 +527,31 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
                         children: [
                           Row(
                             children: [
-                              Text(
-                                m.displayName,
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                              Flexible(
+                                child: Text(
+                                  m.displayName,
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
                               ),
                               if (m.role != null && m.role!.isNotEmpty) ...[
                                 const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primary.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    _roleLabels[m.role] ?? m.role!,
-                                    style: TextStyle(fontSize: 11, color: AppTheme.primary),
+                                Flexible(
+                                  flex: 0,
+                                  fit: FlexFit.loose,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primary.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      _roleLabels[m.role] ?? m.role!,
+                                      style: TextStyle(fontSize: 11, color: AppTheme.primary),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -549,17 +561,24 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
                             Text(
                               (m.qualifikation!).join(', '),
                               style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                         ],
                       ),
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         IconButton(
                           icon: Icon(m.active ? Icons.check_circle : Icons.cancel, color: m.active ? Colors.green : Colors.red),
                           onPressed: () => _toggleActive(m),
                           tooltip: m.active ? 'Deaktivieren' : 'Aktivieren',
+                          style: IconButton.styleFrom(
+                            minimumSize: Responsive.isCompact(context) ? const Size(40, 40) : null,
+                            padding: Responsive.isCompact(context) ? const EdgeInsets.all(8) : null,
+                          ),
                         ),
                         if ((m.uid != null && m.uid!.isNotEmpty) ||
                             (m.pseudoEmail != null && m.pseudoEmail!.isNotEmpty) ||
@@ -569,17 +588,29 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
                             icon: const Icon(Icons.lock_reset),
                             onPressed: () => _resetPassword(m),
                             tooltip: 'Passwort setzen',
+                            style: IconButton.styleFrom(
+                              minimumSize: Responsive.isCompact(context) ? const Size(40, 40) : null,
+                              padding: Responsive.isCompact(context) ? const EdgeInsets.all(8) : null,
+                            ),
                           ),
                         IconButton(
                           icon: const Icon(Icons.edit),
                           onPressed: () => _openEdit(m),
                           tooltip: 'Bearbeiten',
+                          style: IconButton.styleFrom(
+                            minimumSize: Responsive.isCompact(context) ? const Size(40, 40) : null,
+                            padding: Responsive.isCompact(context) ? const EdgeInsets.all(8) : null,
+                          ),
                         ),
                         if (canDelete)
                           IconButton(
                             icon: Icon(Icons.delete, color: Colors.red[700]),
                             onPressed: () => _confirmDelete(m),
                             tooltip: 'Löschen',
+                            style: IconButton.styleFrom(
+                              minimumSize: Responsive.isCompact(context) ? const Size(40, 40) : null,
+                              padding: Responsive.isCompact(context) ? const EdgeInsets.all(8) : null,
+                            ),
                           ),
                       ],
                     ),
@@ -596,6 +627,7 @@ class _MitarbeiterverwaltungScreenState extends State<MitarbeiterverwaltungScree
 
 class _MitarbeiterFormScreen extends StatefulWidget {
   final String companyId;
+  final String? bereich;
   final Mitarbeiter? mitarbeiter;
   final List<String> roles;
   final Map<String, String> roleLabels;
@@ -607,6 +639,7 @@ class _MitarbeiterFormScreen extends StatefulWidget {
 
   const _MitarbeiterFormScreen({
     required this.companyId,
+    this.bereich,
     this.mitarbeiter,
     required this.roles,
     required this.roleLabels,
@@ -622,6 +655,10 @@ class _MitarbeiterFormScreen extends StatefulWidget {
 }
 
 class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
+  /// Notfallseelsorge und Schulsanitätsdienst: Führerschein, Qualifikation, Vertrag ausblenden
+  bool get _hideRettungsdienstFields =>
+      ['notfallseelsorge', 'schulsanitaetsdienst'].contains((widget.bereich ?? '').trim().toLowerCase());
+
   late final TextEditingController _personalnummerCtrl;
   late final TextEditingController _emailCtrl;
   late final TextEditingController _vornameCtrl;
@@ -773,9 +810,9 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
         hausnummer: _hausnummerCtrl.text.trim().isEmpty ? null : _hausnummerCtrl.text.trim(),
         plz: _plzCtrl.text.trim().isEmpty ? null : _plzCtrl.text.trim(),
         ort: _ortCtrl.text.trim().isEmpty ? null : _ortCtrl.text.trim(),
-        fuehrerschein: _fuehrerschein.isEmpty ? null : _fuehrerschein,
-        qualifikation: _qualifikation.isEmpty ? null : _qualifikation,
-        angestelltenverhaeltnis: _angestelltenverhaeltnis.isEmpty ? null : _angestelltenverhaeltnis,
+        fuehrerschein: _hideRettungsdienstFields ? null : (_fuehrerschein.isEmpty ? null : _fuehrerschein),
+        qualifikation: _hideRettungsdienstFields ? null : (_qualifikation.isEmpty ? null : _qualifikation),
+        angestelltenverhaeltnis: _hideRettungsdienstFields ? null : (_angestelltenverhaeltnis.isEmpty ? null : _angestelltenverhaeltnis),
         geburtsdatum: _geburtsdatum,
         active: _active,
       );
@@ -823,9 +860,9 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
           'hausnummer': mitarbeiter.hausnummer,
           'plz': mitarbeiter.plz,
           'ort': mitarbeiter.ort,
-          'fuehrerschein': mitarbeiter.fuehrerschein,
-          'qualifikation': _qualifikation.isEmpty ? null : _qualifikation,
-          'angestelltenverhaeltnis': _angestelltenverhaeltnis.isEmpty ? null : _angestelltenverhaeltnis,
+          'fuehrerschein': _hideRettungsdienstFields ? null : mitarbeiter.fuehrerschein,
+          'qualifikation': _hideRettungsdienstFields ? null : (_qualifikation.isEmpty ? null : _qualifikation),
+          'angestelltenverhaeltnis': _hideRettungsdienstFields ? null : (_angestelltenverhaeltnis.isEmpty ? null : _angestelltenverhaeltnis),
           'active': mitarbeiter.active,
         };
         if (_geburtsdatum != null) updates['geburtsdatum'] = _geburtsdatum!.millisecondsSinceEpoch;
@@ -1063,79 +1100,83 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
                   keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 12),
-                // 8. Führerscheinklasse (Dropdown)
-                DropdownButtonFormField<String>(
-                  value: _fuehrerschein,
-                  decoration: const InputDecoration(labelText: 'Führerscheinklasse'),
-                  items: [
-                    const DropdownMenuItem(value: '', child: Text('–')),
-                    ...widget.fuehrerscheinklassen.where((c) => c.isNotEmpty).map((c) => DropdownMenuItem(value: c, child: Text(c))),
-                  ],
-                  onChanged: (v) => setState(() => _fuehrerschein = v ?? ''),
-                ),
-                const SizedBox(height: 12),
-                // 9. Qualifikation und Vertrag auf einer Ebene
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Qualifikation',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        ),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: widget.qualifikationen.map((q) {
-                            final selected = _qualifikation.contains(q);
-                            return FilterChip(
-                              label: Text(q),
-                              selected: selected,
-                              onSelected: (v) {
-                                setState(() {
-                                  if (v) _qualifikation.add(q);
-                                  else _qualifikation.remove(q);
-                                  _qualifikation = List.from(_qualifikation);
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: 'Vertrag',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        ),
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: widget.vertraege.map((a) {
-                            final selected = _angestelltenverhaeltnis.contains(a);
-                            return FilterChip(
-                              label: Text(a),
-                              selected: selected,
-                              onSelected: (v) {
-                                setState(() {
-                                  if (v) _angestelltenverhaeltnis.add(a);
-                                  else _angestelltenverhaeltnis.remove(a);
-                                  _angestelltenverhaeltnis = List.from(_angestelltenverhaeltnis);
-                                });
-                              },
-                            );
-                          }).toList(),
+                if (!_hideRettungsdienstFields) ...[
+                  const SizedBox(height: 12),
+                  // 8. Führerscheinklasse (Dropdown) – nur Rettungsdienst
+                  DropdownButtonFormField<String>(
+                    value: _fuehrerschein,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Führerscheinklasse'),
+                    items: [
+                      const DropdownMenuItem(value: '', child: Text('–')),
+                      ...widget.fuehrerscheinklassen.where((c) => c.isNotEmpty).map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis, maxLines: 1))),
+                    ],
+                    onChanged: (v) => setState(() => _fuehrerschein = v ?? ''),
+                  ),
+                  const SizedBox(height: 12),
+                  // 9. Qualifikation und Vertrag – nur Rettungsdienst
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Qualifikation',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: widget.qualifikationen.map((q) {
+                              final selected = _qualifikation.contains(q);
+                              return FilterChip(
+                                label: Text(q),
+                                selected: selected,
+                                onSelected: (v) {
+                                  setState(() {
+                                    if (v) _qualifikation.add(q);
+                                    else _qualifikation.remove(q);
+                                    _qualifikation = List.from(_qualifikation);
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Vertrag',
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: widget.vertraege.map((a) {
+                              final selected = _angestelltenverhaeltnis.contains(a);
+                              return FilterChip(
+                                label: Text(a),
+                                selected: selected,
+                                onSelected: (v) {
+                                  setState(() {
+                                    if (v) _angestelltenverhaeltnis.add(a);
+                                    else _angestelltenverhaeltnis.remove(a);
+                                    _angestelltenverhaeltnis = List.from(_angestelltenverhaeltnis);
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 // 10. Rolle und Status (Aktiv) auf einer Ebene
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -1143,8 +1184,9 @@ class _MitarbeiterFormScreenState extends State<_MitarbeiterFormScreen> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _role,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Rolle'),
-                        items: widget.roles.map((r) => DropdownMenuItem(value: r, child: Text(widget.roleLabels[r] ?? r))).toList(),
+                        items: widget.roles.map((r) => DropdownMenuItem(value: r, child: Text(widget.roleLabels[r] ?? r, overflow: TextOverflow.ellipsis, maxLines: 1))).toList(),
                         onChanged: (v) => setState(() => _role = v ?? 'user'),
                       ),
                     ),

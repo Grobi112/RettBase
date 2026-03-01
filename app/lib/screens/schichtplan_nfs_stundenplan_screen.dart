@@ -878,10 +878,12 @@ class _AddBereitschaftSheetState extends State<_AddBereitschaftSheet> {
             if (widget.typen.isNotEmpty)
               DropdownButtonFormField<String>(
                 value: _typId ?? widget.typen.first.id,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Bereitschafts-Typ', border: OutlineInputBorder()),
                 items: widget.typen.map((t) => DropdownMenuItem(
                       value: t.id,
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
                             width: 12,
@@ -889,7 +891,7 @@ class _AddBereitschaftSheetState extends State<_AddBereitschaftSheet> {
                             decoration: BoxDecoration(color: widget.colorForTyp(t.id), borderRadius: BorderRadius.circular(2)),
                           ),
                           const SizedBox(width: 8),
-                          Text(t.name),
+                          Flexible(child: Text(t.name, overflow: TextOverflow.ellipsis, maxLines: 1)),
                         ],
                       ),
                     )).toList(),

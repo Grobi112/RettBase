@@ -9,6 +9,13 @@
       ]
     },
     {
+      "collectionGroup": "fahrtenbuchEintraegeV2",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "datum", "order": "DESCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "schichtplanNfsMeldungen",
       "queryScope": "COLLECTION",
       "fields": [

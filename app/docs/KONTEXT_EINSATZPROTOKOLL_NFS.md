@@ -49,8 +49,13 @@ kunden/{companyId}/
 **Laufende interne Nr.:**
 - Format: YYYYNNNN (z.B. 20260001)
 - Neues Jahr → Zähler bei 0001
-- Beim Formular-Öffnen wird nächste Nr. geladen und angezeigt
+- **Nur beim Speichern vergeben** (nicht beim Formular-Öffnen)
+- Beim Öffnen: Anzeige "–"
 - Nicht änderbar (enabled: false, Firestore: kein update)
+- **Löschen:** Wenn letzte vergebene Nr. gelöscht wird → Nr. wiederverwendbar. Bei Löschen einer mittleren Nr. keine Auswirkung (nächste bleibt z.B. 20260004)
+- **Beispiele:**
+  - Speichern → Löschen: Protokoll bekommt 20260001, Zähler = 1. Nach Löschen: Zähler geht automatisch auf 0, nächste Nr. wieder 20260001.
+  - 3 Protokolle (01, 02, 03), Protokoll 02 löschen: Zähler bleibt bei 3, nächste Nr. ist 20260004 (Lücke bei 02 bleibt bestehen).
 
 ## 5. Bereich „Einsatzbericht“
 
@@ -87,7 +92,15 @@ kunden/{companyId}/
 | menueverwaltung_screen.dart | Modul für Notfallseelsorge-Menü |
 | modulverwaltung_screen.dart | Modul in der Modulverwaltung |
 
-## 10. Wichtige Dateien
+## 10. Migration: Zähler zurücksetzen
+
+Falls die laufende Nr. vor der Umstellung (nur beim Speichern) bereits vergeben wurde:
+```bash
+dart run app:migrate_reset_nfs_laufende_nr
+```
+Setzt den Zähler für 2026 auf 0 → nächste Nr. ist 20260001.
+
+## 11. Wichtige Dateien
 
 | Datei | Rolle |
 |-------|-------|
@@ -98,3 +111,4 @@ kunden/{companyId}/
 | lib/services/einsatzprotokoll_nfs_service.dart | Firestore-Service |
 | firestore.rules | Regeln für einsatzprotokoll-nfs (kein update) |
 | .cursor/rules/pdf-zeichen-sanitisierung.mdc | PDF-Zeichen ersetzen |
+| bin/migrate_reset_nfs_laufende_nr.dart | Zähler auf 0 setzen |

@@ -92,16 +92,50 @@ class SchichtplanNfsService {
   }
 
   /// User einem NFS-Mitarbeiter zuordnen (E-Mail oder UID aus mitarbeiter)
+  /// Fallback: Direkte Firestore-Suche wenn nicht in loadMitarbeiter (z.B. companyId-Unterschied)
   Future<SchichtplanMitarbeiter?> findMitarbeiterByEmail(
     String companyId,
     String email,
   ) async {
     if (email.isEmpty) return null;
-    final list = await loadMitarbeiter(companyId);
     final normalized = email.trim().toLowerCase();
+    var list = await loadMitarbeiter(companyId);
     for (final m in list) {
       if ((m.email ?? '').trim().toLowerCase() == normalized) return m;
     }
+    if (companyId.trim().toLowerCase() != companyId) {
+      list = await loadMitarbeiter(companyId.trim().toLowerCase());
+      for (final m in list) {
+        if ((m.email ?? '').trim().toLowerCase() == normalized) return m;
+      }
+    }
+    // Fallback: Direkt in mitarbeiter suchen (email oder pseudoEmail)
+    try {
+      final normalizedId = companyId.trim().toLowerCase();
+      var snap = await _db
+          .collection('kunden')
+          .doc(normalizedId)
+          .collection('mitarbeiter')
+          .where('email', isEqualTo: normalized)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty) {
+        snap = await _db
+            .collection('kunden')
+            .doc(normalizedId)
+            .collection('mitarbeiter')
+            .where('pseudoEmail', isEqualTo: normalized)
+            .limit(1)
+            .get();
+      }
+      if (snap.docs.isNotEmpty) {
+        final d = snap.docs.first;
+        final data = d.data();
+        if (data['active'] != false) {
+          return _docToSchichtplanMitarbeiter(d.id, data);
+        }
+      }
+    } catch (_) {}
     return null;
   }
 
@@ -110,39 +144,74 @@ class SchichtplanNfsService {
     String uid,
   ) async {
     try {
-      final docById = await _db.doc('kunden/$companyId/mitarbeiter/$uid').get();
+      final normalizedId = companyId.trim().toLowerCase();
+      var docById = await _db.doc('kunden/$normalizedId/mitarbeiter/$uid').get();
+      if (!docById.exists || docById.data() == null) {
+        docById = await _db.doc('kunden/$companyId/mitarbeiter/$uid').get();
+      }
       if (docById.exists && docById.data() != null) {
         var m = await _getMitarbeiterById(companyId, docById.id);
         if (m != null) return m;
         final d = docById.data()!;
-        final email = d['email']?.toString() ?? '';
+        final email = (d['email'] ?? d['pseudoEmail'])?.toString() ?? '';
         final vorname = d['vorname']?.toString() ?? '';
         final nachname = d['nachname']?.toString() ?? '';
         m = await findMitarbeiterByEmail(companyId, email);
         if (m == null) m = await _findMitarbeiterByName(companyId, vorname, nachname);
-        return m;
+        if (m != null) return m;
+        return _docToSchichtplanMitarbeiter(docById.id, d);
       }
-      final docs = await _db
+      var docs = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(normalizedId)
           .collection('mitarbeiter')
           .where('uid', isEqualTo: uid)
           .limit(1)
           .get();
+      if (docs.docs.isEmpty && normalizedId != companyId) {
+        docs = await _db
+            .collection('kunden')
+            .doc(companyId)
+            .collection('mitarbeiter')
+            .where('uid', isEqualTo: uid)
+            .limit(1)
+            .get();
+      }
       if (docs.docs.isEmpty) return null;
       final doc = docs.docs.first;
       final data = doc.data();
       var m = await _getMitarbeiterById(companyId, doc.id);
       if (m != null) return m;
-      final email = data['email']?.toString() ?? '';
+      final email = (data['email'] ?? data['pseudoEmail'])?.toString() ?? '';
       final vorname = data['vorname']?.toString() ?? '';
       final nachname = data['nachname']?.toString() ?? '';
       m = await findMitarbeiterByEmail(companyId, email);
       if (m == null) m = await _findMitarbeiterByName(companyId, vorname, nachname);
-      return m;
+      if (m != null) return m;
+      return _docToSchichtplanMitarbeiter(doc.id, data);
     } catch (_) {
       return null;
     }
+  }
+
+  SchichtplanMitarbeiter _docToSchichtplanMitarbeiter(String id, Map<String, dynamic> data) {
+    final q = data['qualifikation'];
+    List<String>? qual;
+    if (q is List) qual = q.map((e) => e.toString()).toList();
+    return SchichtplanMitarbeiter(
+      id: id,
+      vorname: data['vorname']?.toString(),
+      nachname: data['nachname']?.toString(),
+      email: (data['email'] ?? data['pseudoEmail'])?.toString(),
+      qualifikation: qual,
+      personalnummer: data['personalnummer']?.toString(),
+      strasse: data['strasse']?.toString(),
+      hausnummer: data['hausnummer']?.toString(),
+      plz: data['plz']?.toString(),
+      ort: data['ort']?.toString(),
+      telefonnummer: (data['telefonnummer'] ?? data['telefon'] ?? data['handynummer'])?.toString(),
+      role: data['role']?.toString(),
+    );
   }
 
   Future<SchichtplanMitarbeiter?> _findMitarbeiterByName(
@@ -621,6 +690,17 @@ class SchichtplanNfsService {
       'createdAt': FieldValue.serverTimestamp(),
     });
     return ref.id;
+  }
+
+  /// Stream der Anzahl pending-Meldungen (für Badge-Anzeige bei Admin/Koordinator/Superadmin).
+  Stream<int> streamMeldungenCount(String companyId) {
+    return _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('schichtplanNfsMeldungen')
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snap) => snap.docs.length);
   }
 
   /// Pending-Meldungen laden (status == 'pending')

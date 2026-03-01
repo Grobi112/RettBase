@@ -9,6 +9,7 @@ import '../services/mitarbeiter_service.dart';
 import '../services/auth_service.dart';
 import '../services/schicht_status_service.dart';
 import '../services/schichtanmeldung_service.dart';
+import '../utils/fahrtenbuch_permissions.dart';
 
 /// Fahrtenbuch – digitales Fahrtenbuch
 class FahrtenbuchScreen extends StatefulWidget {
@@ -16,6 +17,7 @@ class FahrtenbuchScreen extends StatefulWidget {
   final VoidCallback onBack;
   final FahrtenbuchVorlage? initialVorlage;
   final FahrtenbuchEintrag? initialEintrag;
+  final String? userRole;
 
   const FahrtenbuchScreen({
     super.key,
@@ -23,6 +25,7 @@ class FahrtenbuchScreen extends StatefulWidget {
     required this.onBack,
     this.initialVorlage,
     this.initialEintrag,
+    this.userRole,
   });
 
   @override
@@ -262,6 +265,14 @@ class _FahrtenbuchScreenState extends State<FahrtenbuchScreen> {
   }
 
   Future<void> _openEintragForm({FahrtenbuchEintrag? eintrag, FahrtenbuchVorlage? vorlage}) async {
+    final uid = _authService.currentUser?.uid ?? '';
+    final canEdit = eintrag == null
+        ? true
+        : FahrtenbuchPermissions.canEdit(
+            userRole: widget.userRole,
+            userId: uid,
+            createdBy: eintrag.createdBy,
+          );
     await Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
@@ -271,7 +282,8 @@ class _FahrtenbuchScreenState extends State<FahrtenbuchScreen> {
           vorlage: vorlage,
           fahrtenbuchService: _service,
           mitarbeiterService: _mitarbeiterService,
-          currentUserUid: _authService.currentUser?.uid ?? '',
+          currentUserUid: uid,
+          canEdit: canEdit,
           onSave: () {
             Navigator.of(ctx).pop();
             widget.onBack();
@@ -293,6 +305,7 @@ class _FahrtenbuchFormScreen extends StatefulWidget {
   final FahrtenbuchService fahrtenbuchService;
   final MitarbeiterService mitarbeiterService;
   final String currentUserUid;
+  final bool canEdit;
   final VoidCallback onSave;
   final VoidCallback onCancel;
 
@@ -303,6 +316,7 @@ class _FahrtenbuchFormScreen extends StatefulWidget {
     required this.fahrtenbuchService,
     required this.mitarbeiterService,
     required this.currentUserUid,
+    this.canEdit = true,
     required this.onSave,
     required this.onCancel,
   });
@@ -384,8 +398,14 @@ class _FahrtenbuchFormScreenState extends State<_FahrtenbuchFormScreen> {
     _sonderrechteAnfahrt = sr.contains('anfahrt') && sr.contains('ja');
     _sonderrechteTransport = sr.contains('transport') && sr.contains('ja');
     _transportschein = e?.transportschein ?? false;
-    _kmAnfangCtrl.addListener(() => setState(() {}));
-    _kmEndeCtrl.addListener(() => setState(() {}));
+    void _onKmChanged() {
+      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _formKey.currentState?.validate();
+      });
+    }
+    _kmAnfangCtrl.addListener(_onKmChanged);
+    _kmEndeCtrl.addListener(_onKmChanged);
     _mitarbeiterSuchCtrl.addListener(() => setState(() {}));
     if (v != null) {
       final fa = v.fahrerOptionen;
@@ -785,26 +805,33 @@ class _FahrtenbuchFormScreenState extends State<_FahrtenbuchFormScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppTheme.buildModuleAppBar(
-        title: widget.eintrag == null ? 'Neuer Fahrtenbucheintrag' : 'Fahrtenbucheintrag bearbeiten',
+        title: widget.eintrag == null
+            ? 'Neuer Fahrtenbucheintrag'
+            : (widget.canEdit ? 'Fahrtenbucheintrag bearbeiten' : 'Fahrtenbucheintrag anzeigen'),
         onBack: widget.onCancel,
         leadingIcon: Icons.close,
-        actions: [
-          TextButton(onPressed: widget.onCancel, child: const Text('Abbrechen')),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
-            child: _saving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Speichern'),
-          ),
-          const SizedBox(width: 16),
-        ],
+        actions: widget.canEdit
+            ? [
+                TextButton(onPressed: widget.onCancel, child: const Text('Abbrechen')),
+                FilledButton(
+                  onPressed: _saving ? null : _save,
+                  style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
+                  child: _saving
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Speichern'),
+                ),
+                const SizedBox(width: 16),
+              ]
+            : null,
       ),
       body: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(
+              child: IgnorePointer(
+                ignoring: !widget.canEdit,
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     TextFormField(
@@ -829,6 +856,16 @@ class _FahrtenbuchFormScreenState extends State<_FahrtenbuchFormScreen> {
                       controller: _kmAnfangCtrl,
                       decoration: const InputDecoration(labelText: 'Km Anfang'),
                       keyboardType: TextInputType.number,
+                      validator: (v) {
+                        final kmAnfang = int.tryParse((v ?? '').trim());
+                        if (kmAnfang == null && (v ?? '').trim().isEmpty) return null;
+                        if (kmAnfang == null) return 'Ungültige Zahl';
+                        final kmEnde = int.tryParse(_kmEndeCtrl.text.trim());
+                        if (kmEnde != null && kmAnfang > kmEnde) {
+                          return 'KM-Stand Fahrtbeginn darf nicht über KM-Stand Fahrtende liegen';
+                        }
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -837,7 +874,12 @@ class _FahrtenbuchFormScreenState extends State<_FahrtenbuchFormScreen> {
                       keyboardType: TextInputType.number,
                       validator: (v) {
                         if ((v ?? '').trim().isEmpty) return 'Pflichtfeld';
-                        if (int.tryParse(v!.trim()) == null) return 'Ungültige Zahl';
+                        final kmEnde = int.tryParse(v!.trim());
+                        if (kmEnde == null) return 'Ungültige Zahl';
+                        final kmAnfang = int.tryParse(_kmAnfangCtrl.text.trim());
+                        if (kmAnfang != null && kmEnde < kmAnfang) {
+                          return 'KM-Stand Fahrtende darf nicht unter KM-Stand Fahrtbeginn liegen';
+                        }
                         return null;
                       },
                     ),
@@ -1067,7 +1109,7 @@ class _FahrtenbuchFormScreenState extends State<_FahrtenbuchFormScreen> {
                       controller: _praktikantCtrl,
                       decoration: const InputDecoration(labelText: 'Praktikant/Azubi'),
                     ),
-                    if (widget.eintrag != null) ...[
+                    if (widget.eintrag != null && widget.canEdit) ...[
                       const SizedBox(height: 24),
                       OutlinedButton.icon(
                         icon: const Icon(Icons.delete, color: Colors.red, size: 20),
@@ -1076,6 +1118,7 @@ class _FahrtenbuchFormScreenState extends State<_FahrtenbuchFormScreen> {
                       ),
                     ],
                   ],
+                ),
                 ),
               ),
             ),

@@ -261,10 +261,12 @@ exports.resolveLoginInfo = functions.region("europe-west1").https.onCall(async (
   const realEmail = (mData.email || "").toString().trim();
   const isPseudo = realEmail && realEmail.endsWith("." + ROOT_DOMAIN);
   let email;
-  if (realEmail && !isPseudo) {
-    email = realEmail;
-  } else if (docPseudo) {
+  // PseudoEmail hat Vorrang: Firebase Auth wurde damit erstellt; echte E-Mail im Profil
+  // ändert die Auth-Identity nicht – Login muss immer mit pseudoEmail erfolgen
+  if (docPseudo) {
     email = docPseudo;
+  } else if (realEmail && !isPseudo) {
+    email = realEmail;
   } else {
     email = input + "@" + companyId + "." + ROOT_DOMAIN;
   }

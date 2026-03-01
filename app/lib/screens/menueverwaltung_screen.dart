@@ -70,6 +70,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       await _modulService.ensureSchichtplanNfsModuleExists();
       await _modulService.ensureTelefonlisteNfsModuleExists();
       await _modulService.ensureEinsatzprotokollNfsModuleExists();
+      await _modulService.ensureFahrzeugstatusModuleExists();
       var items = await _menuService.loadMenuStructure(_selectedBereich);
       // Menü startet leer – keine Legacy-Migration, Nutzer legt alles selbst an
       var mods = await _modulService.getAllModules();
@@ -524,10 +525,11 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
         children: [
           DropdownButtonFormField<String>(
             value: _selectedBereich,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Bereich', border: OutlineInputBorder()),
             items: KundenBereich.ids.map((id) => DropdownMenuItem(
               value: id,
-              child: Text(KundenBereich.labels[id] ?? id),
+              child: Text(KundenBereich.labels[id] ?? id, overflow: TextOverflow.ellipsis, maxLines: 1),
             )).toList(),
             onChanged: (v) {
               if (v != null && v != _selectedBereich) {
@@ -624,6 +626,8 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     if (_selectedBereich != KundenBereich.notfallseelsorge) {
       available = available.where((e) => e.key != 'telefonlistenfs' && e.key != 'einsatzprotokollnfs').toList();
     }
+    // Schichtübersicht nur über Schichtanmeldung → Einstellungen, nicht im Menü
+    available = available.where((e) => e.key != 'schichtuebersicht').toList();
     available.sort((a, b) {
       final la = (a.value['label'] ?? a.key).toString().toLowerCase();
       final lb = (b.value['label'] ?? b.key).toString().toLowerCase();

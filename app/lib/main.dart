@@ -210,9 +210,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
 
   Future<void> _submitCompanyId() async {
     final raw = _companyIdController.text.trim();
-    final kundenId = raw.isEmpty
-        ? AppConfig.defaultKundenId
-        : raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\-]'), '');
+    final kundenId = raw.isEmpty ? '' : raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\-]'), '');
     if (kundenId.isEmpty) {
       setState(() => _companyIdError = 'Bitte eine gültige Kunden-ID eingeben.');
       return;
@@ -388,6 +386,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
   }
 
   Widget _buildCompanyIdForm(BuildContext context) {
+    const logoHeight = 90.0; // Konstant (kein Wechsel bei Tastatur-Fokus)
     final viewInsets = MediaQuery.of(context).viewInsets;
     final keyboardVisible = viewInsets.bottom > 0;
     return Scaffold(
@@ -411,7 +410,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
               children: [
                 Image.asset(
                   'img/rettbase_splash.png',
-                  height: keyboardVisible ? 64 : (Responsive.isCompact(context) ? 100 : 140),
+                  height: logoHeight,
                   fit: BoxFit.contain,
                 ),
                 SizedBox(height: keyboardVisible ? 20 : 48),

@@ -224,6 +224,7 @@ class _SchichtAnlegenSheetState extends State<SchichtAnlegenSheet> {
                   Expanded(
                     child: DropdownButtonFormField<int>(
                       value: _uhrzeitVon,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Uhrzeit von',
                         border: OutlineInputBorder(),
@@ -249,6 +250,7 @@ class _SchichtAnlegenSheetState extends State<SchichtAnlegenSheet> {
                   Expanded(
                     child: DropdownButtonFormField<int>(
                       value: _uhrzeitBis > _uhrzeitVon ? _uhrzeitBis : (_uhrzeitVon < 23 ? _uhrzeitVon + 1 : 24),
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Uhrzeit bis',
                         border: OutlineInputBorder(),
@@ -271,6 +273,7 @@ class _SchichtAnlegenSheetState extends State<SchichtAnlegenSheet> {
               if (_typen.isNotEmpty)
                 DropdownButtonFormField<String>(
                   value: _typId ?? _typen.first.id,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Bereitschaftstyp',
                     border: OutlineInputBorder(),
@@ -289,7 +292,7 @@ class _SchichtAnlegenSheetState extends State<SchichtAnlegenSheet> {
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-                                Text(t.name),
+                                Flexible(child: Text(t.name, overflow: TextOverflow.ellipsis, maxLines: 1)),
                               ],
                             ),
                           ))

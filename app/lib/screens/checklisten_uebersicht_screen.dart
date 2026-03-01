@@ -21,7 +21,7 @@ class ChecklistenUebersichtScreen extends StatefulWidget {
     required this.onBack,
   });
 
-  static const _editRoles = ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung'];
+  static const _editRoles = ['admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'koordinator'];
   static const _viewSavedRoles = ['superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'wachleitung'];
 
   static bool canEdit(String role) => _editRoles.contains((role).toLowerCase().trim());
@@ -47,6 +47,17 @@ class _ChecklistenUebersichtScreenState extends State<ChecklistenUebersichtScree
       appBar: AppTheme.buildModuleAppBar(
         title: widget.title ?? 'Checklisten',
         onBack: widget.onBack,
+        actions: showEdit
+            ? [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: AppTheme.headerPrimaryButton(
+                    label: 'Checkliste hinzufügen',
+                    onPressed: _openErstellen,
+                  ),
+                ),
+              ]
+            : null,
       ),
       body: StreamBuilder<List<Checkliste>>(
         stream: _service.streamChecklisten(widget.companyId),
@@ -56,7 +67,7 @@ class _ChecklistenUebersichtScreenState extends State<ChecklistenUebersichtScree
           }
           final list = snap.data ?? [];
           return ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + (showEdit ? 80 : 24)),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
             children: [
               if (showSaved) ...[
                 Card(
@@ -88,7 +99,7 @@ class _ChecklistenUebersichtScreenState extends State<ChecklistenUebersichtScree
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          showEdit ? 'Tippen Sie auf + um eine neue Checkliste zu erstellen.' : 'Es wurden noch keine Checklisten angelegt.',
+                          showEdit ? 'Nutzen Sie „Checkliste hinzufügen" oben rechts um eine neue Checkliste zu erstellen.' : 'Es wurden noch keine Checklisten angelegt.',
                           style: TextStyle(color: Colors.grey[500], fontSize: 14),
                           textAlign: TextAlign.center,
                         ),
@@ -102,13 +113,6 @@ class _ChecklistenUebersichtScreenState extends State<ChecklistenUebersichtScree
           );
         },
       ),
-      floatingActionButton: showEdit
-          ? FloatingActionButton(
-              onPressed: _openErstellen,
-              backgroundColor: AppTheme.primary,
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
     );
   }
 

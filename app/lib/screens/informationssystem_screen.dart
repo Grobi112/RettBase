@@ -55,13 +55,14 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
   bool _loading = true;
   TabController? _tabController;
 
-  static const _deleteAllowedRoles = {
-    'superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'leiterssd', 'wachleitung',
+  /// Rollen, die Informationen erstellen, bearbeiten und löschen dürfen (z.B. nfsunna: admin, koordinator)
+  static const _createEditDeleteRoles = {
+    'superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'leiterssd', 'wachleitung', 'koordinator',
   };
 
-  /// Nur diese Rollen dürfen Einstellungen (Zahnrad) vornehmen – andere können ggf. Informationen einpflegen.
+  /// Rollen, die Einstellungen (Zahnrad, Container-Typen, Slots) verwalten dürfen
   static const _settingsAllowedRoles = {
-    'superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung',
+    'superadmin', 'admin', 'geschaeftsfuehrung', 'rettungsdienstleitung', 'koordinator',
   };
 
   @override
@@ -110,8 +111,8 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
     }
   }
 
-  bool get _canDelete =>
-      widget.userRole != null && _deleteAllowedRoles.contains((widget.userRole ?? '').toLowerCase().trim());
+  bool get _canCreateEditDelete =>
+      widget.userRole != null && _createEditDeleteRoles.contains((widget.userRole ?? '').toLowerCase().trim());
 
   bool get _canAccessSettings =>
       widget.userRole != null && _settingsAllowedRoles.contains((widget.userRole ?? '').toLowerCase().trim());
@@ -164,7 +165,8 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
           onBack: () => Navigator.of(context).pop(),
           onSaved: () => Navigator.of(context).pop(true),
           initialInfo: info,
-          canDelete: _canDelete,
+          canDelete: _canCreateEditDelete,
+          readOnly: !_canCreateEditDelete,
           containerTypeIds: _containerTypes,
           containerTypeLabels: _containerLabels,
         ),
@@ -189,6 +191,7 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
         titleWidget: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             SvgPicture.asset(
               'img/icon_informationssystem.svg',
@@ -197,7 +200,14 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
               colorFilter: ColorFilter.mode(AppTheme.primary, BlendMode.srcIn),
             ),
             const SizedBox(width: 10),
-            Text(widget.title ?? 'Informationssystem', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            Expanded(
+              child: Text(
+                widget.title ?? 'Informationssystem',
+                style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ],
         ),
         onBack: widget.onBack ?? () => Navigator.of(context).pop(),
@@ -230,7 +240,7 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
                     final typ = idx < _containerTypes.length ? _containerTypes[idx] : _containerTypes.first;
                     return MediaQuery.sizeOf(context).width < 400
                         ? IconButton(
-                            onPressed: () => _openAnlegen(typ),
+                            onPressed: _canCreateEditDelete ? () => _openAnlegen(typ) : null,
                             icon: const Icon(Icons.add),
                             tooltip: 'Neue Information',
                             style: IconButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white),
@@ -238,7 +248,7 @@ class _InformationssystemScreenState extends State<InformationssystemScreen> wit
                         : Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: FilledButton.icon(
-                              onPressed: () => _openAnlegen(typ),
+                              onPressed: _canCreateEditDelete ? () => _openAnlegen(typ) : null,
                               icon: const Icon(Icons.add, size: 18),
                               label: const Text('Neue Information'),
                               style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),

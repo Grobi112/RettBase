@@ -662,6 +662,7 @@ class _NfsMitarbeiterBearbeitenScreenState
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     value: _rolle,
+                    isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Rolle', border: OutlineInputBorder()),
                     items: const [
                       DropdownMenuItem(value: 'admin', child: Text('Admin')),

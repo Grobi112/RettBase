@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../services/login_service.dart';
 import '../utils/ensure_users_doc_cache.dart';
 import '../utils/web_version_check.dart';
+import '../utils/reload_web.dart' show reload;
 import '../services/push_notification_service.dart';
 import 'company_id_screen.dart';
 import 'dashboard_screen.dart';
@@ -141,8 +142,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       if (kIsWeb) {
         await updateWebVersionFromServer();
+        await runWebVersionCheckOnce(() => reload());
+        if (!mounted) return;
       }
-      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => DashboardScreen(companyId: dashboardCompanyId),
@@ -175,8 +177,9 @@ class _LoginScreenState extends State<LoginScreen> {
           if (!mounted) return;
           if (kIsWeb) {
             await updateWebVersionFromServer();
+            await runWebVersionCheckOnce(() => reload());
+            if (!mounted) return;
           }
-          if (!mounted) return;
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
               builder: (_) => DashboardScreen(companyId: companyId),
@@ -327,7 +330,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Image.asset(
                   'img/rettbase_splash.png',
-                  height: keyboardVisible ? 64 : (Responsive.isCompact(context) ? 100 : 140),
+                  height: 90,
                   fit: BoxFit.contain,
                 ),
                 SizedBox(height: keyboardVisible ? 20 : 48),

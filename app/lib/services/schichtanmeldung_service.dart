@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/fahrtenbuch_vorlage.dart';
+import '../models/fahrtenbuch_v2_vorlage.dart';
 import '../models/checklisten_vorlage.dart';
 import 'fahrtenbuch_service.dart';
+import 'fahrtenbuch_v2_service.dart';
 
 /// Modell: Bereitschafts-Typ
 class BereitschaftsTyp {
@@ -108,15 +110,19 @@ class SchichtplanMitarbeiter {
 
 /// Schichtanmeldung – Bereitschaften, Standorte, Typen
 /// Nutzt schichtplanBereitschaften, schichtplanStandorte, schichtplanBereitschaftsTypen
+/// Wichtig: companyId wird stets normalisiert (trim, toLowerCase) – keine Daten anderer Kunden.
 class SchichtanmeldungService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// Standorte laden
+  static String _cid(String companyId) => companyId.trim().toLowerCase();
+
+  /// Standorte laden – ausschließlich aus kunden/{companyId}/schichtplanStandorte
   Future<List<Standort>> loadStandorte(String companyId) async {
     try {
+      final cid = _cid(companyId);
       final snap = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('schichtplanStandorte')
           .orderBy('order')
           .get();
@@ -137,12 +143,13 @@ class SchichtanmeldungService {
     }
   }
 
-  /// Bereitschafts-Typen laden
+  /// Bereitschafts-Typen laden – ausschließlich aus kunden/{companyId}/schichtplanBereitschaftsTypen
   Future<List<BereitschaftsTyp>> loadBereitschaftsTypen(String companyId) async {
     try {
+      final cid = _cid(companyId);
       final snap = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('schichtplanBereitschaftsTypen')
           .orderBy('name')
           .get();
@@ -161,9 +168,10 @@ class SchichtanmeldungService {
     String? beschreibung,
     int? color,
   }) async {
+    final cid = _cid(companyId);
     final ref = await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanBereitschaftsTypen')
         .add({
       'name': name,
@@ -174,6 +182,17 @@ class SchichtanmeldungService {
     return ref.id;
   }
 
+  /// Bereitschafts-Typ löschen
+  Future<void> deleteBereitschaftsTyp(String companyId, String typId) async {
+    final cid = _cid(companyId);
+    await _db
+        .collection('kunden')
+        .doc(cid)
+        .collection('schichtplanBereitschaftsTypen')
+        .doc(typId)
+        .delete();
+  }
+
   /// Bereitschafts-Typ aktualisieren
   Future<void> updateBereitschaftsTyp(
     String companyId,
@@ -182,13 +201,14 @@ class SchichtanmeldungService {
     String? beschreibung,
     int? color,
   }) async {
+    final cid = _cid(companyId);
     final data = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
     if (name != null) data['name'] = name;
     if (beschreibung != null) data['beschreibung'] = beschreibung;
     if (color != null) data['color'] = color;
     await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanBereitschaftsTypen')
         .doc(typId)
         .update(data);
@@ -197,15 +217,16 @@ class SchichtanmeldungService {
   /// NFS-BereitschaftsTypen nach schichtplanBereitschaftsTypen synchronisieren
   /// Kopiert alle Einträge aus schichtplanNfsBereitschaftsTypen
   Future<int> syncBereitschaftsTypenFromNfs(String companyId) async {
+    final cid = _cid(companyId);
     final nfsSnap = await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanNfsBereitschaftsTypen')
         .get();
     if (nfsSnap.docs.isEmpty) return 0;
     final existing = await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanBereitschaftsTypen')
         .get();
     final existingNames = existing.docs
@@ -220,7 +241,7 @@ class SchichtanmeldungService {
       if (existingNames.contains(name.toLowerCase())) continue;
       await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('schichtplanBereitschaftsTypen')
           .add({
         'name': name,
@@ -235,37 +256,103 @@ class SchichtanmeldungService {
   }
 
   /// Schichtplan-Mitarbeiter laden (für Zuordnung zum eingeloggten User)
+  /// Merge: schichtplanMitarbeiter + mitarbeiter (Mitgliederverwaltung), damit alle Nutzer zugreifen können
   Future<List<SchichtplanMitarbeiter>> loadSchichtplanMitarbeiter(String companyId) async {
     try {
+      final cid = _cid(companyId);
       final snap = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('schichtplanMitarbeiter')
           .orderBy('nachname')
           .get();
-      return snap.docs
+      final list = snap.docs
           .map((d) => SchichtplanMitarbeiter.fromFirestore(d.id, d.data()))
           .toList();
+      final existingIds = list.map((m) => m.id).toSet();
+      // Fallback: mitarbeiter aus Mitgliederverwaltung ergänzen (nicht in schichtplanMitarbeiter)
+      try {
+        final mitSnap = await _db
+            .collection('kunden')
+            .doc(cid)
+            .collection('mitarbeiter')
+            .get();
+        for (final d in mitSnap.docs) {
+          final data = d.data();
+          if (data['active'] == false) continue;
+          if (existingIds.contains(d.id)) continue;
+          list.add(_mitarbeiterDocToSchichtplanMitarbeiter(d.id, data));
+          existingIds.add(d.id);
+        }
+        list.sort((a, b) => (a.nachname ?? '').toLowerCase().compareTo((b.nachname ?? '').toLowerCase()));
+      } catch (_) {}
+      return list;
     } catch (_) {
       return [];
     }
   }
 
+  /// Mitarbeiter-Doc aus mitarbeiter-Collection zu SchichtplanMitarbeiter konvertieren
+  SchichtplanMitarbeiter _mitarbeiterDocToSchichtplanMitarbeiter(String id, Map<String, dynamic> data) {
+    final q = data['qualifikation'];
+    List<String>? qual;
+    if (q is List) qual = q.map((e) => e.toString()).toList();
+    return SchichtplanMitarbeiter(
+      id: id,
+      vorname: data['vorname']?.toString(),
+      nachname: data['nachname']?.toString(),
+      email: (data['email'] ?? data['pseudoEmail'])?.toString(),
+      qualifikation: qual,
+      personalnummer: data['personalnummer']?.toString(),
+      strasse: data['strasse']?.toString(),
+      hausnummer: data['hausnummer']?.toString(),
+      plz: data['plz']?.toString(),
+      ort: data['ort']?.toString(),
+      telefonnummer: (data['telefonnummer'] ?? data['telefon'])?.toString(),
+      role: data['role']?.toString(),
+    );
+  }
+
   /// Aktuellen User einem Schichtplan-Mitarbeiter zuordnen (per E-Mail)
+  /// Fallback: Wenn nicht in schichtplanMitarbeiter, Suche in mitarbeiter-Collection
   Future<SchichtplanMitarbeiter?> findMitarbeiterByEmail(
     String companyId,
     String email,
   ) async {
     if (email.isEmpty) return null;
-    final list = await loadSchichtplanMitarbeiter(companyId);
     final normalized = email.trim().toLowerCase();
-    for (final m in list) {
+    for (final m in await loadSchichtplanMitarbeiter(companyId)) {
       if ((m.email ?? '').trim().toLowerCase() == normalized) return m;
     }
+    // Fallback: in mitarbeiter-Collection suchen (E-Mail oder Pseudo-E-Mail)
+    try {
+      final cid = _cid(companyId);
+      var snap = await _db
+          .collection('kunden')
+          .doc(cid)
+          .collection('mitarbeiter')
+          .where('email', isEqualTo: normalized)
+          .limit(1)
+          .get();
+      if (snap.docs.isEmpty) {
+        snap = await _db
+            .collection('kunden')
+            .doc(cid)
+            .collection('mitarbeiter')
+            .where('pseudoEmail', isEqualTo: normalized)
+            .limit(1)
+            .get();
+      }
+      if (snap.docs.isNotEmpty) {
+        final d = snap.docs.first;
+        return _mitarbeiterDocToSchichtplanMitarbeiter(d.id, d.data());
+      }
+    } catch (_) {}
     return null;
   }
 
   /// Aktuellen User per Name in Schichtplan-Mitarbeiter finden (Fallback bei Übereinstimmung)
+  /// Nutzt loadSchichtplanMitarbeiter (enthält bereits mitarbeiter-Merge)
   Future<SchichtplanMitarbeiter?> findMitarbeiterByName(
     String companyId,
     String vorname,
@@ -284,32 +371,46 @@ class SchichtanmeldungService {
   }
 
   /// Aktuellen User per UID aus mitarbeiter-Collection finden, dann in Schichtplan-Mitarbeiter matchen
+  /// Fallback: Wenn nicht in schichtplanMitarbeiter, Mitarbeiter-Doc direkt als SchichtplanMitarbeiter verwenden
   Future<SchichtplanMitarbeiter?> findMitarbeiterByUid(
     String companyId,
     String uid,
   ) async {
     try {
+      final normalizedId = companyId.trim().toLowerCase();
       var docs = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(normalizedId)
           .collection('mitarbeiter')
           .where('uid', isEqualTo: uid)
           .limit(1)
           .get()
           .then((s) => s.docs);
       if (docs.isEmpty) {
-        final docById = await _db.doc('kunden/$companyId/mitarbeiter/$uid').get();
+        final docById = await _db.doc('kunden/$normalizedId/mitarbeiter/$uid').get();
         if (docById.exists && docById.data() != null) {
-          var m = await getSchichtplanMitarbeiterById(companyId, docById.id);
+          final data = docById.data()!;
+          final mitarbeiterDocId = docById.id;
+          var m = await getSchichtplanMitarbeiterById(companyId, mitarbeiterDocId);
           if (m != null) return m;
-          final d = docById.data()!;
-          final email = d['email']?.toString() ?? '';
-          final vorname = d['vorname']?.toString() ?? '';
-          final nachname = d['nachname']?.toString() ?? '';
+          final email = data['email']?.toString() ?? data['pseudoEmail']?.toString() ?? '';
+          final vorname = data['vorname']?.toString() ?? '';
+          final nachname = data['nachname']?.toString() ?? '';
           m = await findMitarbeiterByEmail(companyId, email);
           if (m == null) m = await findMitarbeiterByName(companyId, vorname, nachname);
-          return m;
+          if (m != null) return m;
+          return _mitarbeiterDocToSchichtplanMitarbeiter(mitarbeiterDocId, data);
         }
+      }
+      if (docs.isEmpty && normalizedId != companyId.trim()) {
+        docs = await _db
+            .collection('kunden')
+            .doc(companyId.trim())
+            .collection('mitarbeiter')
+            .where('uid', isEqualTo: uid)
+            .limit(1)
+            .get()
+            .then((s) => s.docs);
       }
       if (docs.isEmpty) return null;
       final doc = docs.first;
@@ -317,32 +418,48 @@ class SchichtanmeldungService {
       final mitarbeiterDocId = doc.id;
       var m = await getSchichtplanMitarbeiterById(companyId, mitarbeiterDocId);
       if (m != null) return m;
-      final email = data['email']?.toString() ?? '';
+      final email = data['email']?.toString() ?? data['pseudoEmail']?.toString() ?? '';
       final vorname = data['vorname']?.toString() ?? '';
       final nachname = data['nachname']?.toString() ?? '';
       m = await findMitarbeiterByEmail(companyId, email);
       if (m == null) m = await findMitarbeiterByName(companyId, vorname, nachname);
-      return m;
+      if (m != null) return m;
+      // Fallback: Mitarbeiter aus mitarbeiter-Collection direkt verwenden (ohne schichtplanMitarbeiter-Eintrag)
+      return _mitarbeiterDocToSchichtplanMitarbeiter(mitarbeiterDocId, data);
     } catch (_) {
       return null;
     }
   }
 
   /// Schichtplan-Mitarbeiter direkt per Dokument-ID laden (Verknüpfung wenn gleiche ID wie mitarbeiter-Collection)
+  /// Fallback: Wenn nicht in schichtplanMitarbeiter, in mitarbeiter-Collection suchen
   Future<SchichtplanMitarbeiter?> getSchichtplanMitarbeiterById(String companyId, String id) async {
     if (id.isEmpty) return null;
     try {
-      final snap = await _db
+      final normalizedId = companyId.trim().toLowerCase();
+      var snap = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(normalizedId)
           .collection('schichtplanMitarbeiter')
           .doc(id)
           .get();
-      if (!snap.exists) return null;
-      return SchichtplanMitarbeiter.fromFirestore(snap.id, snap.data()!);
-    } catch (_) {
-      return null;
-    }
+      if (snap.exists && snap.data() != null) {
+        return SchichtplanMitarbeiter.fromFirestore(snap.id, snap.data()!);
+      }
+      // Fallback: in mitarbeiter-Collection
+      snap = await _db
+          .collection('kunden')
+          .doc(normalizedId)
+          .collection('mitarbeiter')
+          .doc(id)
+          .get();
+      if (snap.exists && snap.data() != null) {
+        final data = snap.data()!;
+        if (data['active'] == false) return null;
+        return _mitarbeiterDocToSchichtplanMitarbeiter(snap.id, data);
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Bereitschaften für ein Datum laden (dayId = DD.MM.YYYY)
@@ -409,12 +526,13 @@ class SchichtanmeldungService {
         .delete();
   }
 
-  /// Schichten laden (schichtplanSchichten)
+  /// Schichten laden – ausschließlich aus kunden/{companyId}/schichtplanSchichten
   Future<List<SchichtTyp>> loadSchichten(String companyId) async {
     try {
+      final cid = _cid(companyId);
       final snap = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('schichtplanSchichten')
           .orderBy('order')
           .get();
@@ -426,29 +544,15 @@ class SchichtanmeldungService {
       }
       return list;
     } catch (_) {
-      try {
-        final snap = await _db
-            .collection('kunden')
-            .doc(companyId)
-            .collection('schichtplanSchichten')
-            .get();
-        return snap.docs
-            .map((d) => SchichtTyp.fromFirestore(d.id, d.data()))
-            .toList();
-      } catch (_) {
-        return [];
-      }
+      return [];
     }
   }
 
   /// Fahrzeuge laden (für Dropdown, inkl. "Alle")
   Future<List<FahrzeugKurz>> loadFahrzeuge(String companyId) async {
     try {
-      final normalizedId = companyId.trim().toLowerCase();
-      var snap = await _db.collection('kunden').doc(normalizedId).collection('fahrzeuge').get();
-      if (snap.docs.isEmpty && normalizedId != companyId) {
-        snap = await _db.collection('kunden').doc(companyId).collection('fahrzeuge').get();
-      }
+      final cid = _cid(companyId);
+      final snap = await _db.collection('kunden').doc(cid).collection('fahrzeuge').get();
       final list = <FahrzeugKurz>[
         const FahrzeugKurz(id: 'alle', displayName: 'Alle'),
       ];
@@ -458,7 +562,7 @@ class SchichtanmeldungService {
         if (data['aktiv'] == false) continue;
         final ruf = data['rufname']?.toString() ?? data['name']?.toString() ?? '';
         final wache = data['wache']?.toString();
-        final kz = (data['kennzeichen'] ?? data['Kennzeichen'])?.toString().trim();
+        final kz = (data['kennzeichen'] ?? data['Kennzeichen'] ?? data['nummernschild'])?.toString().trim();
         items.add(FahrzeugKurz(id: d.id, displayName: ruf.isNotEmpty ? ruf : d.id, wache: wache, kennzeichen: kz?.isNotEmpty == true ? kz : null));
       }
       items.sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
@@ -470,11 +574,12 @@ class SchichtanmeldungService {
 
   /// Schicht-Typ erstellen
   Future<String> createSchicht(String companyId, SchichtTyp s) async {
+    final cid = _cid(companyId);
     final data = s.toFirestore();
     data['createdAt'] = FieldValue.serverTimestamp();
     final ref = await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanSchichten')
         .add(data);
     return ref.id;
@@ -482,9 +587,10 @@ class SchichtanmeldungService {
 
   /// Schicht-Typ aktualisieren
   Future<void> updateSchicht(String companyId, String schichtId, SchichtTyp s) async {
+    final cid = _cid(companyId);
     await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanSchichten')
         .doc(schichtId)
         .update(s.toFirestore());
@@ -492,17 +598,18 @@ class SchichtanmeldungService {
 
   /// Schicht-Typ löschen (soft: active=false) oder hart löschen
   Future<void> deleteSchicht(String companyId, String schichtId, {bool hard = false}) async {
+    final cid = _cid(companyId);
     if (hard) {
       await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('schichtplanSchichten')
           .doc(schichtId)
           .delete();
     } else {
       await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('schichtplanSchichten')
           .doc(schichtId)
           .update({'active': false, 'updatedAt': FieldValue.serverTimestamp()});
@@ -511,9 +618,10 @@ class SchichtanmeldungService {
 
   /// Standort erstellen
   Future<String> createStandort(String companyId, String name, {int order = 0}) async {
+    final cid = _cid(companyId);
     final ref = await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanStandorte')
         .add({
       'name': name,
@@ -526,11 +634,12 @@ class SchichtanmeldungService {
 
   /// Standort aktualisieren
   Future<void> updateStandort(String companyId, String standortId, String name, {int? order}) async {
+    final cid = _cid(companyId);
     final data = <String, dynamic>{'name': name, 'updatedAt': FieldValue.serverTimestamp()};
     if (order != null) data['order'] = order;
     await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanStandorte')
         .doc(standortId)
         .update(data);
@@ -538,9 +647,10 @@ class SchichtanmeldungService {
 
   /// Standort löschen
   Future<void> deleteStandort(String companyId, String standortId) async {
+    final cid = _cid(companyId);
     await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtplanStandorte')
         .doc(standortId)
         .delete();
@@ -548,9 +658,10 @@ class SchichtanmeldungService {
 
   /// Schichtanmeldung löschen
   Future<void> deleteSchichtanmeldung(String companyId, String anmeldungId) async {
+    final cid = _cid(companyId);
     await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtanmeldungen')
         .doc(anmeldungId)
         .delete();
@@ -561,9 +672,10 @@ class SchichtanmeldungService {
     String companyId,
     SchichtanmeldungEintrag e,
   ) async {
+    final cid = _cid(companyId);
     await _db
         .collection('kunden')
-        .doc(companyId)
+        .doc(cid)
         .collection('schichtanmeldungen')
         .add(e.toFirestore());
   }
@@ -582,13 +694,14 @@ class SchichtanmeldungService {
       d = d.add(const Duration(days: 1));
     }
     if (dayIds.isEmpty) return [];
+    final cid = _cid(companyId);
     final results = <SchichtanmeldungEintrag>[];
     for (var i = 0; i < dayIds.length; i += 30) {
       final batch = dayIds.skip(i).take(30).toList();
       try {
         final snap = await _db
             .collection('kunden')
-            .doc(companyId)
+            .doc(cid)
             .collection('schichtanmeldungen')
             .where('datum', whereIn: batch)
             .get();
@@ -608,9 +721,10 @@ class SchichtanmeldungService {
   ) async {
     if (dayIds.isEmpty) return [];
     try {
+      final cid = _cid(companyId);
       final snap = await _db
           .collection('kunden')
-          .doc(companyId)
+          .doc(cid)
           .collection('schichtanmeldungen')
           .where('mitarbeiterId', isEqualTo: mitarbeiterId)
           .where('datum', whereIn: dayIds)
@@ -716,6 +830,79 @@ class SchichtanmeldungService {
       datum: datumTag,
       fahrerOptionen: fahrerNamen,
       beifahrerOptionen: beifahrerNamen,
+    );
+  }
+
+  /// FahrtenbuchV2Vorlage aus Schichtanmeldung (für Vorausfüllung bei aktivem Schicht-Einstieg)
+  Future<FahrtenbuchV2Vorlage?> buildFahrtenbuchV2VorlageFromAnmeldung(
+    String companyId,
+    SchichtanmeldungEintrag e,
+    FahrtenbuchService fahrtenbuchService,
+    FahrtenbuchV2Service fahrtenbuchV2Service,
+  ) async {
+    if (e.datum.isEmpty) return null;
+    final mitarbeiterList = await loadSchichtplanMitarbeiter(companyId);
+    final mitarbeiterMap = {for (final m in mitarbeiterList) m.id: m};
+    String mitarbeiterName(String id) => mitarbeiterMap[id]?.displayName ?? id;
+
+    DateTime datumTag;
+    try {
+      final p = e.datum.split('.');
+      if (p.length != 3) return null;
+      datumTag = DateTime(int.parse(p[2]), int.parse(p[1]), int.parse(p[0]));
+    } catch (_) {
+      return null;
+    }
+
+    final alleFuerSchicht = await loadSchichtanmeldungenForDateRange(companyId, datumTag, datumTag);
+    final gruppe = alleFuerSchicht
+        .where((a) =>
+            a.datum == e.datum &&
+            a.wacheId == e.wacheId &&
+            a.schichtId == e.schichtId &&
+            a.fahrzeugId == e.fahrzeugId)
+        .toList();
+    final fahrer = gruppe.where((a) => a.rolle == 'fahrer').toList();
+    final beifahrer = gruppe.where((a) => a.rolle != 'fahrer').toList();
+    final nameFahrer = fahrer.isNotEmpty ? mitarbeiterName(fahrer.first.mitarbeiterId) : null;
+    // Fahrer + Beifahrer für Dropdown (beide auf Schicht angemeldet)
+    final fahrerNamen = fahrer.map((a) => mitarbeiterName(a.mitarbeiterId)).where((n) => n != '–' && n.isNotEmpty).toSet().toList();
+    final beifahrerNamen = beifahrer.map((a) => mitarbeiterName(a.mitarbeiterId)).where((n) => n != '–' && n.isNotEmpty).toSet().toList();
+    for (final n in beifahrerNamen) {
+      if (!fahrerNamen.contains(n)) fahrerNamen.add(n);
+    }
+
+    String rufname = e.fahrzeugId == 'alle' ? 'Alle' : '';
+    String fahrzeugId = e.fahrzeugId;
+    String? kennzeichen;
+    int? kmAnfang;
+
+    if (e.fahrzeugId != 'alle' && e.fahrzeugId.isNotEmpty) {
+      final allFz = await loadFahrzeuge(companyId);
+      final fahrzeugKurz = allFz.where((f) => f.id == e.fahrzeugId).firstOrNull;
+      rufname = fahrzeugKurz?.displayName ?? e.fahrzeugId;
+      kennzeichen = fahrzeugKurz?.kennzeichen;
+      if (kennzeichen == null || kennzeichen!.isEmpty) {
+        try {
+          final fleetFz = await fahrtenbuchService.loadFahrzeuge(companyId);
+          var ff = fleetFz.where((f) => f.id == e.fahrzeugId).firstOrNull;
+          if (ff == null && rufname.isNotEmpty) {
+            ff = fleetFz.where((f) => (f.rufname ?? f.id) == rufname).firstOrNull;
+          }
+          kennzeichen = ff?.kennzeichen;
+        } catch (_) {}
+      }
+      kmAnfang = await fahrtenbuchV2Service.getLetzterKmEnde(companyId, rufname.isNotEmpty ? rufname : kennzeichen);
+    }
+
+    return FahrtenbuchV2Vorlage(
+      fahrzeugId: fahrzeugId,
+      fahrzeugRufname: rufname,
+      kennzeichen: kennzeichen,
+      nameFahrer: nameFahrer,
+      kmAnfang: kmAnfang,
+      datum: datumTag,
+      fahrerOptionen: fahrerNamen,
     );
   }
 

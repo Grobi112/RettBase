@@ -50,6 +50,7 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
   List<SchichtanmeldungEintrag> _anmeldungen = [];
   List<Standort> _standorte = [];
   List<SchichtTyp> _schichten = [];
+  List<FahrzeugKurz> _fahrzeuge = [];
   Map<String, SchichtplanMitarbeiter> _mitarbeiterMap = {};
 
   DateTime _selectedDate = DateTime.now();
@@ -100,6 +101,7 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
     try {
       final standorte = await _service.loadStandorte(widget.companyId);
       final schichten = await _service.loadSchichten(widget.companyId);
+      final fahrzeuge = await _service.loadFahrzeuge(widget.companyId);
       final anmeldungen = await _service.loadSchichtanmeldungenForDateRange(
         widget.companyId,
         _selectedDate,
@@ -112,6 +114,7 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
         setState(() {
           _standorte = standorte;
           _schichten = schichten;
+          _fahrzeuge = fahrzeuge;
           _anmeldungen = anmeldungen;
           _mitarbeiterMap = mitarbeiterMap;
           _userRole = role;
@@ -144,6 +147,14 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
     if (id == null || id.isEmpty) return '–';
     final m = _mitarbeiterMap[id];
     return m?.displayName ?? id;
+  }
+
+  String _fahrzeugKennzeichen(String? fahrzeugId) {
+    if (fahrzeugId == null || fahrzeugId.isEmpty || fahrzeugId == 'alle') return '–';
+    final f = _fahrzeuge.where((x) => x.id == fahrzeugId).firstOrNull;
+    if (f == null) return '–';
+    final text = f.kennzeichen ?? f.displayName;
+    return text.trim().isNotEmpty ? text : '–';
   }
 
   /// Gruppierung: datum|wacheId|schichtId -> Liste Anmeldungen (gleiche Schicht am gleichen Tag zusammen)
@@ -285,7 +296,7 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(Responsive.horizontalPadding(context)),
         children: [
           _buildDaySelector(),
           const SizedBox(height: 20),
@@ -316,8 +327,9 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
   }
 
   Widget _buildDaySelector() {
+    final isCompact = Responsive.isCompact(context);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: isCompact ? 4 : 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -330,21 +342,26 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
             icon: const Icon(Icons.chevron_left),
             onPressed: _goPrevDay,
             color: AppTheme.primary,
-            iconSize: 28,
+            iconSize: isCompact ? 24 : 28,
+            style: isCompact ? IconButton.styleFrom(padding: const EdgeInsets.all(8)) : null,
           ),
           Expanded(
             child: InkWell(
               onTap: _pickDate,
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: EdgeInsets.symmetric(vertical: isCompact ? 4 : 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.calendar_today, size: 20, color: AppTheme.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      _formatDatum(_dayId),
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                    Icon(Icons.calendar_today, size: isCompact ? 18 : 20, color: AppTheme.primary),
+                    SizedBox(width: isCompact ? 6 : 8),
+                    Flexible(
+                      child: Text(
+                        _formatDatum(_dayId),
+                        style: TextStyle(fontSize: isCompact ? 15 : 17, fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
                   ],
                 ),
@@ -355,7 +372,8 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
             icon: const Icon(Icons.chevron_right),
             onPressed: _goNextDay,
             color: AppTheme.primary,
-            iconSize: 28,
+            iconSize: isCompact ? 24 : 28,
+            style: isCompact ? IconButton.styleFrom(padding: const EdgeInsets.all(8)) : null,
           ),
         ],
       ),
@@ -378,6 +396,144 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
   }
 
   bool get _kannLoeschen => _loeschenRollen.contains(_userRole);
+
+  /// Kompakte Ansicht für <400px: gestapelt, mehr Platz pro Feld
+  Widget _buildSchichtCardCompact(String schicht, String kennzeichen, String fahrerNamen, String beifahrerNamen) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                schicht,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Kennzeichen',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    kennzeichen,
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    textAlign: TextAlign.end,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _compactLabelValue('Fahrer', fahrerNamen.isNotEmpty ? fahrerNamen : '–'),
+        const SizedBox(height: 6),
+        _compactLabelValue('Beifahrer', beifahrerNamen.isNotEmpty ? beifahrerNamen : '–'),
+      ],
+    );
+  }
+
+  Widget _compactLabelValue(String label, String value) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          ),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+          ),
+        ],
+      );
+
+  /// Breite Ansicht für ≥400px: horizontale Anordnung
+  Widget _buildSchichtCardWide(String schicht, String kennzeichen, String fahrerNamen, String beifahrerNamen) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            schicht,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+        SizedBox(
+          width: 90,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Kennzeichen',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+              Text(
+                kennzeichen,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Fahrer',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+              Text(
+                fahrerNamen.isNotEmpty ? fahrerNamen : '–',
+                style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Beifahrer',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+              Text(
+                beifahrerNamen.isNotEmpty ? beifahrerNamen : '–',
+                style: const TextStyle(fontSize: 15, color: AppTheme.textPrimary),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Future<void> _loeschenAnmeldung(SchichtanmeldungEintrag e) async {
     final bestaetigt = await showDialog<bool>(
@@ -534,6 +690,7 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
     final first = list.first;
     final standort = _standortName(first.wacheId);
     final schicht = _schichtName(first.schichtId);
+    final kennzeichen = _fahrzeugKennzeichen(first.fahrzeugId);
 
     final fahrerNamen = list.where((a) => a.rolle == 'fahrer').map((a) => _mitarbeiterName(a.mitarbeiterId)).join(', ');
     final beifahrerNamen = list.where((a) => a.rolle != 'fahrer').map((a) => _mitarbeiterName(a.mitarbeiterId)).join(', ');
@@ -561,48 +718,9 @@ class _SchichtuebersichtScreenState extends State<SchichtuebersichtScreen> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppTheme.border),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  schicht,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 48),
-                Expanded(
-                  child: Center(
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: TextStyle(fontSize: 15, color: AppTheme.textPrimary),
-                        children: [
-                          TextSpan(text: 'Fahrer: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                          TextSpan(text: fahrerNamen.isNotEmpty ? fahrerNamen : '–'),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Center(
-                    child: RichText(
-                      textAlign: TextAlign.center,
-                      text: TextSpan(
-                        style: TextStyle(fontSize: 15, color: AppTheme.textPrimary),
-                        children: [
-                          TextSpan(text: 'Beifahrer: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                          TextSpan(text: beifahrerNamen.isNotEmpty ? beifahrerNamen : '–'),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            child: Responsive.isCompact(context)
+                ? _buildSchichtCardCompact(schicht, kennzeichen, fahrerNamen, beifahrerNamen)
+                : _buildSchichtCardWide(schicht, kennzeichen, fahrerNamen, beifahrerNamen),
           ),
         ),
       ],

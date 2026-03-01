@@ -433,6 +433,7 @@ class _UebergriffsmeldungScreenState extends State<UebergriffsmeldungScreen> {
         padding: const EdgeInsets.only(bottom: 20),
         child: DropdownButtonFormField<bool>(
           value: value,
+          isExpanded: true,
           decoration: _inputDecoration.copyWith(labelText: label),
           hint: const Text('Bitte wählen'),
           borderRadius: BorderRadius.circular(10),
@@ -472,6 +473,7 @@ class _UebergriffsmeldungScreenState extends State<UebergriffsmeldungScreen> {
         padding: const EdgeInsets.only(bottom: 20),
         child: DropdownButtonFormField<int>(
           value: _anzahlTatverdaechtige,
+          isExpanded: true,
           decoration: _inputDecoration.copyWith(labelText: 'Wie viele Personen sind tatverdächtig?'),
           borderRadius: BorderRadius.circular(10),
           items: List.generate(10, (i) => DropdownMenuItem(value: i + 1, child: Text('${i + 1}'))),
@@ -608,6 +610,7 @@ class _UebergriffsmeldungScreenState extends State<UebergriffsmeldungScreen> {
                   padding: const EdgeInsets.only(bottom: 20),
                   child: DropdownButtonFormField<String>(
                     value: _artDesUebergriffs,
+                    isExpanded: true,
                     decoration: _inputDecoration.copyWith(labelText: 'Art des Übergriffs'),
                     hint: const Text('bitte wählen ...'),
                     borderRadius: BorderRadius.circular(10),

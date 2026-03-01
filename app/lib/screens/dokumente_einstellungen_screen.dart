@@ -104,12 +104,68 @@ class _DokumenteEinstellungenScreenState extends State<DokumenteEinstellungenScr
     }
   }
 
+  Future<void> _renameOrdner(DokumenteOrdner folder) async {
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final ctrl = TextEditingController(text: folder.name);
+        return AlertDialog(
+          title: const Text('Ordner umbenennen'),
+          content: TextField(
+            controller: ctrl,
+            decoration: const InputDecoration(
+              labelText: 'Neuer Ordnername',
+              hintText: 'z.B. Formulare',
+            ),
+            autofocus: true,
+            onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Abbrechen')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
+              onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+              child: const Text('Übernehmen'),
+            ),
+          ],
+        );
+      },
+    );
+    if (newName == null || newName.isEmpty || newName == folder.name) return;
+    setState(() => _saving = true);
+    try {
+      await _service.updateOrdnerName(widget.companyId, folder.id, newName);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ordner umbenannt.')));
+        _load();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+        setState(() => _saving = false);
+      }
+    }
+  }
+
   Future<void> _deleteOrdner(DokumenteOrdner folder) async {
+    final count = await _service.countOrdnerContents(widget.companyId, folder.id);
+    if (!mounted) return;
+    final hasContent = count.ordner > 0 || count.dokumente > 0;
+    String contentText;
+    if (hasContent) {
+      final parts = <String>[];
+      if (count.ordner > 0) parts.add('${count.ordner} Unterordner');
+      if (count.dokumente > 0) parts.add('${count.dokumente} Dokumente');
+      contentText = 'Dieser Ordner enthält ${parts.join(' und ')}. Alles wird unwiderruflich gelöscht.';
+    } else {
+      contentText = 'Der Ordner ist leer.';
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Ordner löschen?'),
-        content: Text('Möchten Sie „${folder.name}" wirklich löschen? Der Ordner muss leer sein.'),
+        content: Text('Möchten Sie „${folder.name}" wirklich löschen?\n\n$contentText'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Abbrechen')),
           FilledButton(
@@ -225,6 +281,11 @@ class _DokumenteEinstellungenScreenState extends State<DokumenteEinstellungenScr
                   ? Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_outlined, size: 20),
+                          tooltip: 'Umbenennen',
+                          onPressed: () => _renameOrdner(f),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.add, size: 20),
                           tooltip: 'Unterordner',

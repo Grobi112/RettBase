@@ -10,7 +10,7 @@ import '../models/checkliste_model.dart';
 import '../services/checklisten_service.dart';
 import '../theme/app_theme.dart';
 
-/// Druck-/PDF-Vorschau einer gespeicherten Checkliste – DIN A4, eine Seite
+/// Druck-/PDF-Vorschau einer gespeicherten Checkliste – DIN A4, bei Bedarf mehrere Seiten mit Fahrzeugkennung auf jeder Seite
 class ChecklisteAusfuellungDruckScreen extends StatelessWidget {
   final String companyId;
   final ChecklisteAusfuellung ausfuellung;
@@ -50,11 +50,20 @@ class ChecklisteAusfuellungDruckScreen extends StatelessWidget {
     return s.trim().isEmpty ? _empty : s.trim();
   }
 
+  /// Fahrzeugkennung + Kennzeichen für Header auf jeder Seite
+  String _fahrzeugHeader() {
+    final titel = (ausfuellung.checklisteTitel ?? '').trim();
+    final kz = (ausfuellung.kennzeichen ?? '').trim();
+    if (titel.isNotEmpty && kz.isNotEmpty) return '$titel - $kz';
+    if (kz.isNotEmpty) return kz;
+    return titel.isNotEmpty ? titel : 'Checkliste';
+  }
+
   Future<Uint8List> _buildPdf(Checkliste checkliste, PdfPageFormat format) async {
     final pdf = pw.Document();
-    const fs = 7.0;
-    const fsSection = 8.0;
-    const fsTitle = 10.0;
+    const fs = 8.0;
+    const fsSection = 9.0;
+    const fsTitle = 11.0;
     const lineH = 4.0;
     const pad = 3.0;
 
@@ -67,6 +76,7 @@ class ChecklisteAusfuellungDruckScreen extends StatelessWidget {
     final standort = _str(ausfuellung.standort);
     final schicht = _str(ausfuellung.wachbuchSchicht);
     final kmStr = ausfuellung.kmStand != null ? '${ausfuellung.kmStand} km' : _empty;
+    final fahrzeugHeader = _fahrzeugHeader();
 
     // Kompakte Info-Zeilen (2 Spalten)
     pw.Widget infoRow(String l, String v) => pw.Padding(
@@ -150,7 +160,7 @@ class ChecklisteAusfuellungDruckScreen extends StatelessWidget {
       if (list.length > 5) {
         children.add(pw.Padding(
           padding: const pw.EdgeInsets.only(left: 6),
-          child: pw.Text('… und ${list.length - 5} weitere', style: const pw.TextStyle(fontSize: fs - 0.5)),
+          child: pw.Text('... und ${list.length - 5} weitere', style: const pw.TextStyle(fontSize: fs - 0.5)),
         ));
       }
       children.add(pw.SizedBox(height: lineH + 4));
@@ -225,31 +235,32 @@ class ChecklisteAusfuellungDruckScreen extends StatelessWidget {
       children.add(pw.SizedBox(height: lineH + 2));
     }
 
-    // DIN A4, eine Seite – kompaktes Layout mit Skalierung falls nötig
-    const margin = 16.0;
-    final availableW = format.width - margin * 2;
-    final availableH = format.height - margin * 2;
-
+    // MultiPage: DIN A4, bei Überlauf automatisch neue Seite, Header mit Fahrzeug auf jeder Seite
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: format,
         margin: const pw.EdgeInsets.all(16),
-        build: (ctx) => pw.SizedBox(
-          width: availableW,
-          height: availableH,
-          child: pw.FittedBox(
-            fit: pw.BoxFit.contain,
-            alignment: pw.Alignment.topLeft,
-            child: pw.SizedBox(
-              width: availableW,
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                mainAxisSize: pw.MainAxisSize.min,
-                children: children,
+        header: (ctx) => pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.only(bottom: 8),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(bottom: pw.BorderSide(width: 0.5, color: PdfColors.grey)),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Fahrzeug: $fahrzeugHeader',
+                style: pw.TextStyle(fontSize: fs - 1, color: PdfColors.grey700),
               ),
-            ),
+              pw.Text(
+                'Seite ${ctx.pageNumber}',
+                style: pw.TextStyle(fontSize: fs - 1, color: PdfColors.grey700),
+              ),
+            ],
           ),
         ),
+        build: (_) => children,
       ),
     );
 

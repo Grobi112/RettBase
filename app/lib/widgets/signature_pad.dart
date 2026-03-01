@@ -57,14 +57,23 @@ class SignaturePadState extends State<SignaturePad> {
                   'Unterschrift',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade800),
                 ),
-                TextButton.icon(
-                  onPressed: hasContent ? clear : null,
-                  icon: Icon(Icons.refresh, size: 18, color: hasContent ? Colors.grey.shade700 : Colors.grey.shade400),
-                  label: Text('Unterschrift wiederholen', style: TextStyle(fontSize: 13, color: hasContent ? Colors.grey.shade700 : Colors.grey.shade400)),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: hasContent ? clear : null,
+                      icon: Icon(Icons.refresh, size: 18, color: hasContent ? Colors.grey.shade700 : Colors.grey.shade400),
+                      label: Text(
+                        'Unterschrift wiederholen',
+                        style: TextStyle(fontSize: 13, color: hasContent ? Colors.grey.shade700 : Colors.grey.shade400),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
                   ),
                 ),
               ],

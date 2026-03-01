@@ -144,7 +144,7 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
   void initState() {
     super.initState();
     _loadAuth();
-    _loadLaufendeNr();
+    _loadLaufendeNrPreview();
   }
 
   @override
@@ -177,12 +177,10 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
     }
   }
 
-  Future<void> _loadLaufendeNr() async {
+  Future<void> _loadLaufendeNrPreview() async {
     try {
-      final nr = await _nfsService.getNextLaufendeInterneNr(widget.companyId);
-      if (mounted) {
-        setState(() => _laufendeNrCtrl.text = nr);
-      }
+      final nr = await _nfsService.getNextLaufendeInterneNrPreview(widget.companyId);
+      if (mounted) setState(() => _laufendeNrCtrl.text = nr);
     } catch (_) {
       if (mounted) setState(() => _laufendeNrCtrl.text = '–');
     }
@@ -265,9 +263,7 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
         creatorName = auth.displayName;
       }
 
-      final laufendeNr = _laufendeNrCtrl.text.trim();
       final data = <String, dynamic>{
-        'laufendeInterneNr': laufendeNr.isNotEmpty && laufendeNr != '–' ? laufendeNr : null,
         'name': _nameCtrl.text.trim(),
         'alarmierungKoordinator': _alarmierungKoordinator,
         'alarmierungSonstige': _alarmierungSonstige,
@@ -311,7 +307,7 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
           SnackBar(content: Text('Protokoll ${result.laufendeInterneNr} gespeichert.')),
         );
         _resetForm();
-        _loadLaufendeNr();
+        _loadLaufendeNrPreview();
       }
     } catch (e) {
       if (mounted) {
@@ -461,9 +457,10 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
           const SizedBox(height: 16),
           DropdownButtonFormField<String?>(
             value: _weitereBetreuungDurch,
+            isExpanded: true,
             decoration: _inputDecoration.copyWith(labelText: 'Weitere Betreuung durch:'),
             items: _weitereBetreuungOptions
-                .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2)))
+                .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2, overflow: TextOverflow.ellipsis, maxLines: 1)))
                 .toList(),
             onChanged: (v) => setState(() => _weitereBetreuungDurch = v),
           ),
@@ -525,11 +522,12 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
           const SizedBox(height: 16),
           DropdownButtonFormField<String?>(
             value: _einsatznachbesprechungGewuenscht,
+            isExpanded: true,
             decoration: _inputDecoration.copyWith(
               labelText: 'Ist eine gesonderte Einsatznachbesprechung gewünscht?',
             ),
             items: _einsatznachbesprechungOptions
-                .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2)))
+                .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2, overflow: TextOverflow.ellipsis, maxLines: 1)))
                 .toList(),
             onChanged: (v) => setState(() => _einsatznachbesprechungGewuenscht = v),
           ),
@@ -705,12 +703,13 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String?>(
                   value: _einsatzindikation,
+                  isExpanded: true,
                   decoration: _inputDecoration.copyWith(
                     labelText: 'Einsatzindikation',
                     fillColor: (_einsatzindikation == null || (_einsatzindikation ?? '').trim().isEmpty) ? _pflichtfeldGelb : Colors.white,
                   ),
                   items: _einsatzindikationOptions
-                      .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2)))
+                      .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2, overflow: TextOverflow.ellipsis, maxLines: 1)))
                       .toList(),
                   onChanged: (v) => setState(() => _einsatzindikation = v),
                 ),
@@ -767,12 +766,13 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String?>(
                             value: _einsatzindikation,
+                            isExpanded: true,
                             decoration: _inputDecoration.copyWith(
                               labelText: 'Einsatzindikation',
                               fillColor: (_einsatzindikation == null || (_einsatzindikation ?? '').trim().isEmpty) ? _pflichtfeldGelb : Colors.white,
                             ),
                             items: _einsatzindikationOptions
-                                .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2)))
+                                .map((e) => DropdownMenuItem<String?>(value: e.$1, child: Text(e.$2, overflow: TextOverflow.ellipsis, maxLines: 1)))
                                 .toList(),
                             onChanged: (v) => setState(() => _einsatzindikation = v),
                           ),

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +7,7 @@ import '../models/dokumente_model.dart';
 import '../services/dokumente_service.dart';
 import '../services/auth_data_service.dart';
 import '../services/auth_service.dart';
+import 'dokumente_pdf_viewer_screen.dart';
 
 String _formatDate(DateTime d) {
   final day = d.day.toString().padLeft(2, '0');
@@ -133,13 +134,14 @@ class _DokumenteOrdnerScreenState extends State<DokumenteOrdnerScreen> {
     final res = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => _UploadDialog(
-        onUpload: (file, priority, lesebestaetigungNoetig) async {
+        onUpload: (bytes, fileName, priority, lesebestaetigungNoetig) async {
           setState(() => _uploading = true);
           try {
             await _service.uploadDokument(
               companyId: widget.companyId,
               folderId: widget.folder.id,
-              file: file,
+              bytes: bytes,
+              fileName: fileName,
               priority: priority,
               lesebestaetigungNoetig: lesebestaetigungNoetig,
               createdBy: user.uid,
@@ -148,13 +150,17 @@ class _DokumenteOrdnerScreenState extends State<DokumenteOrdnerScreen> {
             if (mounted) {
               setState(() => _uploading = false);
               _load();
-              Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dokument hochgeladen.')));
+              if (ctx.mounted) {
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Dokument hochgeladen.')));
+              }
             }
           } catch (e) {
             if (mounted) {
               setState(() => _uploading = false);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+              }
             }
           }
         },
@@ -164,12 +170,33 @@ class _DokumenteOrdnerScreenState extends State<DokumenteOrdnerScreen> {
   }
 
   Future<void> _openDocument(DokumenteDatei doc) async {
-    final uri = Uri.parse(doc.fileUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (doc.lesebestaetigungNoetig && _currentUserId != null && !(_gelesen[doc.id] ?? false)) {
-        await _service.markAsRead(widget.companyId, doc.id, _currentUserId!);
-        setState(() => _gelesen[doc.id] = true);
+    final isPdf = doc.name.toLowerCase().endsWith('.pdf');
+    if (isPdf) {
+      final navigator = Navigator.of(context);
+      await navigator.push(
+        MaterialPageRoute(
+          builder: (_) => DokumentePdfViewerScreen(
+            title: doc.name,
+            fileUrl: doc.fileUrl,
+            onBack: () => Navigator.of(context).pop(),
+            onRead: doc.lesebestaetigungNoetig && _currentUserId != null && !(_gelesen[doc.id] ?? false)
+                ? () async {
+                    await _service.markAsRead(widget.companyId, doc.id, _currentUserId!);
+                    if (mounted) setState(() => _gelesen[doc.id] = true);
+                  }
+                : null,
+          ),
+        ),
+      );
+      if (mounted) _load();
+    } else {
+      final uri = Uri.parse(doc.fileUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (doc.lesebestaetigungNoetig && _currentUserId != null && !(_gelesen[doc.id] ?? false)) {
+          await _service.markAsRead(widget.companyId, doc.id, _currentUserId!);
+          setState(() => _gelesen[doc.id] = true);
+        }
       }
     }
   }
@@ -269,6 +296,7 @@ class _DokumenteOrdnerScreenState extends State<DokumenteOrdnerScreen> {
     final icon = isPdf ? Icons.picture_as_pdf : Icons.description;
     final priorityStyle = _getPriorityStyle(d.priority);
     final hasRead = _gelesen[d.id] ?? false;
+    final canEdit = _service.canCreateFolders(widget.userRole);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -321,12 +349,116 @@ class _DokumenteOrdnerScreenState extends State<DokumenteOrdnerScreen> {
                         ],
                       ),
                     ),
+            if (canEdit) ...[
+              const SizedBox(width: 8),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert, size: 20),
+                tooltip: 'Aktionen',
+                onSelected: (value) {
+                  if (value == 'priority') _showPriorityDialog(d);
+                  if (value == 'delete') _confirmDeleteDocument(d);
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'priority', child: Text('Priorität ändern')),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Löschen', style: TextStyle(color: Colors.red[700])),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
         isThreeLine: true,
         onTap: () => _openDocument(d),
       ),
     );
+  }
+
+  Future<void> _showPriorityDialog(DokumenteDatei doc) async {
+    String selected = doc.priority;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Priorität ändern'),
+          content: DropdownButtonFormField<String>(
+            value: selected,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Priorität', border: OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: 'wichtig', child: Text('wichtig')),
+              DropdownMenuItem(value: 'mittel', child: Text('mittel')),
+              DropdownMenuItem(value: 'niedrig', child: Text('niedrig')),
+            ],
+            onChanged: (v) => setState(() => selected = v ?? selected),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Abbrechen')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
+              onPressed: () => Navigator.of(ctx).pop(selected),
+              child: const Text('Übernehmen'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null || result == doc.priority) return;
+    try {
+      await _service.updateDokumentPriority(widget.companyId, doc.id, result);
+      if (mounted) {
+        setState(() {
+          final idx = _dokumente.indexWhere((x) => x.id == doc.id);
+          if (idx >= 0) {
+            _dokumente[idx] = DokumenteDatei(
+              id: doc.id,
+              folderId: doc.folderId,
+              name: doc.name,
+              fileUrl: doc.fileUrl,
+              filePath: doc.filePath,
+              priority: result,
+              lesebestaetigungNoetig: doc.lesebestaetigungNoetig,
+              companyId: doc.companyId,
+              createdAt: doc.createdAt,
+              createdBy: doc.createdBy,
+              createdByName: doc.createdByName,
+            );
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Priorität geändert.')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+    }
+  }
+
+  Future<void> _confirmDeleteDocument(DokumenteDatei doc) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Dokument löschen?'),
+        content: Text('Möchten Sie „${doc.name}" wirklich löschen?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Abbrechen')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Löschen'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _service.deleteDokument(widget.companyId, doc.id);
+      if (mounted) {
+        setState(() => _dokumente.removeWhere((x) => x.id == doc.id));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dokument gelöscht.')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler: $e')));
+    }
   }
 
   ({Color color, Color textColor}) _getPriorityStyle(String p) {
@@ -352,7 +484,7 @@ class _DokumenteOrdnerScreenState extends State<DokumenteOrdnerScreen> {
   }
 }
 
-typedef _UploadCallback = Future<void> Function(File file, String priority, bool lesebestaetigungNoetig);
+typedef _UploadCallback = Future<void> Function(Uint8List bytes, String fileName, String priority, bool lesebestaetigungNoetig);
 
 class _UploadDialog extends StatefulWidget {
   final _UploadCallback onUpload;
@@ -364,7 +496,7 @@ class _UploadDialog extends StatefulWidget {
 }
 
 class _UploadDialogState extends State<_UploadDialog> {
-  File? _selectedFile;
+  PlatformFile? _selectedFile;
   String _priority = 'mittel';
   bool _lesebestaetigungNoetig = false;
   bool _uploading = false;
@@ -374,22 +506,26 @@ class _UploadDialogState extends State<_UploadDialog> {
       type: FileType.custom,
       allowedExtensions: ['pdf', 'doc', 'docx'],
       allowMultiple: false,
+      withData: true,
     );
-    if (result == null || result.files.isEmpty || result.files.single.path == null) return;
-    if (mounted) setState(() => _selectedFile = File(result.files.single.path!));
+    if (result == null || result.files.isEmpty) return;
+    final pf = result.files.single;
+    if (pf.bytes == null) return;
+    if (mounted) setState(() => _selectedFile = pf);
   }
 
   Future<void> _doUpload() async {
-    final file = _selectedFile;
-    if (file == null) return;
+    final pf = _selectedFile;
+    if (pf == null || pf.bytes == null) return;
     setState(() => _uploading = true);
-    await widget.onUpload(file, _priority, _lesebestaetigungNoetig);
+    final fileName = pf.name;
+    await widget.onUpload(pf.bytes!, fileName, _priority, _lesebestaetigungNoetig);
     if (mounted) setState(() => _uploading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final fileName = _selectedFile?.path.split(RegExp(r'[/\\]')).last ?? '';
+    final fileName = _selectedFile?.name ?? '';
 
     final width = MediaQuery.of(context).size.width;
     final dialogWidth = (width * 0.92).clamp(440.0, 600.0);
@@ -451,6 +587,7 @@ class _UploadDialogState extends State<_UploadDialog> {
               const SizedBox(height: 20),
               DropdownButtonFormField<String>(
                 value: _priority,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Priorität', border: OutlineInputBorder()),
                 items: const [
                   DropdownMenuItem(value: 'wichtig', child: Text('wichtig')),
@@ -478,7 +615,7 @@ class _UploadDialogState extends State<_UploadDialog> {
         ),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: AppTheme.primary),
-          onPressed: (_selectedFile != null && !_uploading) ? _doUpload : null,
+          onPressed: (_selectedFile != null && _selectedFile!.bytes != null && !_uploading) ? _doUpload : null,
           child: _uploading
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Text('Hochladen'),

@@ -548,6 +548,7 @@ class _EintragFormScreenState extends State<_EintragFormScreen> {
                 Expanded(
                   child: DropdownButtonFormField<String?>(
                     value: _selectedEreignis,
+                    isExpanded: true,
                     decoration: InputDecoration(
                       labelText: 'Ereignis *',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -568,7 +569,7 @@ class _EintragFormScreenState extends State<_EintragFormScreen> {
                     icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.primary),
                     items: [
                       const DropdownMenuItem<String?>(value: null, child: Text('Bitte wählen')),
-                      ...widget.ereignisse.where((x) => x.active).map((e) => DropdownMenuItem<String?>(value: e.name, child: Text(e.name))),
+                      ...widget.ereignisse.where((x) => x.active).map((e) => DropdownMenuItem<String?>(value: e.name, child: Text(e.name, overflow: TextOverflow.ellipsis, maxLines: 1))),
                     ],
                     onChanged: (v) => setState(() {
                       _selectedEreignis = v;

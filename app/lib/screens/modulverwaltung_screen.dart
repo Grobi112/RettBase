@@ -59,6 +59,7 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
       await _modulService.ensureSchichtplanNfsModuleExists();
       await _modulService.ensureTelefonlisteNfsModuleExists();
       await _modulService.ensureEinsatzprotokollNfsModuleExists();
+      await _modulService.ensureFahrzeugstatusModuleExists();
       var mods = await _modulService.getAllModules();
       if (mods.isEmpty) {
         final defs = await _kundenService.getAllModuleDefs();

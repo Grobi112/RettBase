@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/dokumente_model.dart';
@@ -58,6 +58,16 @@ class DokumenteService {
     return ref.id;
   }
 
+  /// Ordner umbenennen
+  Future<void> updateOrdnerName(String companyId, String folderId, String newName) async {
+    await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('dokumente_ordner')
+        .doc(folderId)
+        .update({'name': newName});
+  }
+
   /// Reihenfolge eines Ordners aktualisieren
   Future<void> updateOrdnerOrder(String companyId, String folderId, int order) async {
     await _db
@@ -68,14 +78,35 @@ class DokumenteService {
         .update({'order': order});
   }
 
-  /// Ordner löschen (nur wenn leer)
+  /// Ordner löschen (inkl. aller Unterordner und Dokumente – endgültig in Firestore + Storage)
   Future<void> deleteOrdner(String companyId, String folderId) async {
-    final subs = await loadOrdner(companyId);
-    final hasChildren = subs.any((f) => f.parentId == folderId);
-    if (hasChildren) throw Exception('Ordner enthält Unterordner');
+    final allOrdner = await loadOrdner(companyId);
+    final subFolders = allOrdner.where((f) => f.parentId == folderId).toList();
     final docs = await loadDokumente(companyId, folderId);
-    if (docs.isNotEmpty) throw Exception('Ordner enthält noch Dokumente');
+
+    for (final d in docs) {
+      await deleteDokument(companyId, d.id);
+    }
+    for (final sub in subFolders) {
+      await deleteOrdner(companyId, sub.id);
+    }
     await _db.collection('kunden').doc(companyId).collection('dokumente_ordner').doc(folderId).delete();
+  }
+
+  /// Zählt Unterordner und Dokumente eines Ordners (inkl. rekursiv)
+  Future<({int ordner, int dokumente})> countOrdnerContents(String companyId, String folderId) async {
+    final allOrdner = await loadOrdner(companyId);
+    final subFolders = allOrdner.where((f) => f.parentId == folderId).toList();
+    final docs = await loadDokumente(companyId, folderId);
+
+    int totalOrdner = subFolders.length;
+    int totalDokumente = docs.length;
+    for (final sub in subFolders) {
+      final c = await countOrdnerContents(companyId, sub.id);
+      totalOrdner += c.ordner;
+      totalDokumente += c.dokumente;
+    }
+    return (ordner: totalOrdner, dokumente: totalDokumente);
   }
 
   /// Dokumente in einem Ordner laden
@@ -95,20 +126,21 @@ class DokumenteService {
     }
   }
 
-  /// Datei hochladen
+  /// Datei hochladen (Bytes + Dateiname – Web- und Native-kompatibel)
+  /// Der Dateititel wird aus dem Dateinamen übernommen.
   Future<DokumenteDatei> uploadDokument({
     required String companyId,
     required String folderId,
-    required File file,
+    required Uint8List bytes,
+    required String fileName,
     required String priority,
     required bool lesebestaetigungNoetig,
     required String createdBy,
     required String createdByName,
   }) async {
-    final fileName = file.path.split(RegExp(r'[/\\]')).last;
     final path = 'kunden/$companyId/dokumente/${DateTime.now().millisecondsSinceEpoch}_$fileName';
     final ref = _storage.ref().child(path);
-    await ref.putFile(file);
+    await ref.putData(bytes);
     final url = await ref.getDownloadURL();
 
     final docRef = _db.collection('kunden').doc(companyId).collection('dokumente').doc();
@@ -129,6 +161,16 @@ class DokumenteService {
     return data;
   }
 
+  /// Priorität eines Dokuments ändern
+  Future<void> updateDokumentPriority(String companyId, String docId, String newPriority) async {
+    await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('dokumente')
+        .doc(docId)
+        .update({'priority': newPriority});
+  }
+
   /// Dokument löschen
   Future<void> deleteDokument(String companyId, String docId) async {
     final doc = await _db.collection('kunden').doc(companyId).collection('dokumente').doc(docId).get();
@@ -140,10 +182,11 @@ class DokumenteService {
         } catch (_) {}
       }
     }
+    final gelesenSnap = await _db.collection('kunden').doc(companyId).collection('dokumente').doc(docId).collection('gelesen').get();
+    for (final d in gelesenSnap.docs) {
+      await d.reference.delete();
+    }
     await _db.collection('kunden').doc(companyId).collection('dokumente').doc(docId).delete();
-    await _db.collection('kunden').doc(companyId).collection('dokumente').doc(docId).collection('gelesen').get().then((s) async {
-      for (final d in s.docs) await d.reference.delete();
-    });
   }
 
   /// Lesebestätigung: als gelesen markieren
