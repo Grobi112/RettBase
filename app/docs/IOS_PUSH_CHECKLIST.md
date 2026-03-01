@@ -54,7 +54,11 @@ Nach Änderungen an Entitlements oder Capabilities:
 - **Einstellungen** → **RettBase** → **Benachrichtigungen**: aktiviert
 - **Benachrichtigungen erlauben** und **Töne** aktiviert
 
-## 7. Debug – wenn Badge erst nach App-Öffnen erscheint
+## 7. WICHTIG: Echtes Gerät erforderlich
+
+**Push-Benachrichtigungen funktionieren NICHT im iOS-Simulator.** APNs liefert nur an physische Geräte. Teste mit TestFlight oder per USB verbundenem iPhone.
+
+## 8. Debug – wenn Badge erst nach App-Öffnen erscheint
 
 **Symptom:** Badge erscheint nur, wenn du die App geöffnet, die Nachricht nicht gelesen und die App wieder verlassen hast – nicht direkt bei neuer Nachricht.
 
@@ -78,12 +82,12 @@ Nach Änderungen an Entitlements oder Capabilities:
    - **Debug von Xcode** (Run auf Gerät): kann Sandbox/Development nutzen
    - Empfehlung: Mit **TestFlight-Build** testen – dort ist die Konfiguration am zuverlässigsten
 
-4. **Provisioning Profile neu erzeugen**
+5. **Provisioning Profile neu erzeugen**
    - Apple Developer → Profiles → dein App-Profile
    - Löschen und neu erstellen (damit Push-Entitlement übernommen wird)
    - In Xcode: Product → Clean Build Folder, dann neu archivieren
 
-5. **APNs-Key in Firebase**
+6. **APNs-Key in Firebase**
    - Firebase Console → Projekteinstellungen → Cloud Messaging
    - APNs-Authentifizierungsschlüssel (.p8) muss hochgeladen sein
    - Key ID und Team ID müssen stimmen

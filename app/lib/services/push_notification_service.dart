@@ -45,8 +45,16 @@ class PushNotificationService {
     return null;
   }
 
+  static Future<void>? _initFuture;
+
   /// Initialisierung: Berechtigungen, Handler, Token-Refresh.
+  /// Vor saveToken [ensureInitialized] abwarten, damit Permission-Dialog beantwortet ist.
   static Future<void> initialize() async {
+    _initFuture ??= _initializeImpl();
+    await _initFuture;
+  }
+
+  static Future<void> _initializeImpl() async {
     final service = PushNotificationService();
     await service._requestPermissions();
     if (!kIsWeb) {
@@ -59,9 +67,7 @@ class PushNotificationService {
     FirebaseMessaging.onMessage.listen(service._onForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(service._onBackgroundOpenedApp);
     final initial = await FirebaseMessaging.instance.getInitialMessage();
-    if (initial != null) {
-      _handleMessageData(initial.data);
-    }
+    if (initial != null) _handleMessageData(initial.data);
     if (!kIsWeb && !_tokenRefreshListenerActive) {
       _tokenRefreshListenerActive = true;
       FirebaseMessaging.instance.onTokenRefresh.listen((token) {
@@ -72,6 +78,9 @@ class PushNotificationService {
     }
   }
 
+  /// Wartet auf Initialisierung (Permission). Vor saveToken aufrufen.
+  static Future<void> ensureInitialized() => initialize();
+
   Future<void> _requestPermissions() async {
     if (kIsWeb) return;
     final settings = await _messaging.requestPermission(
@@ -79,7 +88,7 @@ class PushNotificationService {
       badge: true,
       sound: true,
     );
-    debugPrint('RettBase Push: permission ${settings.authorizationStatus}');
+    debugPrint('RettBase Push: permission ${settings.authorizationStatus} (authorized=${settings.authorizationStatus == AuthorizationStatus.authorized})');
   }
 
   void _onForegroundMessage(RemoteMessage message) {
@@ -119,6 +128,30 @@ class PushNotificationService {
     }
   }
 
+  /// FCM-Token für Native (iOS/Android). Auf iOS: APNs-Token muss zuerst verfügbar sein.
+  Future<String?> _getFcmTokenForNative() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      var apnsToken = await _messaging.getAPNSToken();
+      if (apnsToken == null || apnsToken.isEmpty) {
+        debugPrint('RettBase Push: APNs-Token noch nicht da – warte 3s, dann Retry');
+        await Future.delayed(const Duration(seconds: 3));
+        apnsToken = await _messaging.getAPNSToken();
+      }
+      if (apnsToken == null || apnsToken.isEmpty) {
+        debugPrint('RettBase Push: APNs-Token nach Retry weiterhin null – echtes Gerät nötig (kein Simulator)');
+        return null;
+      }
+      debugPrint('RettBase Push: APNs-Token vorhanden, hole FCM-Token');
+    }
+    var token = await _messaging.getToken();
+    if (token == null || token.isEmpty) {
+      debugPrint('RettBase Push: getToken null – Retry in 3s');
+      await Future.delayed(const Duration(seconds: 3));
+      token = await _messaging.getToken();
+    }
+    return token;
+  }
+
   /// FCM-Token in Firestore speichern (nach Login). Wird bei jedem Dashboard-Load aufgerufen.
   Future<void> saveToken(String companyId, String uid) async {
     _lastCompanyId = companyId;
@@ -144,9 +177,13 @@ class PushNotificationService {
       return;
     }
     try {
-      final token = await _messaging.getToken();
-      if (token == null || token.isEmpty) return;
+      var token = await _getFcmTokenForNative();
+      if (token == null || token.isEmpty) {
+        debugPrint('RettBase Push: getToken nach Retries weiterhin null – prüfe Einstellungen → Benachrichtigungen');
+        return;
+      }
       await _saveTokenToFirestore(companyId, uid, token);
+      debugPrint('RettBase Push: Token gespeichert für uid=$uid');
     } catch (e) {
       final msg = e.toString();
       if (!msg.contains('permission-blocked') && !msg.contains('permission_blocked')) {
@@ -157,12 +194,14 @@ class PushNotificationService {
 
   Future<void> _saveTokenToFirestore(String companyId, String uid, String token) async {
     try {
+      debugPrint('RettBase Push: schreibe Token nach Firestore (companyId=$companyId, uid=$uid)');
       final data = {
         'fcmToken': token,
         'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
       };
       await _db.collection('kunden').doc(companyId).collection('users').doc(uid).set(data, SetOptions(merge: true));
       await _db.collection('fcmTokens').doc(uid).set(data, SetOptions(merge: true));
+      debugPrint('RettBase Push: Firestore-Schreiben erfolgreich');
     } catch (e) {
       debugPrint('RettBase Push: Firestore-Schreiben fehlgeschlagen: $e');
     }
