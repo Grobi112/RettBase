@@ -18,18 +18,34 @@ jobs:
       - name: Repository auschecken
         uses: actions/checkout@v4
 
+      - name: Chrome installieren
+        uses: browser-actions/setup-chrome@v2
+
       - name: Flutter einrichten
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
+      - name: Umgebung prüfen
+        run: flutter doctor -v
+        working-directory: app
+
       - name: Abhängigkeiten installieren
-        run: flutter pub get
+        run: |
+          flutter clean
+          flutter pub get
         working-directory: app
 
       - name: Web-App bauen
-        run: flutter build web --release
+        run: |
+          flutter build web --release --no-wasm-dry-run --verbose 2>&1 | tee build.log
+          exit_code=${PIPESTATUS[0]}
+          if [ $exit_code -ne 0 ]; then
+            echo "=== Letzte 150 Zeilen des Build-Logs (Fehlerdetails) ==="
+            tail -150 build.log
+          fi
+          exit $exit_code
         working-directory: app
 
       - name: Zu Strato hochladen (FTP)
