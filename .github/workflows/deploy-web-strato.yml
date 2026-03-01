@@ -29,7 +29,7 @@ jobs:
         working-directory: app
 
       - name: Web-App bauen
-        run: flutter build web --release --web-renderer html
+        run: flutter build web --release
         working-directory: app
 
       - name: Zu Strato hochladen (FTP)
