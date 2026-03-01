@@ -104,7 +104,7 @@
 - **Cloud Functions:** `onNewChatMessage` (neue Nachricht), `onNewGroupChat` (zur Gruppe hinzugefügt) – senden FCM an Empfänger
 - **FCM-Token:** zusätzlich in `fcmTokens/{uid}` (global) gespeichert – Cloud Function nutzt Fallback, falls `kunden/{companyId}/users/{uid}` leer
 - **Token-Speicherung robuster (März 2026):** saveToken wird beim App-Start (vor Dashboard-Navigation) und bei App-Resume (WidgetsBindingObserver im Dashboard) aufgerufen – behebt „Kein FCM-Token“ wenn Empfänger die App geöffnet hatte. **Checklist:** docs/IOS_PUSH_CHECKLIST.md
-- **iOS APNs-Token:** Vor getToken() wird auf iOS auf getAPNSToken() gewartet (mit Retry) – sonst liefert getToken() null. **Push nur auf echtem Gerät** – Simulator unterstützt APNs nicht. saveToken ruft intern ensureInitialized() auf (Race-Condition-Fix). **Firebase:** Entwicklungs- und Produktions-APNs-Key hochladen – Debug-Builds brauchen Entwicklungs-Key.
+- **iOS APNs-Token:** Vor getToken() wird auf iOS auf getAPNSToken() gewartet (mit Retry) – sonst liefert getToken() null. **Push nur auf echtem Gerät** – Simulator unterstützt APNs nicht. saveToken ruft intern ensureInitialized() auf (Race-Condition-Fix). **Firebase:** Entwicklungs- und Produktions-APNs-Key hochladen – Debug-Builds brauchen Entwicklungs-Key. Commit: ee4ef85
 - **Badge Native:** flutter_app_badger (nur iOS/Android, nicht Web), aktualisiert bei Chat-Unread-Änderung
 - **Badge PWA/Web:** Navigator Badging API (setAppBadge). **Safari iOS** ab 16.4, aber nur mit Notification-Permission. **Chrome Android:** nicht unterstützt (Plattform-Limit) – siehe docs/WEB_PUSH_SETUP.md §5
 - **App über Push öffnen:** `initialChatFromNotification` → Dashboard ruft `_maybeOpenChatFromNotification` auf, übergibt `initialChatId` an ChatScreen
