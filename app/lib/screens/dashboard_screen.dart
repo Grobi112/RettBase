@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import '../theme/app_theme.dart';
 import '../services/chat_service.dart';
+import '../services/email_service.dart';
 import '../models/app_module.dart';
 import '../models/information_model.dart';
 import '../models/kunde_model.dart';
@@ -40,6 +41,7 @@ import 'dokumente_screen.dart';
 import 'unfallbericht_screen.dart';
 import 'schnittstellenmeldung_screen.dart';
 import 'uebergriffsmeldung_screen.dart';
+import 'email_screen.dart';
 import 'telefonliste_screen.dart';
 import 'chat_screen.dart';
 import 'company_id_screen.dart';
@@ -78,7 +80,7 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingObserver {
   final _authService = AuthService();
   final _kundenService = KundenverwaltungService();
   final _menuService = MenueverwaltungService();
@@ -87,12 +89,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _modulesService = ModulesService();
   final _infoService = InformationenService();
   final _chatService = ChatService();
+  final _emailService = EmailService();
   final _schichtplanNfsService = SchichtplanNfsService();
   final _bodyNavigatorKey = GlobalKey<NavigatorState>();
 
   final _chatUnreadNotifier = ValueNotifier<int>(0);
   StreamSubscription<int>? _chatUnreadSub;
   Timer? _badgePollTimer;
+
+  final _emailUnreadNotifier = ValueNotifier<int>(0);
+  StreamSubscription<int>? _emailUnreadSub;
 
   final _schichtplanNfsMeldungenNotifier = ValueNotifier<int>(0);
   StreamSubscription<int>? _schichtplanNfsMeldungenSub;
@@ -118,8 +124,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
     _chatUnreadNotifier.addListener(_onChatUnreadChanged);
+    _emailUnreadNotifier.addListener(_onEmailUnreadChanged);
     if (kIsWeb) {
       visibility_refresh.setOnVisible(() {
         if (mounted) _restartChatUnreadListener();
@@ -132,6 +140,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (kIsWeb) debugPrint('RettBase Badge: _onChatUnreadChanged count=$count');
     setState(() {});
     PushNotificationService.updateBadge(count);
+  }
+
+  void _onEmailUnreadChanged() => setState(() {});
+
+  void _startEmailUnreadListener() {
+    _emailUnreadSub?.cancel();
+    _emailUnreadSub = null;
+    final cid = _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
+    if (cid.isEmpty) return;
+    _emailUnreadSub = _emailService.streamUnreadCount(cid).listen(
+      (count) {
+        if (mounted) _emailUnreadNotifier.value = count;
+      },
+      onError: (e) {
+        debugPrint('RettBase Email Badge: stream Fehler: $e');
+        _emailUnreadSub?.cancel();
+        _emailUnreadSub = null;
+        if (mounted) _emailUnreadNotifier.value = 0;
+      },
+    );
   }
 
   void _restartChatUnreadListener() {
@@ -212,10 +240,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      PushNotificationService.retrySaveTokenIfNeeded();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _chatUnreadNotifier.removeListener(_onChatUnreadChanged);
     _chatUnreadNotifier.dispose();
+    _emailUnreadNotifier.removeListener(_onEmailUnreadChanged);
+    _emailUnreadNotifier.dispose();
     _chatUnreadSub?.cancel();
+    _emailUnreadSub?.cancel();
     _badgePollTimer?.cancel();
     _stopSchichtplanNfsMeldungenStream();
     _schichtplanNfsMeldungenNotifier.dispose();
@@ -349,6 +388,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) _infoItemsNotifier.value = infos;
       }));
       _startChatUnreadListener();
+      _startEmailUnreadListener();
       _startSchichtplanNfsMeldungenStream();
       if (kIsWeb) {
         final h = url_hash.getInitialHash();
@@ -473,6 +513,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       shortcuts: _shortcuts,
       onShortcutTap: _onShortcutTap,
       chatUnreadListenable: _chatUnreadNotifier,
+      emailUnreadListenable: _emailUnreadNotifier,
       schichtplanNfsMeldungenListenable: _schichtplanNfsMeldungenNotifier,
       containerSlotsListenable: _containerSlotsNotifier,
       informationenItemsListenable: _infoItemsNotifier,
@@ -649,6 +690,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: mod.label,
           onBack: onBack,
           hideAppBar: true,
+        );
+        break;
+      case 'email':
+      case 'office':
+        screen = EmailScreen(
+          companyId: _companyId,
+          onBack: onBack,
         );
         break;
       case 'ssd':
@@ -923,6 +971,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Roter Kreis mit ungelesener E-Mail-Anzahl für Menü-Badge.
+  Widget _buildEmailBadge() {
+    final count = _emailUnreadNotifier.value;
+    if (count <= 0) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: const BoxDecoration(
+        color: Colors.red,
+        borderRadius: BorderRadius.all(Radius.circular(12)),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
   List<Widget> _buildDrawerMenuContent() {
     final children = <Widget>[];
     for (final item in _menuStructure) {
@@ -948,7 +1013,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 dense: true,
                 leading: _drawerLeadingForModule(mod.id, size: 22),
                 title: Text(mod.label, style: const TextStyle(fontSize: 14)),
-                trailing: mod.id == 'chat' ? _buildChatBadge() : null,
+                trailing: mod.id == 'chat' ? _buildChatBadge() : (mod.id == 'email' || mod.id == 'office') ? _buildEmailBadge() : null,
                 onTap: () {
                   Navigator.pop(context);
                   _openModule(mod);
@@ -992,7 +1057,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children.add(ListTile(
           leading: _drawerLeadingForModule(mod.id),
           title: Text(mod.label),
-          trailing: mod.id == 'chat' ? _buildChatBadge() : null,
+          trailing: mod.id == 'chat' ? _buildChatBadge() : (mod.id == 'email' || mod.id == 'office') ? _buildEmailBadge() : null,
           onTap: () {
             Navigator.pop(context);
             _openModule(mod);

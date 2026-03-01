@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_app_badger/flutter_app_badger.dart';
@@ -48,6 +49,13 @@ class PushNotificationService {
   static Future<void> initialize() async {
     final service = PushNotificationService();
     await service._requestPermissions();
+    if (!kIsWeb) {
+      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    }
     FirebaseMessaging.onMessage.listen(service._onForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(service._onBackgroundOpenedApp);
     final initial = await FirebaseMessaging.instance.getInitialMessage();
@@ -76,11 +84,11 @@ class PushNotificationService {
 
   void _onForegroundMessage(RemoteMessage message) {
     debugPrint('RettBase Push: foreground ${message.data}');
-    if (kIsWeb && message.data != null) {
-      final badgeStr = message.data!['badge'] as String?;
-      if (badgeStr != null && badgeStr.isNotEmpty) {
-        final badge = int.tryParse(badgeStr);
-        if (badge != null && badge > 0) {
+    if (message.data != null && message.data!['type'] == 'chat') {
+      final badgeStr = message.data!['totalUnread'] ?? message.data!['badge'];
+      if (badgeStr != null && badgeStr.toString().isNotEmpty) {
+        final badge = int.tryParse(badgeStr.toString());
+        if (badge != null && badge >= 0) {
           updateBadge(badge);
         }
       }
@@ -98,6 +106,16 @@ class PushNotificationService {
     if (type == 'chat') {
       _initialMessageCompanyId = data['companyId'] as String?;
       _initialMessageChatId = data['chatId'] as String?;
+    }
+  }
+
+  /// Erneutes Speichern des Tokens (z.B. bei App-Resume), wenn companyId/uid bekannt.
+  static Future<void> retrySaveTokenIfNeeded() async {
+    if (kIsWeb) return;
+    final c = _lastCompanyId;
+    final u = _lastUid;
+    if (c != null && u != null && c.isNotEmpty && u.isNotEmpty) {
+      unawaited(PushNotificationService().saveToken(c, u));
     }
   }
 

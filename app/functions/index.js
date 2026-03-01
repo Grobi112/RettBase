@@ -1,5 +1,8 @@
 const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
+const nodemailer = require("nodemailer");
+const { ImapFlow } = require("imapflow");
+const { simpleParser } = require("mailparser");
 
 // Projekt explizit für Auth-Konsistenz (rett-fe0fa = Flutter-App + alle Module)
 admin.initializeApp({
@@ -592,8 +595,24 @@ async function sendChatPush(token, title, body, companyId, chatId, extraData = {
     token,
     notification: { title, body },
     data,
-    android: { priority: "high", notification: { channelId: "chat_messages" } },
-    apns: { payload: { aps: { sound: "default" } }, fcmOptions: {} },
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "chat_messages",
+        defaultSound: true,
+        defaultVibrateTimings: true,
+      },
+    },
+    apns: {
+      headers: { "apns-push-type": "alert", "apns-priority": "10" },
+      payload: {
+        aps: {
+          alert: { title, body },
+          sound: "default",
+        },
+      },
+      fcmOptions: {},
+    },
     webpush: {
       notification: { title, body },
       fcmOptions: { link: `${WEB_APP_BASE_URL}/#chat/${companyId}/${chatId}` },
@@ -646,8 +665,30 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
               badge: String(badge),
               totalUnread: String(totalUnread),
             },
-            android: { priority: "high", notification: { channelId: "chat_messages" } },
-            apns: { payload: { aps: { badge: totalUnread, sound: "default" } }, fcmOptions: {} },
+            android: {
+              priority: "high",
+              notification: {
+                channelId: "chat_messages",
+                defaultSound: true,
+                defaultVibrateTimings: true,
+                notificationCount: totalUnread,
+                priority: "max",
+              },
+            },
+            apns: {
+              headers: {
+                "apns-push-type": "alert",
+                "apns-priority": "10",
+              },
+              payload: {
+                aps: {
+                  alert: { title: "Neue Chat-Nachricht", body },
+                  badge: totalUnread,
+                  sound: "default",
+                },
+              },
+              fcmOptions: {},
+            },
             webpush: {
               notification: {
                 title: totalUnread === 1 ? "Neue Chat-Nachricht" : totalUnread + " ungelesene Nachrichten",
@@ -657,6 +698,7 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
             },
           };
           await admin.messaging().send(payload);
+          console.log("onNewChatMessage: FCM an uid=" + uid + " erfolgreich gesendet");
         } catch (e) {
           console.warn("onNewChatMessage: FCM an", uid, "fehlgeschlagen:", e.message);
         }
@@ -823,3 +865,180 @@ exports.createMitarbeiterDoc = functions.region("europe-west1").https.onCall(asy
     throw new functions.https.HttpsError("internal", e.message || String(e));
   }
 });
+
+/** Versendet externe E-Mails (z.B. aus E-Mail-Modul, Schnittstellenmeldung, Übergriffsmeldung).
+ *  SMTP: .env (SMTP_USER, SMTP_HOST, SMTP_PORT, SMTP_SECURE) + Secret SMTP_PASS.
+ *  Siehe .env.example. "SMTP_PASS" = feste Name des Secrets (nicht ersetzen!). */
+exports.sendEmail = functions
+  .region("europe-west1")
+  .runWith({ secrets: ["SMTP_PASS"] })
+  .https.onCall(async (data, context) => {
+    if (!context?.auth?.uid) {
+      throw new functions.https.HttpsError("unauthenticated", "Benutzer muss angemeldet sein");
+    }
+    const { to, subject, body, fromEmail, fromName, replyTo, messageId } = data || {};
+    if (!to || typeof to !== "string" || !subject || typeof subject !== "string" || !body || typeof body !== "string") {
+      throw new functions.https.HttpsError("invalid-argument", "to, subject und body erforderlich");
+    }
+    const toTrim = String(to).trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(toTrim)) {
+      throw new functions.https.HttpsError("invalid-argument", "Ungültige E-Mail-Adresse");
+    }
+
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const host = process.env.SMTP_HOST || "smtp.gmail.com";
+    const port = parseInt(process.env.SMTP_PORT || "587", 10);
+    const secure = process.env.SMTP_SECURE === "true";
+
+    if (!user || !pass) {
+      console.error("sendEmail: SMTP nicht konfiguriert. .env mit SMTP_USER anlegen, firebase functions:secrets:set SMTP_PASS ausführen.");
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "E-Mail-Versand ist nicht konfiguriert. Bitte .env mit SMTP_USER anlegen und firebase functions:secrets:set SMTP_PASS ausführen."
+      );
+    }
+
+    const effectiveFrom = (fromEmail && String(fromEmail).trim()) || "mail@rettbase.de";
+    const effectiveName = (fromName && String(fromName).trim()) || "RettBase";
+
+    let htmlBody = String(body);
+    if (messageId && String(messageId).trim()) {
+      htmlBody += `<p style="margin-top:24px;font-size:11px;color:#888;">──<br>Gesendet über RettBase. Nur Antworten auf diese E-Mail sind möglich. Direktmails an mail@rettbase.de werden nicht bearbeitet.</p>`;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass },
+    });
+
+    const mailOptions = {
+      from: `"${effectiveName.replace(/"/g, "'")}" <${effectiveFrom}>`,
+      to: toTrim,
+      subject: String(subject).trim(),
+      html: htmlBody,
+      ...(replyTo && String(replyTo).trim() ? { replyTo: String(replyTo).trim() } : {}),
+      ...(messageId && String(messageId).trim() ? { messageId: `<${String(messageId).trim()}>` } : {}),
+    };
+
+    try {
+      await transporter.sendMail(mailOptions);
+      return { success: true };
+    } catch (e) {
+      console.error("sendEmail Fehler:", e.message || e);
+      throw new functions.https.HttpsError("internal", "E-Mail konnte nicht gesendet werden: " + (e.message || String(e)));
+    }
+  });
+
+/** Pollt IMAP-Inbox für eingehende Antworten auf externe E-Mails.
+ *  Sucht nach: (1) mail+companyId_emailId@rettbase.de in To/CC oder
+ *  (2) rettbase.companyId.emailId@rettbase.de in In-Reply-To/References (Message-ID).
+ *  Läuft jede Minute. IMAP: IMAP_HOST, IMAP_PORT, SMTP_USER, SMTP_PASS. */
+const RETTBASE_DOMAIN = "rettbase.de";
+const MAIL_PLUS_REGEX = new RegExp(`mail\\+([a-zA-Z0-9_-]+)_([a-zA-Z0-9]+)@${RETTBASE_DOMAIN.replace(".", "\\.")}`, "i");
+const MESSAGE_ID_REGEX = new RegExp(`rettbase\\.([a-zA-Z0-9_-]+)\\.([a-zA-Z0-9]+)@${RETTBASE_DOMAIN.replace(".", "\\.")}`, "i");
+
+exports.pollInboundEmail = functions
+  .region("europe-west1")
+  .runWith({ secrets: ["SMTP_PASS"], timeoutSeconds: 120 })
+  .pubsub.schedule("every minute")
+  .onRun(async () => {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+    const host = process.env.IMAP_HOST || "imap.strato.de";
+    const port = parseInt(process.env.IMAP_PORT || "993", 10);
+    if (!user || !pass) {
+      console.warn("pollInboundEmail: SMTP_USER/SMTP_PASS nicht gesetzt, überspringe.");
+      return null;
+    }
+    const client = new ImapFlow({
+      host,
+      port,
+      secure: true,
+      auth: { user, pass },
+    });
+    try {
+      await client.connect();
+      const lock = await client.getMailboxLock("INBOX");
+      try {
+        const unseenUids = await client.search({ seen: false }, { uid: true });
+        if (unseenUids.length === 0) return null;
+        const messages = await client.fetchAll(unseenUids, { envelope: true, source: true }, { uid: true });
+        const toMarkSeen = [];
+        for (const msg of messages) {
+          let companyId = null;
+          let emailId = null;
+          const toAddrs = (msg.envelope.to || []).map((a) => (a && a.address || "").toLowerCase());
+          const ccAddrs = (msg.envelope.cc || []).map((a) => (a && a.address || "").toLowerCase());
+          for (const addr of [...toAddrs, ...ccAddrs]) {
+            const m = addr.match(MAIL_PLUS_REGEX);
+            if (m) {
+              companyId = m[1];
+              emailId = m[2];
+              break;
+            }
+          }
+          let parsed = null;
+          try {
+            parsed = await simpleParser(msg.source);
+            if (!companyId || !emailId) {
+              const inReplyTo = (parsed.headers.get("in-reply-to") || "").toString();
+              const references = (parsed.headers.get("references") || "").toString();
+              const m2 = `${inReplyTo} ${references}`.match(MESSAGE_ID_REGEX);
+              if (m2) {
+                companyId = m2[1];
+                emailId = m2[2];
+              }
+            }
+          } catch (e) {
+            console.warn("pollInboundEmail parse:", e.message);
+          }
+          if (!companyId || !emailId) continue;
+          const origRef = db.collection("kunden").doc(companyId).collection("emails").doc(emailId);
+          const origSnap = await origRef.get();
+          if (!origSnap.exists) continue;
+          const orig = origSnap.data();
+          const recipientUid = orig.from;
+          if (!recipientUid) continue;
+          let fromEmail = "";
+          let fromName = "";
+          if (msg.envelope.from && msg.envelope.from[0]) {
+            fromEmail = (msg.envelope.from[0].address || "").trim();
+            fromName = (msg.envelope.from[0].name || "").trim() || fromEmail || "Extern";
+          }
+          const body = parsed ? (parsed.html || (parsed.text ? `<p>${String(parsed.text).replace(/\n/g, "<br>")}</p>` : "")) : "";
+          let subject = (msg.envelope.subject || "").trim();
+          if (!subject && parsed) subject = parsed.subject || "";
+          await db.collection("kunden").doc(companyId).collection("emails").add({
+            from: null,
+            fromName,
+            fromEmail,
+            to: recipientUid,
+            toName: null,
+            toEmail: null,
+            subject: subject || "(Kein Betreff)",
+            body: body || "(Keine Nachricht)",
+            read: false,
+            draft: false,
+            deleted: false,
+            isExternal: true,
+            inReplyTo: emailId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          toMarkSeen.push(msg.uid);
+        }
+        if (toMarkSeen.length > 0) {
+          await client.messageFlagsAdd(toMarkSeen, ["\\Seen"], { uid: true });
+        }
+      } finally {
+        lock.release();
+      }
+      await client.logout();
+    } catch (e) {
+      console.error("pollInboundEmail Fehler:", e.message || e);
+    }
+    return null;
+  });

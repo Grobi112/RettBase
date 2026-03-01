@@ -6,6 +6,7 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
@@ -21,6 +22,23 @@ import 'utils/firebase_sw_register_stub.dart'
     if (dart.library.html) 'utils/firebase_sw_register_web.dart' as firebase_sw;
 import 'utils/splash_loader_stub.dart'
     if (dart.library.html) 'utils/splash_loader_web.dart' as splash_loader;
+
+/// Top-Level-Handler für Push-Nachrichten im Hintergrund/beendet – Badge sofort setzen.
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  final data = message.data;
+  if (data != null && data['type'] == 'chat') {
+    final badgeStr = data['totalUnread'] ?? data['badge'];
+    if (badgeStr != null && badgeStr.toString().isNotEmpty) {
+      final badge = int.tryParse(badgeStr.toString());
+      if (badge != null && badge >= 0) {
+        await PushNotificationService.updateBadge(badge);
+      }
+    }
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -46,6 +64,9 @@ void main() async {
       try {
         await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
       } catch (_) {}
+    }
+    if (!kIsWeb) {
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     }
     unawaited(PushNotificationService.initialize().catchError((e) {
       if (kDebugMode) debugPrint('RettBase Push Init: $e');
@@ -172,6 +193,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
       if (!mounted) return;
       _setProgress(1.0);
       if (user != null) {
+        if (!kIsWeb) unawaited(PushNotificationService().saveToken(companyId, user!.uid));
         _navigateTo(DashboardScreen(companyId: companyId));
       } else {
         _navigateTo(LoginScreen(companyId: companyId));
@@ -197,6 +219,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
           _setProgress(1.0);
           final user = FirebaseAuth.instance.currentUser;
           if (user != null) {
+            if (!kIsWeb) unawaited(PushNotificationService().saveToken(companyId, user.uid));
             _navigateTo(DashboardScreen(companyId: companyId));
           } else {
             _navigateTo(LoginScreen(companyId: companyId));
@@ -334,6 +357,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
       user = await FirebaseAuth.instance.authStateChanges().first;
       _setProgress(1.0);
       if (user != null) {
+        if (!kIsWeb) unawaited(PushNotificationService().saveToken(companyId, user!.uid));
         _navigateTo(DashboardScreen(companyId: companyId));
       } else {
         _navigateTo(LoginScreen(companyId: companyId));
@@ -367,6 +391,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
 
     if (user != null) {
       debugPrint('RettBase: Bereits angemeldet (uid=${user.uid}) – springe direkt ins Dashboard');
+      if (!kIsWeb) unawaited(PushNotificationService().saveToken(companyId, user!.uid));
       _navigateTo(DashboardScreen(companyId: companyId));
     } else {
       _navigateTo(LoginScreen(companyId: companyId));

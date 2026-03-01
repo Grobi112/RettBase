@@ -103,6 +103,7 @@
 - **FCM-Token** in `kunden/{companyId}/users/{uid}` (fcmToken, fcmTokenUpdatedAt) – nach Login speichern
 - **Cloud Functions:** `onNewChatMessage` (neue Nachricht), `onNewGroupChat` (zur Gruppe hinzugefügt) – senden FCM an Empfänger
 - **FCM-Token:** zusätzlich in `fcmTokens/{uid}` (global) gespeichert – Cloud Function nutzt Fallback, falls `kunden/{companyId}/users/{uid}` leer
+- **Token-Speicherung robuster (März 2026):** saveToken wird beim App-Start (vor Dashboard-Navigation) und bei App-Resume (WidgetsBindingObserver im Dashboard) aufgerufen – behebt „Kein FCM-Token“ wenn Empfänger die App geöffnet hatte. **Checklist:** docs/IOS_PUSH_CHECKLIST.md
 - **Badge Native:** flutter_app_badger (nur iOS/Android, nicht Web), aktualisiert bei Chat-Unread-Änderung
 - **Badge PWA/Web:** Navigator Badging API (setAppBadge). **Safari iOS** ab 16.4, aber nur mit Notification-Permission. **Chrome Android:** nicht unterstützt (Plattform-Limit) – siehe docs/WEB_PUSH_SETUP.md §5
 - **App über Push öffnen:** `initialChatFromNotification` → Dashboard ruft `_maybeOpenChatFromNotification` auf, übergibt `initialChatId` an ChatScreen
@@ -403,7 +404,27 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 
 ---
 
-## 22. Firebase-Passwort-Reset-E-Mail
+## 22. Externe E-Mails (sendEmail + pollInboundEmail)
+
+- **Cloud Function** `sendEmail` – versendet externe E-Mails (E-Mail-Modul, Schnittstellenmeldung, Übergriffsmeldung)
+- **Reply-To:** `mail+{companyId}_{emailId}@rettbase.de` – Antworten landen in mail@rettbase.de (Plus-Adressierung)
+- **Cloud Function** `pollInboundEmail` – pollt alle 3 Min. IMAP-Inbox, parst Antworten an mail+..., speichert in Firestore, zeigt im Posteingang
+- **SMTP-Konfiguration via Firebase params** (März 2026 – keine functions.config() mehr):
+  1. `.env` in `functions/` anlegen (siehe `functions/.env.example`):
+     ```
+     SMTP_USER=deine@email.de
+     SMTP_HOST=smtp.gmail.com
+     SMTP_PORT=587
+     SMTP_SECURE=false
+     ```
+  2. Passwort als Secret: `firebase functions:secrets:set SMTP_PASS` – „SMTP_PASS“ ist der feste Name (nicht ersetzen!), danach Passwort für SMTP_USER eingeben
+- **Gmail:** App-Passwort verwenden (nicht normales Passwort). Port 587 (STARTTLS) oder 465 (SSL) mit `SMTP_SECURE=true`
+- **IMAP** (für pollInboundEmail): `.env` mit `IMAP_HOST=imap.strato.de`, `IMAP_PORT=993` (Strato). Gleiche Credentials wie SMTP (SMTP_USER, SMTP_PASS)
+- Ohne Konfiguration: klare Fehlermeldung „E-Mail-Versand ist nicht konfiguriert“
+
+---
+
+## 23. Firebase-Passwort-Reset-E-Mail
 
 - **Firebase Console** → Authentication → Templates → Passwort zurücksetzen
 - **Deutsche Vorlage** mit Link „Passwort jetzt zurücksetzen“ (Bold, zentriert, 14px)
