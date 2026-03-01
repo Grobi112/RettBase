@@ -1,16 +1,16 @@
-# Automatisches Deployment der RettBase-WebApp zu Strato
+# Web-App bauen – manueller Upload zu Strato
 # Läuft bei jedem Push auf main (und optional manuell).
-# Die Flutter-App liegt in app/ – Workflow muss working-directory nutzen.
+# Build-Artefakt kann unter Actions → Run → Artifacts heruntergeladen werden.
 
-name: Deploy WebApp zu Strato
+name: WebApp bauen
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Manueller Start unter Actions → "Deploy WebApp zu Strato" → Run workflow
+  workflow_dispatch:  # Manueller Start unter Actions → "WebApp bauen" → Run workflow
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -38,25 +38,11 @@ jobs:
         working-directory: app
 
       - name: Web-App bauen
-        run: |
-          flutter build web --release --no-wasm-dry-run --verbose 2>&1 | tee build.log
-          exit_code=${PIPESTATUS[0]}
-          if [ $exit_code -ne 0 ]; then
-            echo "=== Letzte 150 Zeilen des Build-Logs (Fehlerdetails) ==="
-            tail -150 build.log
-          fi
-          exit $exit_code
+        run: flutter build web --release --no-wasm-dry-run
         working-directory: app
 
-      - name: Zu Strato hochladen (FTP)
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+      - name: Artefakt hochladen
+        uses: actions/upload-artifact@v4
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: app/build/web/
-          server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
+          name: webapp-build
+          path: app/build/web/
