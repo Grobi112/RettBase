@@ -177,6 +177,7 @@ class PushNotificationService {
       return;
     }
     try {
+      await ensureInitialized();
       var token = await _getFcmTokenForNative();
       if (token == null || token.isEmpty) {
         debugPrint('RettBase Push: getToken nach Retries weiterhin null – prüfe Einstellungen → Benachrichtigungen');

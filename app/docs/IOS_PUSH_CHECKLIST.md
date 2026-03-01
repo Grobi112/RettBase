@@ -26,13 +26,17 @@ Wenn Chat-Push-Benachrichtigungen auf iOS nicht ankommen (weder Banner noch Badg
 3. Prüfe: **Push Notifications** muss aktiviert sein
 4. Falls nicht: aktivieren und **Profiles** neu erstellen/herunterladen
 
-## 4. Firebase Console – APNs Key
+## 4. Firebase Console – APNs Key (Development + Production)
+
+**WICHTIG:** Debug-Builds (Xcode Run auf Gerät) nutzen den **APNs Sandbox/Development-Server**. Ohne Entwicklungs-Key kommt Push nie an.
 
 1. Gehe zu [Firebase Console](https://console.firebase.google.com) → Projekt **rett-fe0fa**
 2. ⚙️ **Projekteinstellungen** → Tab **Cloud Messaging**
 3. Unter **Apple-App-Konfiguration**:
-   - **APNs-Authentifizierungsschlüssel** hochladen (`.p8`-Datei)
-   - **Key ID** und **Team ID** eintragen
+   - **Entwicklungs-APNs-Authentifizierungsschlüssel** hochladen – für Debug-Builds (Xcode/USB)
+   - **Produktions-APNs-Authentifizierungsschlüssel** hochladen – für TestFlight/App Store
+
+**Gleiche .p8-Datei** kann für beide verwendet werden (ein Key von Apple funktioniert für Sandbox und Production). Beide Slots in Firebase befüllen.
 
 APNs-Key anlegen (falls noch nicht vorhanden):
 
@@ -78,9 +82,9 @@ Nach Änderungen an Entitlements oder Capabilities:
    - Muss `fcmToken` (nicht leer) und `fcmTokenUpdatedAt` enthalten
 
 3. **TestFlight vs. Debug-Build**
-   - **TestFlight/Archive**: nutzt `aps-environment: production` (APNs-Produktionsserver)
-   - **Debug von Xcode** (Run auf Gerät): kann Sandbox/Development nutzen
-   - Empfehlung: Mit **TestFlight-Build** testen – dort ist die Konfiguration am zuverlässigsten
+   - **TestFlight/Archive**: nutzt APNs-Produktionsserver → braucht Produktions-Key in Firebase
+   - **Debug von Xcode** (Run auf Gerät): nutzt APNs-Sandbox/Development → braucht **Entwicklungs-Key** in Firebase
+   - Ohne Entwicklungs-Key: Push bei Debug-Builds kommt **nie** an, nur bei TestFlight
 
 5. **Provisioning Profile neu erzeugen**
    - Apple Developer → Profiles → dein App-Profile
