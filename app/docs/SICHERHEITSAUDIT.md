@@ -1,6 +1,6 @@
 # Sicherheitsaudit RettBase Flutter-App
 
-Stand: März 2026 (Commit 0436b75: Audit-Fixes, rettbase/ entfernt)
+Stand: März 2026 (Commit a95249c: Audit-Fixes, rettbase/ entfernt)
 
 ## Übersicht
 
@@ -176,5 +176,6 @@ Externes Sicherheitsaudit hat u.a. K1–K8, H1–H8 identifiziert. **Wichtig:** 
 ### 9.4 WebView / Custom-Links
 
 - **WebView** wird nur für Custom-Links (type: `custom` im Menü) genutzt; derzeit keine Custom-Links aktiv.
+- **Legacy-*.html-Redirects** entfernt (März 2026): Fallbacks für `mitarbeiterverwaltung.html`, `kundenverwaltung.html`, `modulverwaltung.html`, `menue.html` in `dashboard_screen.dart` – waren tot, da `_normalizeItem` url stets auf `''` setzt.
 - Code bleibt erhalten für kundenspezifische Links (z.B. externe Module).
 - K3 (Token in URL): Nur relevant, wenn Custom-Links aktiviert werden – Token ist kurzlebig und einmalig.

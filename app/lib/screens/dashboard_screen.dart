@@ -728,41 +728,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
         break;
       default:
-        // Fallback: Alte HTML-URLs → native Screens (verhindert 404)
-        if (mod.url.contains('mitarbeiterverwaltung.html')) {
-          screen = MitarbeiterverwaltungScreen(
-            companyId: _companyId,
-            userRole: _userRole,
-            bereich: _bereich,
-            title: mod.label,
-            onBack: onBack,
-            hideAppBar: true,
-          );
-        } else if (mod.url.contains('kundenverwaltung.html')) {
-          screen = KundenverwaltungScreen(
-            companyId: _companyId,
-            title: mod.label,
-            onBack: onBack,
-            hideAppBar: true,
-          );
-        } else if (mod.url.contains('modulverwaltung.html')) {
-          screen = ModulverwaltungScreen(
-            companyId: _companyId,
-            userRole: _userRole,
-            title: mod.label,
-            onBack: onBack,
-            hideAppBar: true,
-          );
-        } else if (mod.url.contains('menue.html')) {
-          screen = MenueverwaltungScreen(
-            companyId: _companyId,
-            userRole: _userRole,
-            title: mod.label,
-            onBack: onBack,
-            onMenuSaved: () => _load(forceMenuServerRead: true),
-            hideAppBar: true,
-          );
-        } else if (mod.url.isNotEmpty) {
+        // Unbekanntes Modul: WebView bei URL (Custom-Link), sonst Platzhalter
+        if (mod.url.isNotEmpty) {
           screen = ModuleWebViewScreen(
             module: mod,
             companyId: _companyId,
