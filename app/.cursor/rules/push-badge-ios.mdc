@@ -1,0 +1,42 @@
+---
+description: Push-Benachrichtigungen & Badge (iOS) – Kontext für Fehlersuche und Weiterentwicklung
+alwaysApply: false
+globs: ["**/push*.dart", "**/functions/index.js", "**/AppDelegate.swift", "**/*entitlements*"]
+---
+
+# Push & Badge (iOS) – Kontext
+
+## Problem (Stand März 2026)
+
+- **Badge** erscheint erst, wenn App geöffnet und wieder geschlossen wird
+- **Push-Benachrichtigung** bei geschlossener App wird nicht angezeigt
+- Cloud Function meldet „erfolgreich gesendet“
+
+## Durchlauf
+
+1. **Cloud Function** (`onNewChatMessage`) → sendet FCM mit `notification` + `data` + `apns`
+2. **Firebase FCM** → leitet an APNs weiter (APNs-Key in Firebase Console nötig)
+3. **APNs** → liefert an Gerät (aps-environment: Debug=development, Release=production)
+4. **iOS** → zeigt Benachrichtigung (UIBackgroundModes: remote-notification)
+
+## Relevante Dateien
+
+| Datei | Inhalt |
+|-------|--------|
+| `lib/main.dart` | `_firebaseMessagingBackgroundHandler` (Top-Level, vor Firebase.initializeApp registrieren), `_AppWithTokenRefreshOnResume` |
+| `lib/services/push_notification_service.dart` | `saveToken`, `retrySaveTokenIfNeeded`, `updateBadge`, `_getFcmTokenForNative` |
+| `functions/index.js` | `onNewChatMessage`, `getFcmToken`, APNs-Payload mit `alert`, `badge`, `sound`, `content-available: 1` |
+| `ios/Runner/AppDelegate.swift` | `registerForRemoteNotifications()` |
+| `ios/Runner/Runner.entitlements` | `aps-environment: production` (Release) |
+| `ios/Runner/Runner-Debug.entitlements` | `aps-environment: development` (Debug) |
+| `ios/Runner.xcodeproj/project.pbxproj` | Debug → `Runner-Debug.entitlements`, Release → `Runner.entitlements` |
+| `docs/PUSH_ANALYSE_GESCHLOSSENE_APP.md` | Vollständige Analyse & Prüfliste |
+| `docs/BADGE_PUSH_CHECKLIST.md` | Technische Checkliste |
+
+## Wichtige Punkte
+
+- **onBackgroundMessage** muss **vor** `Firebase.initializeApp` registriert werden (iOS: erste Push nach App-Kill)
+- **Debug-Build** (flutter run): APNs Sandbox → Entwicklungs-APNs-Key in Firebase nötig
+- **TestFlight/Release**: APNs Production → Produktions-Key
+- **Simulator**: Push funktioniert nicht, nur echtes Gerät
+- Token-Speicherung: `kunden/{companyId}/users/{uid}.fcmToken` und `fcmTokens/{uid}.fcmToken`

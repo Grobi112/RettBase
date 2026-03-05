@@ -42,6 +42,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Background-Handler MUSS vor allen async-Aufrufen registriert werden (iOS: erste Push nach App-Kill)
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
+
   // Uncaught Errors abfangen (z.B. async Fehler in _initApp, Push-Service)
   FlutterError.onError = (details) {
     if (kDebugMode) debugPrint('RettBase FlutterError: ${details.exception}\n${details.stack}');
@@ -65,9 +70,6 @@ void main() async {
         await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
       } catch (_) {}
     }
-    if (!kIsWeb) {
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    }
     unawaited(PushNotificationService.initialize().catchError((e) {
       if (kDebugMode) debugPrint('RettBase Push Init: $e');
     }));
@@ -79,10 +81,39 @@ void main() async {
     firebase_sw.registerFirebaseMessagingSwDeferred();
   });
 
-  runApp(const RettBaseApp());
+  runApp(kIsWeb ? const RettBaseApp() : const _AppWithTokenRefreshOnResume());
 }
 
 final _navigatorKey = GlobalKey<NavigatorState>();
+
+/// Wrapper für Native: Token bei App-Resume erneuern (FCM-Token-Rotation).
+class _AppWithTokenRefreshOnResume extends StatefulWidget {
+  const _AppWithTokenRefreshOnResume();
+
+  @override
+  State<_AppWithTokenRefreshOnResume> createState() => _AppWithTokenRefreshOnResumeState();
+}
+
+class _AppWithTokenRefreshOnResumeState extends State<_AppWithTokenRefreshOnResume> {
+  late final AppLifecycleListener _lifecycleListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () => unawaited(PushNotificationService.retrySaveTokenIfNeeded()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const RettBaseApp();
+}
 
 class RettBaseApp extends StatelessWidget {
   const RettBaseApp({super.key});

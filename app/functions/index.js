@@ -685,6 +685,7 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
                   alert: { title: "Neue Chat-Nachricht", body },
                   badge: totalUnread,
                   sound: "default",
+                  "content-available": 1,
                 },
               },
               fcmOptions: {},
