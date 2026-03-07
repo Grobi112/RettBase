@@ -137,9 +137,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
 
   void _onChatUnreadChanged() {
     final count = _chatUnreadNotifier.value;
-    if (kIsWeb) debugPrint('RettBase Badge: _onChatUnreadChanged count=$count');
-    setState(() {});
     PushNotificationService.updateBadge(count);
+    setState(() {});
   }
 
   void _onEmailUnreadChanged() => setState(() {});
@@ -181,28 +180,18 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     _badgePollTimer = null;
     final cid = _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
     if (cid.isEmpty) return;
-    if (kIsWeb) debugPrint('RettBase Badge: starte streamUnreadCount für companyId=$cid');
-    _chatUnreadSub = _chatService.streamUnreadCount(cid).listen(
-      (count) {
-        if (kIsWeb) debugPrint('RettBase Badge: stream emit count=$count');
-        if (mounted) _chatUnreadNotifier.value = count;
-      },
-      onError: (e) {
-        debugPrint('RettBase Badge: stream Fehler: $e');
-        _chatUnreadSub?.cancel();
-        _chatUnreadSub = null;
-        if (mounted) _chatUnreadNotifier.value = 0;
-      },
-    );
-    if (kIsWeb) {
-      _badgePollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-        if (!mounted || cid.isEmpty) return;
+    // Nur für UI (Chat-Tile) – Badge am App-Icon kommt ausschließlich aus Push
+    void refreshForUi() async {
+      if (!mounted || cid.isEmpty) return;
+      try {
         final count = await _chatService.getUnreadCount(cid);
-        if (mounted) {
-          _chatUnreadNotifier.value = count;
-        }
-      });
+        if (mounted) _chatUnreadNotifier.value = count;
+      } catch (e) {
+        debugPrint('RettBase Chat UI: getUnreadCount Fehler: $e');
+      }
     }
+    refreshForUi();
+    _badgePollTimer = Timer.periodic(const Duration(seconds: 5), (_) => refreshForUi());
   }
 
   void _startSchichtplanNfsMeldungenStream() {
@@ -233,7 +222,18 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       if (!mounted) return;
       _bodyNavigatorKey.currentState?.push(
         MaterialPageRoute(
-          builder: (_) => ChatScreen(companyId: companyId, initialChatId: chat.$2, onBack: _goToHome, hideAppBar: true),
+          builder: (_) => ChatScreen(
+            companyId: companyId,
+            initialChatId: chat.$2,
+            onBack: _goToHome,
+            hideAppBar: true,
+            onChatOpened: (chatId, unreadInChat) {
+              _chatUnreadNotifier.value = _chatUnreadNotifier.value - unreadInChat;
+              if (_chatUnreadNotifier.value < 0) _chatUnreadNotifier.value = 0;
+              PushNotificationService.updateBadge(_chatUnreadNotifier.value);
+              unawaited(_chatService.markChatReadPublic(companyId, chatId));
+            },
+          ),
         ),
       );
     });
@@ -243,7 +243,17 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       PushNotificationService.retrySaveTokenIfNeeded();
+      _refreshBadgeOnResume();
     }
+  }
+
+  void _refreshBadgeOnResume() {
+    final cid = _effectiveCompanyId.isNotEmpty ? _effectiveCompanyId : widget.companyId;
+    if (cid.isEmpty) return;
+    // Nur Chat-UI aktualisieren – Badge am App-Icon kommt ausschließlich aus Push
+    unawaited(_chatService.getUnreadCount(cid).then((count) {
+      if (mounted) _chatUnreadNotifier.value = count;
+    }));
   }
 
   @override
@@ -300,7 +310,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       }
       final effectiveCompanyId = authData.companyId.trim().isNotEmpty ? authData.companyId : widget.companyId;
       // Token im Hintergrund speichern – darf Dashboard-Lade nicht blockieren (getToken kann auf Web hängen)
-      unawaited(PushNotificationService().saveToken(effectiveCompanyId, user.uid));
+      await PushNotificationService().saveToken(effectiveCompanyId, user.uid);
       var bereich = await _kundenService.getCompanyBereich(effectiveCompanyId);
       final isAdminCompany = (effectiveCompanyId.trim().toLowerCase()) == 'admin';
       if (bereich == null || bereich.isEmpty) {
@@ -690,6 +700,12 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           title: mod.label,
           onBack: onBack,
           hideAppBar: true,
+          onChatOpened: (chatId, unreadInChat) {
+            _chatUnreadNotifier.value = _chatUnreadNotifier.value - unreadInChat;
+            if (_chatUnreadNotifier.value < 0) _chatUnreadNotifier.value = 0;
+            PushNotificationService.updateBadge(_chatUnreadNotifier.value);
+            unawaited(_chatService.markChatReadPublic(_companyId, chatId));
+          },
         );
         break;
       case 'email':
