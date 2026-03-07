@@ -310,7 +310,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       }
       final effectiveCompanyId = authData.companyId.trim().isNotEmpty ? authData.companyId : widget.companyId;
       // Token im Hintergrund speichern – darf Dashboard-Lade nicht blockieren (getToken kann auf Web hängen)
-      await PushNotificationService().saveToken(effectiveCompanyId, user.uid);
+      unawaited(PushNotificationService().saveToken(effectiveCompanyId, user.uid).timeout(const Duration(seconds: 30), onTimeout: () {}));
       var bereich = await _kundenService.getCompanyBereich(effectiveCompanyId);
       final isAdminCompany = (effectiveCompanyId.trim().toLowerCase()) == 'admin';
       if (bereich == null || bereich.isEmpty) {
