@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../services/chat_offline_queue.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -66,7 +68,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _groupNameController = TextEditingController();
   final List<MitarbeiterForChat> _selectedGroupMembers = [];
 
+  /// Ausstehende Nachrichten (Offline-Queue) für den aktuellen Chat.
+  final List<Map<String, dynamic>> _pendingMessages = [];
+
   // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  Timer? _pendingCheckTimer;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +85,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _selectedChatId = widget.initialChatId;
       _subscribeToMessages(widget.initialChatId!);
     }
+    if (!kIsWeb) {
+      _startPendingCheckTimer();
+      unawaited(_chatService.processOfflineQueue());
+    }
+  }
+
+  void _startPendingCheckTimer() {
+    _pendingCheckTimer?.cancel();
+    _pendingCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!mounted || _pendingMessages.isEmpty) return;
+      try {
+        final inQueue = await ChatOfflineQueue.getAll();
+        final ids = inQueue.map((p) => p.id).toSet();
+        if (mounted) {
+          setState(() {
+            _pendingMessages.removeWhere((p) => !ids.contains(p['id']));
+          });
+        }
+      } catch (_) {}
+    });
   }
 
   // ââ Chat-Listen-Stream ââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -125,6 +152,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       (msgs) {
         if (!mounted) return;
         final wasShort = _messages.length < msgs.length;
+        // Pending entfernen, wenn Nachricht aus Stream von uns (nach Offline-Versand)
+        final currentUid = _chatService.userId;
+        if (currentUid != null && _selectedChatId != null) {
+          for (final m in msgs) {
+            if (m.from == currentUid && m.text != null && m.text!.isNotEmpty) {
+              final idx = _pendingMessages.indexWhere((p) =>
+                  p['chatId'] == _selectedChatId &&
+                  p['text'] == m.text);
+              if (idx >= 0) _pendingMessages.removeAt(idx);
+            }
+          }
+        }
         setState(() {
           _messages = msgs;
           _messagesLoading = false;
@@ -182,6 +221,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _pendingCheckTimer?.cancel();
     if (_visibilityCallback != null) {
       visibility_refresh.removeOnVisible(_visibilityCallback!);
     }
@@ -209,6 +249,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() {
       _selectedChatId = null;
       _selectedChat = null;
+      _pendingMessages.clear();
     });
     _unsubscribeFromMessages();
   }
@@ -221,6 +262,56 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return others.map((p) => p.name).where((n) => n.isNotEmpty).join(', ').isNotEmpty
         ? others.map((p) => p.name).where((n) => n.isNotEmpty).join(', ')
         : 'Chat';
+  }
+
+  /// Kombiniert Firestore-Nachrichten mit ausstehenden (Offline-Queue), sortiert nach Zeit.
+  List<({ChatMessage? message, Map<String, dynamic>? pending})> _getDisplayMessages() {
+    final pendingForChat = _pendingMessages
+        .where((p) => p['chatId'] == _selectedChatId)
+        .map((p) => (message: null as ChatMessage?, pending: Map<String, dynamic>.from(p)))
+        .toList();
+    final fromFirestore = _messages
+        .map((m) => (message: m, pending: null as Map<String, dynamic>?))
+        .toList();
+    final combined = [...fromFirestore, ...pendingForChat];
+    combined.sort((a, b) {
+      final at = a.message?.createdAt ?? (a.pending!['createdAt'] as DateTime);
+      final bt = b.message?.createdAt ?? (b.pending!['createdAt'] as DateTime);
+      return at.compareTo(bt);
+    });
+    return combined;
+  }
+
+  /// WhatsApp-Style: 1 Haken=verschickt, 2 grau=zugestellt, 2 blau=gelesen.
+  Widget _buildDeliveryStatus(bool isSent, ChatMessage? m, bool isPending) {
+    if (!isSent || isPending || m == null) {
+      if (isPending) {
+        return Icon(Icons.schedule, size: 12, color: Colors.white.withOpacity(0.65));
+      }
+      return const SizedBox.shrink();
+    }
+    final uid = _chatService.userId;
+    final chat = _selectedChat;
+    if (uid == null || chat == null) {
+      return Icon(Icons.done, size: 14, color: Colors.white.withOpacity(0.65));
+    }
+    final recipients = chat.participants.where((p) => p != uid).toList();
+    final delivered = recipients.every((r) => m.deliveredTo.contains(r));
+    final read = recipients.every((r) {
+      final lr = chat.lastReadAt[r];
+      if (lr == null || m.createdAt == null) return false;
+      final lrAt = lr is Timestamp ? lr.toDate() : (lr is DateTime ? lr : null);
+      return lrAt != null && !m.createdAt!.isAfter(lrAt);
+    });
+    final color = read ? Colors.blue.shade200 : Colors.white.withOpacity(0.65);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(read ? Icons.done_all : Icons.done, size: 14, color: color),
+        if (delivered || read) const SizedBox(width: 2),
+        if (delivered || read) Icon(read ? Icons.done_all : Icons.done, size: 14, color: color),
+      ],
+    );
   }
 
   String _formatTime(DateTime? d) {
@@ -356,13 +447,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() => _pendingImages = []);
 
     try {
-      await _chatService.sendMessage(
+      final resultId = await _chatService.sendMessageOrQueue(
         widget.companyId,
         _selectedChatId!,
         text,
         imageBytes: images.isNotEmpty ? images : null,
         imageNames: images.asMap().entries.map((e) => 'image_${e.key}.jpg').toList(),
       );
+      if (resultId.startsWith('pending-') && mounted) {
+        setState(() {
+          _pendingMessages.add({
+            'id': resultId,
+            'chatId': _selectedChatId,
+            'text': text,
+            'hasImages': images.isNotEmpty,
+            'createdAt': DateTime.now(),
+          });
+        });
+      }
       // Stream liefert die neue Nachricht automatisch â kein manuelles Reload
     } catch (e) {
       if (mounted) {
@@ -973,7 +1075,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             color: AppTheme.surfaceBg,
             child: _messagesLoading
                 ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
-                : _messages.isEmpty
+                : _messages.isEmpty && _pendingMessages.where((p) => p['chatId'] == _selectedChatId).isEmpty
                     ? Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -1017,19 +1119,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         controller: _scrollController,
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                         reverse: true,
-                        itemCount: _messages.length,
+                        itemCount: _getDisplayMessages().length,
                         itemBuilder: (_, i) {
-                          final m = _messages[_messages.length - 1 - i];
-                          final isSent = m.from == _chatService.userId;
+                          final items = _getDisplayMessages();
+                          final item = items[items.length - 1 - i];
+                          final m = item.message;
+                          final pending = item.pending;
+                          final text = m?.text ?? (pending?['text'] as String? ?? '');
+                          final createdAt = m?.createdAt ?? (pending?['createdAt'] as DateTime?);
+                          final isSent = m != null ? m.from == _chatService.userId : true;
+                          final isPending = pending != null;
                           // Datum-Trennlinie
-                          final showDate = i == _messages.length - 1 ||
-                              _messages[_messages.length - 2 - i].createdAt?.day !=
-                                  m.createdAt?.day;
+                          final showDate = i == items.length - 1 ||
+                              (items[items.length - 2 - i].message?.createdAt?.day ??
+                                  (items[items.length - 2 - i].pending?['createdAt'] as DateTime?)?.day) !=
+                                  createdAt?.day;
                           return Column(
                             crossAxisAlignment:
                                 isSent ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
-                              if (showDate && m.createdAt != null)
+                              if (showDate && createdAt != null)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                   child: Center(
@@ -1041,7 +1150,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        _formatDate(m.createdAt!),
+                                        _formatDate(createdAt),
                                         style: TextStyle(
                                             fontSize: 11,
                                             color: Colors.grey[600],
@@ -1088,17 +1197,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      if (m.text != null && m.text!.isNotEmpty)
+                                      if (text.isNotEmpty)
                                         Text(
-                                          m.text!,
+                                          text,
                                           style: TextStyle(
                                             color: isSent ? Colors.white : Colors.grey[900],
                                             fontSize: 14.5,
                                             height: 1.45,
                                           ),
                                         ),
-                                      if (m.attachments != null)
-                                        for (final a in m.attachments!)
+                                      if (m?.attachments != null)
+                                        for (final a in m!.attachments!)
                                           if ((a.type).startsWith('image/'))
                                             Padding(
                                               padding: const EdgeInsets.only(top: 6),
@@ -1127,18 +1236,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                 ),
                                               ),
                                             ),
+                                      if (pending != null && (pending['hasImages'] == true))
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Text(
+                                            '📎 Bild(er) werden bei Netzverbindung gesendet',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isSent
+                                                  ? Colors.white70
+                                                  : Colors.grey[600],
+                                            ),
+                                          ),
+                                        ),
                                       const SizedBox(height: 4),
                                       Align(
                                         alignment: Alignment.centerRight,
-                                        child: Text(
-                                          _formatTime(m.createdAt),
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: isSent
-                                                ? Colors.white.withOpacity(0.65)
-                                                : Colors.grey[400],
-                                            fontWeight: FontWeight.w400,
-                                          ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              _formatTime(createdAt),
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: isSent
+                                                    ? Colors.white.withOpacity(0.65)
+                                                    : Colors.grey[400],
+                                                fontWeight: FontWeight.w400,
+                                              ),
+                                            ),
+                                            if (isSent) ...[
+                                              const SizedBox(width: 4),
+                                              _buildDeliveryStatus(isSent, m, isPending),
+                                            ],
+                                          ],
                                         ),
                                       ),
                                     ],

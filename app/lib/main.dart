@@ -11,6 +11,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'services/push_notification_service.dart';
+import 'services/chat_offline_queue.dart';
 import 'theme/app_theme.dart';
 import 'app_config.dart';
 import 'screens/splash_screen.dart';
@@ -73,6 +74,11 @@ void main() async {
     unawaited(PushNotificationService.initialize().catchError((e) {
       if (kDebugMode) debugPrint('RettBase Push Init: $e');
     }));
+    if (!kIsWeb) {
+      unawaited(ChatOfflineQueue.init().catchError((e) {
+        if (kDebugMode) debugPrint('RettBase ChatOfflineQueue Init: $e');
+      }));
+    }
   } catch (e) {
     debugPrint('Firebase Init Fehler: $e');
   }

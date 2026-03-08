@@ -1,14 +1,23 @@
+import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
+
 import '../models/chat.dart';
+import 'chat_offline_queue.dart';
 
 /// Chat-Service – gleiche Logik wie rettbase/module/chat/chat.js
 class ChatService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
+
+  static StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  static bool _connectivityListenerActive = false;
 
   static String getDirectChatId(String u1, String u2) {
     final a = [u1, u2]..sort();
@@ -173,10 +182,19 @@ class ChatService {
         .limit(100)
         .snapshots()
         .map((snap) {
-      return snap.docs
+      final list = snap.docs
           .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
           .where((m) => !m.deletedBy.contains(uid))
           .toList();
+      for (final d in snap.docs) {
+        final data = d.data();
+        final from = data['from']?.toString();
+        final delivered = (data['deliveredTo'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        if (from != null && from != uid && !delivered.contains(uid)) {
+          unawaited(d.reference.update({'deliveredTo': FieldValue.arrayUnion([uid])}));
+        }
+      }
+      return list;
     });
   }
 
@@ -266,6 +284,83 @@ class ChatService {
       }
     } catch (_) {}
     return user.email?.split('@').first ?? 'Unbekannt';
+  }
+
+  /// Startet den Connectivity-Listener für Offline-Queue (nur einmal, nur Native).
+  static void ensureConnectivityListener(ChatService service) {
+    if (kIsWeb || _connectivityListenerActive) return;
+    _connectivityListenerActive = true;
+    _connectivitySub = ChatOfflineQueue.onConnectivityChanged.listen((_) async {
+      if (await ChatOfflineQueue.isOnline) {
+        unawaited(service.processOfflineQueue());
+      }
+    });
+  }
+
+  /// Verarbeitet die Offline-Queue – sendet alle ausstehenden Nachrichten.
+  Future<void> processOfflineQueue() async {
+    if (kIsWeb || userId == null) return;
+    try {
+      final pending = await ChatOfflineQueue.getAll();
+      for (final p in pending) {
+        try {
+          await sendMessage(
+            p.companyId,
+            p.chatId,
+            p.text,
+            imageBytes: p.imageBytes,
+            imageNames: p.imageNames,
+          );
+          await ChatOfflineQueue.remove(p.id);
+        } catch (e) {
+          if (kDebugMode) debugPrint('RettBase processOfflineQueue: $e');
+          // Einzelne Nachricht fehlgeschlagen – nächste trotzdem versuchen
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('RettBase processOfflineQueue: $e');
+    }
+  }
+
+  /// Sendet die Nachricht oder legt sie in die Offline-Queue (bei fehlendem Netz).
+  /// Gibt die lokale ID zurück (für Pending-Anzeige in der UI).
+  Future<String> sendMessageOrQueue(
+    String companyId,
+    String chatId,
+    String text, {
+    List<Uint8List>? imageBytes,
+    List<String>? imageNames,
+  }) async {
+    final uid = userId;
+    if (uid == null) throw Exception('Nicht angemeldet');
+    if (text.trim().isEmpty && (imageBytes == null || imageBytes!.isEmpty)) {
+      throw Exception('Leere Nachricht');
+    }
+
+    ensureConnectivityListener(this);
+
+    if (kIsWeb) {
+      await sendMessage(companyId, chatId, text, imageBytes: imageBytes, imageNames: imageNames);
+      return 'web-${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    final online = await ChatOfflineQueue.isOnline;
+    if (online) {
+      await sendMessage(companyId, chatId, text, imageBytes: imageBytes, imageNames: imageNames);
+      return 'sent-${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    final id = 'pending-${DateTime.now().millisecondsSinceEpoch}';
+    await ChatOfflineQueue.enqueue(PendingChatMessage(
+      id: id,
+      companyId: companyId,
+      chatId: chatId,
+      text: text,
+      imageBytes: imageBytes,
+      imageNames: imageNames,
+      createdAt: DateTime.now(),
+    ));
+    return id;
   }
 
   Future<void> sendMessage(

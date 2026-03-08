@@ -77,6 +77,7 @@ class ChatMessage {
   final String? text;
   final List<MessageAttachment>? attachments;
   final DateTime? createdAt;
+  final List<String> deliveredTo;
   final List<String> readBy;
   final List<String> deletedBy;
 
@@ -87,6 +88,7 @@ class ChatMessage {
     this.text,
     this.attachments,
     this.createdAt,
+    this.deliveredTo = const [],
     this.readBy = const [],
     this.deletedBy = const [],
   });
@@ -105,6 +107,7 @@ class ChatMessage {
     final ca = d['createdAt'];
     if (ca is Timestamp) createdAt = ca.toDate();
     if (ca is DateTime) createdAt = ca;
+    final deliveredTo = (d['deliveredTo'] as List?)?.map((e) => e.toString()).toList() ?? [];
     final readBy = (d['readBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
     final deletedBy = (d['deletedBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
@@ -115,6 +118,7 @@ class ChatMessage {
       text: d['text']?.toString(),
       attachments: att,
       createdAt: createdAt,
+      deliveredTo: deliveredTo,
       readBy: readBy,
       deletedBy: deletedBy,
     );
