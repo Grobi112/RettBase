@@ -16,8 +16,12 @@ class ChatService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
+  // BUG FIX 3: Weak-Reference-Pattern für Connectivity-Listener.
+  // _activeService wird bei jedem Aufruf aktualisiert, sodass immer die
+  // aktuelle Instanz verwendet wird – kein Memory-Leak durch feste Closure.
   static StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   static bool _connectivityListenerActive = false;
+  static ChatService? _activeService;
 
   static String getDirectChatId(String u1, String u2) {
     final a = [u1, u2]..sort();
@@ -101,9 +105,9 @@ class ChatService {
         final data = d.data();
         if ((data['deletedBy'] as List?)?.contains(uid) == true) continue;
         var unread = (data['unreadCount'] is Map ? (data['unreadCount'] as Map)[uid] : null);
-        if (unread is int)
+        if (unread is int) {
           total += unread;
-        else if (unread == null || unread == 0) {
+        } else if (unread == null || unread == 0) {
           final lastFrom = data['lastMessageFrom'];
           final lastAt = data['lastMessageAt'];
           if (lastFrom != null && lastFrom != uid && lastAt != null) {
@@ -186,6 +190,8 @@ class ChatService {
           .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
           .where((m) => !m.deletedBy.contains(uid))
           .toList();
+      // deliveredTo wird gesetzt sobald Empfänger den Stream öffnet.
+      // BUG FIX 1 (ergänzend): Nachrichten ohne deliveredTo-Eintrag werden nachgezogen.
       for (final d in snap.docs) {
         final data = d.data();
         final from = data['from']?.toString();
@@ -286,15 +292,28 @@ class ChatService {
     return user.email?.split('@').first ?? 'Unbekannt';
   }
 
-  /// Startet den Connectivity-Listener für Offline-Queue (nur einmal, nur Native).
+  // BUG FIX 3: Aktive Instanz wird bei jedem Aufruf aktualisiert.
+  // Listener läuft nur einmal, aber ruft immer die aktuellste Instanz auf.
+  // Verhindert Memory-Leak und veraltete Instanz-Referenz.
   static void ensureConnectivityListener(ChatService service) {
-    if (kIsWeb || _connectivityListenerActive) return;
+    if (kIsWeb) return;
+    _activeService = service; // immer aktuelle Instanz merken
+    if (_connectivityListenerActive) return;
     _connectivityListenerActive = true;
     _connectivitySub = ChatOfflineQueue.onConnectivityChanged.listen((_) async {
       if (await ChatOfflineQueue.isOnline) {
-        unawaited(service.processOfflineQueue());
+        final svc = _activeService;
+        if (svc != null) unawaited(svc.processOfflineQueue());
       }
     });
+  }
+
+  /// Connectivity-Listener stoppen und Referenz freigeben (z.B. beim App-Ende).
+  static void disposeConnectivityListener() {
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
+    _connectivityListenerActive = false;
+    _activeService = null;
   }
 
   /// Verarbeitet die Offline-Queue – sendet alle ausstehenden Nachrichten.
@@ -314,7 +333,6 @@ class ChatService {
           await ChatOfflineQueue.remove(p.id);
         } catch (e) {
           if (kDebugMode) debugPrint('RettBase processOfflineQueue: $e');
-          // Einzelne Nachricht fehlgeschlagen – nächste trotzdem versuchen
         }
       }
     } catch (e) {
@@ -333,7 +351,9 @@ class ChatService {
   }) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
-    if (text.trim().isEmpty && (imageBytes == null || imageBytes!.isEmpty)) {
+
+    // BUG FIX 2: imageBytes ohne unnötiges '!' – war null-safety Fehler
+    if (text.trim().isEmpty && (imageBytes == null || imageBytes.isEmpty)) {
       throw Exception('Leere Nachricht');
     }
 
@@ -372,8 +392,12 @@ class ChatService {
   }) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
-    if (text.trim().isEmpty && (imageBytes == null || imageBytes!.isEmpty)) return;
+
+    // BUG FIX 2: imageBytes ohne unnötiges '!'
+    if (text.trim().isEmpty && (imageBytes == null || imageBytes.isEmpty)) return;
+
     final senderName = await _getSenderName(companyId);
+
     List<Map<String, dynamic>>? attachments;
     if (imageBytes != null && imageBytes.isNotEmpty) {
       attachments = [];
@@ -388,19 +412,26 @@ class ChatService {
         attachments.add({'url': url, 'name': name, 'type': 'image/jpeg'});
       }
     }
+
     final messagesRef = _db
         .collection('kunden')
         .doc(companyId)
         .collection('chats')
         .doc(chatId)
         .collection('messages');
+
+    // BUG FIX 1: deliveredTo von Anfang an mit Sender-UID initialisieren.
+    // Vorher fehlte dieses Feld komplett – der Zustellungsstatus funktionierte
+    // nur wenn der Empfänger zufällig gerade den Stream offen hatte.
     await messagesRef.add({
       'from': uid,
       'senderName': senderName,
       'text': text.trim().isNotEmpty ? text.trim() : null,
       'attachments': attachments,
       'createdAt': FieldValue.serverTimestamp(),
+      'deliveredTo': [uid], // Sender direkt als delivered – Empfänger folgt via streamMessages
     });
+
     final lastPreview = text.trim().isNotEmpty
         ? text.trim()
         : (attachments != null
@@ -408,15 +439,18 @@ class ChatService {
                 ? '🎤 Sprachnachricht'
                 : '📎 Datei')
             : '');
+
     final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(chatId);
     final chatSnap = await chatRef.get();
     final chat = chatSnap.data();
     final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
+
     await chatRef.set({
       'lastMessageText': lastPreview,
       'lastMessageAt': FieldValue.serverTimestamp(),
       'lastMessageFrom': uid,
     }, SetOptions(merge: true));
+
     for (final pid in participants) {
       if (pid != uid && pid.isNotEmpty) {
         try {
