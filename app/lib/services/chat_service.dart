@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -21,14 +20,12 @@ class ChatService {
   Future<List<MitarbeiterForChat>> loadMitarbeiter(String companyId) async {
     final uid = userId;
     if (uid == null) return [];
-
     final usersSnap = await _db.collection('kunden').doc(companyId).collection('users').get();
     final emailToUid = <String, String>{};
     for (final u in usersSnap.docs) {
       final em = (u.data()['email'] ?? '').toString().toLowerCase().trim();
       if (em.isNotEmpty) emailToUid[em] = u.id;
     }
-
     final mitarbeiterSnap = await _db.collection('kunden').doc(companyId).collection('mitarbeiter').get();
     final list = <MitarbeiterForChat>[];
     for (final d in mitarbeiterSnap.docs) {
@@ -38,13 +35,11 @@ class ChatService {
       var uid = (emailToUid[email.toLowerCase()] ?? data['uid']?.toString() ?? d.id).toString();
       if (uid.isEmpty) uid = d.id;
       if (uid == this.userId) continue;
-
       final vorname = data['vorname']?.toString() ?? '';
       final nachname = data['nachname']?.toString() ?? '';
       final namePart = [vorname, nachname].where((e) => e.isNotEmpty).join(' ').trim();
       final name = namePart.isNotEmpty ? namePart : (data['name']?.toString() ?? email);
       if (_isExternPlaceholder(name)) continue;
-
       list.add(MitarbeiterForChat(
         uid: uid,
         docId: d.id,
@@ -65,7 +60,6 @@ class ChatService {
   Stream<List<ChatModel>> streamChats(String companyId) {
     final uid = userId;
     if (uid == null) return Stream.value([]);
-
     return _db
         .collection('kunden')
         .doc(companyId)
@@ -98,7 +92,8 @@ class ChatService {
         final data = d.data();
         if ((data['deletedBy'] as List?)?.contains(uid) == true) continue;
         var unread = (data['unreadCount'] is Map ? (data['unreadCount'] as Map)[uid] : null);
-        if (unread is int) total += unread;
+        if (unread is int)
+          total += unread;
         else if (unread == null || unread == 0) {
           final lastFrom = data['lastMessageFrom'];
           final lastAt = data['lastMessageAt'];
@@ -148,9 +143,7 @@ class ChatService {
   Future<List<ChatMessage>> loadMessages(String companyId, String chatId) async {
     final uid = userId;
     if (uid == null) return [];
-
     _markChatRead(companyId, chatId, uid);
-
     final snap = await _db
         .collection('kunden')
         .doc(companyId)
@@ -160,7 +153,6 @@ class ChatService {
         .orderBy('createdAt', descending: false)
         .limit(100)
         .get();
-
     return snap.docs
         .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
         .where((m) => !m.deletedBy.contains(uid))
@@ -170,9 +162,7 @@ class ChatService {
   Stream<List<ChatMessage>> streamMessages(String companyId, String chatId) {
     final uid = userId;
     if (uid == null) return Stream.value([]);
-
     _markChatRead(companyId, chatId, uid);
-
     return _db
         .collection('kunden')
         .doc(companyId)
@@ -204,10 +194,16 @@ class ChatService {
     } catch (_) {}
   }
 
+  /// Öffentliche Methode zum Markieren eines Chats als gelesen (z.B. aus dashboard_screen).
+  Future<void> markChatReadPublic(String companyId, String chatId) async {
+    final uid = userId;
+    if (uid == null) return;
+    await _markChatRead(companyId, chatId, uid);
+  }
+
   Future<void> startDirectChat(String companyId, MitarbeiterForChat mitarbeiter) async {
     final uid = userId;
     if (uid == null) return;
-
     final chatId = getDirectChatId(uid, mitarbeiter.uid);
     final ref = _db.collection('kunden').doc(companyId).collection('chats').doc(chatId);
     final snap = await ref.get();
@@ -230,14 +226,12 @@ class ChatService {
   Future<String> createGroupChat(String companyId, String name, List<MitarbeiterForChat> members) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
-
     final senderName = await _getSenderName(companyId);
     final participants = [uid, ...members.map((m) => m.uid)];
     final participantNames = [
       {'uid': uid, 'name': senderName},
       ...members.map((m) => {'uid': m.uid, 'name': m.name}),
     ];
-
     final ref = await _db.collection('kunden').doc(companyId).collection('chats').add({
       'type': 'group',
       'name': name,
@@ -284,31 +278,27 @@ class ChatService {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
     if (text.trim().isEmpty && (imageBytes == null || imageBytes!.isEmpty)) return;
-
     final senderName = await _getSenderName(companyId);
     List<Map<String, dynamic>>? attachments;
-
     if (imageBytes != null && imageBytes.isNotEmpty) {
       attachments = [];
       final ts = DateTime.now().millisecondsSinceEpoch;
       for (var i = 0; i < imageBytes.length; i++) {
         final name = (i < (imageNames?.length ?? 0) ? imageNames![i] : 'image_$i.jpg')
             .replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '_');
-        final path = 'kunden/$companyId/chat-attachments/$chatId/${ts}_$i\_$name';
+        final path = 'kunden/$companyId/chat-attachments/$chatId/${ts}_${i}_$name';
         final ref = _storage.ref(path);
         await ref.putData(imageBytes[i], SettableMetadata(contentType: 'image/jpeg'));
         final url = await ref.getDownloadURL();
         attachments.add({'url': url, 'name': name, 'type': 'image/jpeg'});
       }
     }
-
     final messagesRef = _db
         .collection('kunden')
         .doc(companyId)
         .collection('chats')
         .doc(chatId)
         .collection('messages');
-
     await messagesRef.add({
       'from': uid,
       'senderName': senderName,
@@ -316,22 +306,22 @@ class ChatService {
       'attachments': attachments,
       'createdAt': FieldValue.serverTimestamp(),
     });
-
     final lastPreview = text.trim().isNotEmpty
         ? text.trim()
-        : (attachments != null ? (attachments.any((a) => (a['type'] ?? '').startsWith('audio/')) ? '🎤 Sprachnachricht' : '📎 Datei') : '');
-
+        : (attachments != null
+            ? (attachments.any((a) => (a['type'] ?? '').startsWith('audio/'))
+                ? '🎤 Sprachnachricht'
+                : '📎 Datei')
+            : '');
     final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(chatId);
     final chatSnap = await chatRef.get();
     final chat = chatSnap.data();
     final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
-
     await chatRef.set({
       'lastMessageText': lastPreview,
       'lastMessageAt': FieldValue.serverTimestamp(),
       'lastMessageFrom': uid,
     }, SetOptions(merge: true));
-
     for (final pid in participants) {
       if (pid != uid && pid.isNotEmpty) {
         try {
