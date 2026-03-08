@@ -329,6 +329,8 @@ class ChatService {
             p.text,
             imageBytes: p.imageBytes,
             imageNames: p.imageNames,
+            audioBytes: p.audioBytes,
+            audioNames: p.audioNames,
           );
           await ChatOfflineQueue.remove(p.id);
         } catch (e) {
@@ -348,25 +350,32 @@ class ChatService {
     String text, {
     List<Uint8List>? imageBytes,
     List<String>? imageNames,
+    List<Uint8List>? audioBytes,
+    List<String>? audioNames,
   }) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
 
-    // BUG FIX 2: imageBytes ohne unnötiges '!' – war null-safety Fehler
-    if (text.trim().isEmpty && (imageBytes == null || imageBytes.isEmpty)) {
+    final hasImages = imageBytes != null && imageBytes.isNotEmpty;
+    final hasAudio = audioBytes != null && audioBytes.isNotEmpty;
+    if (text.trim().isEmpty && !hasImages && !hasAudio) {
       throw Exception('Leere Nachricht');
     }
 
     ensureConnectivityListener(this);
 
     if (kIsWeb) {
-      await sendMessage(companyId, chatId, text, imageBytes: imageBytes, imageNames: imageNames);
+      await sendMessage(companyId, chatId, text,
+          imageBytes: imageBytes, imageNames: imageNames,
+          audioBytes: audioBytes, audioNames: audioNames);
       return 'web-${DateTime.now().millisecondsSinceEpoch}';
     }
 
     final online = await ChatOfflineQueue.isOnline;
     if (online) {
-      await sendMessage(companyId, chatId, text, imageBytes: imageBytes, imageNames: imageNames);
+      await sendMessage(companyId, chatId, text,
+          imageBytes: imageBytes, imageNames: imageNames,
+          audioBytes: audioBytes, audioNames: audioNames);
       return 'sent-${DateTime.now().millisecondsSinceEpoch}';
     }
 
@@ -378,6 +387,8 @@ class ChatService {
       text: text,
       imageBytes: imageBytes,
       imageNames: imageNames,
+      audioBytes: audioBytes,
+      audioNames: audioNames,
       createdAt: DateTime.now(),
     ));
     return id;
@@ -389,29 +400,45 @@ class ChatService {
     String text, {
     List<Uint8List>? imageBytes,
     List<String>? imageNames,
+    List<Uint8List>? audioBytes,
+    List<String>? audioNames,
   }) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
 
     // BUG FIX 2: imageBytes ohne unnötiges '!'
-    if (text.trim().isEmpty && (imageBytes == null || imageBytes.isEmpty)) return;
+    final hasImages = imageBytes != null && imageBytes.isNotEmpty;
+    final hasAudio = audioBytes != null && audioBytes.isNotEmpty;
+    if (text.trim().isEmpty && !hasImages && !hasAudio) return;
 
     final senderName = await _getSenderName(companyId);
 
-    List<Map<String, dynamic>>? attachments;
-    if (imageBytes != null && imageBytes.isNotEmpty) {
-      attachments = [];
-      final ts = DateTime.now().millisecondsSinceEpoch;
-      for (var i = 0; i < imageBytes.length; i++) {
+    List<Map<String, dynamic>>? attachments = [];
+    final ts = DateTime.now().millisecondsSinceEpoch;
+
+    if (hasImages) {
+      for (var i = 0; i < imageBytes!.length; i++) {
         final name = (i < (imageNames?.length ?? 0) ? imageNames![i] : 'image_$i.jpg')
             .replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '_');
-        final path = 'kunden/$companyId/chat-attachments/$chatId/${ts}_${i}_$name';
+        final path = 'kunden/$companyId/chat-attachments/$chatId/${ts}_img_${i}_$name';
         final ref = _storage.ref(path);
         await ref.putData(imageBytes[i], SettableMetadata(contentType: 'image/jpeg'));
         final url = await ref.getDownloadURL();
         attachments.add({'url': url, 'name': name, 'type': 'image/jpeg'});
       }
     }
+    if (hasAudio) {
+      for (var i = 0; i < audioBytes!.length; i++) {
+        final name = (i < (audioNames?.length ?? 0) ? audioNames![i] : 'audio_$i.m4a')
+            .replaceAll(RegExp(r'[^a-zA-Z0-9.-]'), '_');
+        final path = 'kunden/$companyId/chat-attachments/$chatId/${ts}_audio_${i}_$name';
+        final ref = _storage.ref(path);
+        await ref.putData(audioBytes[i], SettableMetadata(contentType: 'audio/m4a'));
+        final url = await ref.getDownloadURL();
+        attachments.add({'url': url, 'name': name, 'type': 'audio/m4a'});
+      }
+    }
+    if (attachments.isEmpty) attachments = null;
 
     final messagesRef = _db
         .collection('kunden')
@@ -482,6 +509,65 @@ class ChatService {
         .update({'deletedBy': FieldValue.arrayUnion([uid])});
   }
 
+  /// Nachricht(en) an anderen Chat weiterleiten.
+  Future<void> forwardMessages(
+    String companyId,
+    String targetChatId,
+    List<ChatMessage> messages,
+  ) async {
+    final uid = userId;
+    if (uid == null) throw Exception('Nicht angemeldet');
+    final senderName = await _getSenderName(companyId);
+    final messagesRef = _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('chats')
+        .doc(targetChatId)
+        .collection('messages');
+    for (final m in messages) {
+      final text = (m.text ?? '').trim();
+      final attachments = m.attachments
+          ?.map((a) => {
+                'url': a.url,
+                'name': a.name,
+                'type': a.type,
+                if (a.duration != null) 'duration': a.duration,
+              })
+          .toList();
+      if (text.isEmpty && (attachments == null || attachments.isEmpty)) continue;
+      await messagesRef.add({
+        'from': uid,
+        'senderName': senderName,
+        'text': text.isNotEmpty ? text : null,
+        'attachments': attachments,
+        'createdAt': FieldValue.serverTimestamp(),
+        'deliveredTo': [uid],
+      });
+    }
+    final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(targetChatId);
+    final chatSnap = await chatRef.get();
+    final chat = chatSnap.data() as Map<String, dynamic>?;
+    final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
+    final lastMsg = messages.last;
+    final lastPreview = (lastMsg.text ?? '').trim().isNotEmpty
+        ? (lastMsg.text ?? '').trim()
+        : (lastMsg.attachments != null && lastMsg.attachments!.isNotEmpty
+            ? '📎 Datei'
+            : '');
+    await chatRef.set({
+      'lastMessageText': lastPreview,
+      'lastMessageAt': FieldValue.serverTimestamp(),
+      'lastMessageFrom': uid,
+    }, SetOptions(merge: true));
+    for (final pid in participants) {
+      if (pid != uid && pid.isNotEmpty) {
+        try {
+          await chatRef.update({'unreadCount.$pid': FieldValue.increment(1)});
+        } catch (_) {}
+      }
+    }
+  }
+
   /// Nachricht für alle löschen (Dokument wird entfernt).
   Future<void> deleteMessageForEveryone(String companyId, String chatId, String messageId) async {
     await _db
@@ -505,7 +591,8 @@ class ChatService {
   Future<void> pinChat(String companyId, String chatId) async {
     final ref = _chatPrefsRef(companyId);
     final snap = await ref.get();
-    final list = (snap.data()?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final data = snap.data() as Map<String, dynamic>?;
+    final list = (data?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
     if (list.contains(chatId)) return;
     list.add(chatId);
     await ref.set({'pinnedChatIds': list}, SetOptions(merge: true));
@@ -515,7 +602,7 @@ class ChatService {
   Future<void> unpinChat(String companyId, String chatId) async {
     final ref = _chatPrefsRef(companyId);
     final snap = await ref.get();
-    final data = snap.data();
+    final data = snap.data() as Map<String, dynamic>?;
     final list = (data?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
     if (list.contains(chatId)) {
       final updated = list.where((id) => id != chatId).toList();
@@ -534,7 +621,8 @@ class ChatService {
         .doc(uid)
         .snapshots()
         .map((snap) {
-      final list = (snap.data()?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+      final data = snap.data() as Map<String, dynamic>?;
+      final list = (data?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
       return list;
     });
   }
@@ -543,7 +631,8 @@ class ChatService {
   Future<void> muteChat(String companyId, String chatId) async {
     final ref = _chatPrefsRef(companyId);
     final snap = await ref.get();
-    final list = (snap.data()?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final data = snap.data() as Map<String, dynamic>?;
+    final list = (data?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
     if (list.contains(chatId)) return;
     list.add(chatId);
     await ref.set({'mutedChatIds': list}, SetOptions(merge: true));
@@ -553,7 +642,8 @@ class ChatService {
   Future<void> unmuteChat(String companyId, String chatId) async {
     final ref = _chatPrefsRef(companyId);
     final snap = await ref.get();
-    final list = (snap.data()?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final data = snap.data() as Map<String, dynamic>?;
+    final list = (data?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
     if (list.contains(chatId)) {
       final updated = list.where((id) => id != chatId).toList();
       await ref.set({'mutedChatIds': updated}, SetOptions(merge: true));
@@ -571,7 +661,8 @@ class ChatService {
         .doc(uid)
         .snapshots()
         .map((snap) {
-      final list = (snap.data()?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+      final data = snap.data() as Map<String, dynamic>?;
+      final list = (data?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
       return list;
     });
   }

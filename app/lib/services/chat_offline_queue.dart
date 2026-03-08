@@ -12,6 +12,8 @@ class PendingChatMessage {
   final String text;
   final List<Uint8List>? imageBytes;
   final List<String>? imageNames;
+  final List<Uint8List>? audioBytes;
+  final List<String>? audioNames;
   final DateTime createdAt;
 
   PendingChatMessage({
@@ -21,8 +23,12 @@ class PendingChatMessage {
     required this.text,
     this.imageBytes,
     this.imageNames,
+    this.audioBytes,
+    this.audioNames,
     required this.createdAt,
   });
+
+  bool get hasAudio => audioBytes != null && audioBytes!.isNotEmpty;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -31,11 +37,14 @@ class PendingChatMessage {
         'text': text,
         'imageBytes': imageBytes?.map((b) => base64Encode(b)).toList(),
         'imageNames': imageNames,
+        'audioBytes': audioBytes?.map((b) => base64Encode(b)).toList(),
+        'audioNames': audioNames,
         'createdAt': createdAt.millisecondsSinceEpoch,
       };
 
   static PendingChatMessage fromJson(Map<String, dynamic> m) {
     final ib = m['imageBytes'] as List?;
+    final ab = m['audioBytes'] as List?;
     return PendingChatMessage(
       id: m['id'] as String,
       companyId: m['companyId'] as String,
@@ -43,6 +52,8 @@ class PendingChatMessage {
       text: m['text'] as String,
       imageBytes: ib?.map((e) => Uint8List.fromList(base64Decode(e as String))).toList(),
       imageNames: (m['imageNames'] as List?)?.cast<String>(),
+      audioBytes: ab?.map((e) => Uint8List.fromList(base64Decode(e as String))).toList(),
+      audioNames: (m['audioNames'] as List?)?.cast<String>(),
       createdAt: DateTime.fromMillisecondsSinceEpoch(m['createdAt'] as int),
     );
   }

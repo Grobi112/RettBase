@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../utils/voice_file_reader.dart';
+
 import '../services/chat_offline_queue.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import '../theme/app_theme.dart';
 import '../models/chat.dart';
 import '../services/chat_service.dart';
@@ -74,6 +78,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   /// Ausstehende Nachrichten (Offline-Queue) für den aktuellen Chat.
   final List<Map<String, dynamic>> _pendingMessages = [];
+
+  /// Auswahlmodus für Weiterleiten: ausgewählte Nachrichten.
+  final Set<String> _selectedMessageIds = {};
+
+  /// Sprachnachricht: Aufnahme-Status.
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
+  String? _recordingPath;
+  DateTime? _recordingStartTime;
 
   // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   Timer? _pendingCheckTimer;
@@ -172,10 +185,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         final currentUid = _chatService.userId;
         if (currentUid != null && _selectedChatId != null) {
           for (final m in msgs) {
-            if (m.from == currentUid && m.text != null && m.text!.isNotEmpty) {
-              final idx = _pendingMessages.indexWhere((p) =>
-                  p['chatId'] == _selectedChatId &&
-                  p['text'] == m.text);
+            if (m.from != currentUid) continue;
+            final hasText = m.text != null && m.text!.trim().isNotEmpty;
+            final hasAudio = m.attachments != null &&
+                m.attachments!.any((a) => (a.type).startsWith('audio/'));
+            if (hasText || hasAudio) {
+              final idx = _pendingMessages.indexWhere((p) {
+                if (p['chatId'] != _selectedChatId) return false;
+                if (hasText) return p['text'] == m.text;
+                return p['hasAudio'] == true;
+              });
               if (idx >= 0) _pendingMessages.removeAt(idx);
             }
           }
@@ -246,6 +265,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _pinnedSub?.cancel();
     _mutedSub?.cancel();
     _messagesSub?.cancel();
+    unawaited(_audioRecorder.dispose());
     _scrollController.dispose();
     _messageController.dispose();
     _groupNameController.dispose();
@@ -259,6 +279,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() {
       _selectedChatId = chat.id;
       _selectedChat = chat;
+      _selectedMessageIds.clear();
     });
     _subscribeToMessages(chat.id);
   }
@@ -268,6 +289,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _selectedChatId = null;
       _selectedChat = null;
       _pendingMessages.clear();
+      _selectedMessageIds.clear();
     });
     _unsubscribeFromMessages();
   }
@@ -275,13 +297,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _showChatContextMenu(ChatModel chat) {
     final isPinned = _pinnedChatIds.contains(chat.id);
     final isMuted = _mutedChatIds.contains(chat.id);
-    showModalBottomSheet<void>(
+    showDialog<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
@@ -329,15 +349,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     required bool isRead,
   }) {
     final isRealMessage = message != null;
-    showModalBottomSheet<void>(
+    final canForward = isRealMessage && ((message?.text ?? '').trim().isNotEmpty ||
+        (message?.attachments != null && message!.attachments!.isNotEmpty));
+    showDialog<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (canForward)
+              ListTile(
+                leading: const Icon(Icons.forward),
+                title: const Text('Weiterleiten'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (message != null) {
+                    setState(() => _selectedMessageIds.add(message.id));
+                  }
+                },
+              ),
             ListTile(
               leading: Icon(Icons.person_remove_outlined, color: Colors.red.shade400),
               title: Text('Für mich löschen', style: TextStyle(color: Colors.red.shade400)),
@@ -369,6 +400,73 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _forwardMessages(List<ChatMessage> messages) {
+    final toForward = messages.isNotEmpty
+        ? messages
+        : _messages.where((m) => _selectedMessageIds.contains(m.id)).toList();
+    if (toForward.isEmpty) return;
+    _showForwardTargetDialog(toForward);
+  }
+
+  Future<void> _showForwardTargetDialog(List<ChatMessage> messages) async {
+    setState(() => _loadingMitarbeiter = true);
+    final mitarbeiter = await _chatService.loadMitarbeiter(widget.companyId);
+    if (mounted) setState(() => _loadingMitarbeiter = false);
+    if (mitarbeiter.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Keine Mitglieder zum Weiterleiten vorhanden.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final target = await showDialog<MitarbeiterForChat>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Weiterleiten an Mitglied (${messages.length} Nachricht${messages.length == 1 ? '' : 'en'})'),
+        content: SizedBox(
+          width: 320,
+          height: 400,
+          child: ListView.builder(
+            itemCount: mitarbeiter.length,
+            itemBuilder: (_, i) {
+              final m = mitarbeiter[i];
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppTheme.primary.withOpacity(0.2),
+                  child: Text(_getInitials(m.name), style: const TextStyle(fontSize: 14)),
+                ),
+                title: Text(m.name),
+                onTap: () => Navigator.pop(ctx, m),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    if (target != null && mounted) {
+      try {
+        await _chatService.startDirectChat(widget.companyId, target);
+        final chatId = ChatService.getDirectChatId(_chatService.userId!, target.uid);
+        await _chatService.forwardMessages(widget.companyId, chatId, messages);
+        setState(() => _selectedMessageIds.clear());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${messages.length} Nachricht${messages.length == 1 ? '' : 'en'} an ${target.name} weitergeleitet')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Weiterleiten fehlgeschlagen: $e')),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _confirmDeleteMessage({
     required ChatMessage? message,
     required Map<String, dynamic>? pending,
@@ -398,6 +496,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
     if (confirm != true || !mounted || _selectedChatId == null) return;
     if (pending != null) {
+      final id = pending['id'] as String?;
+      if (id != null && id.startsWith('pending-')) {
+        unawaited(ChatOfflineQueue.remove(id));
+      }
       setState(() => _pendingMessages.removeWhere((p) => p['id'] == pending['id']));
     } else if (message != null) {
       if (forEveryone) {
@@ -672,15 +774,115 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             'chatId': _selectedChatId,
             'text': text,
             'hasImages': images.isNotEmpty,
+            'hasAudio': false,
             'createdAt': DateTime.now(),
           });
         });
       }
-      // Stream liefert die neue Nachricht automatisch â kein manuelles Reload
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Senden fehlgeschlagen: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _startVoiceRecording() async {
+    if (kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sprachnachrichten nur in der App verfügbar')),
+        );
+      }
+      return;
+    }
+    if (!await _audioRecorder.hasPermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mikrofon-Berechtigung erforderlich')),
+        );
+      }
+      return;
+    }
+    try {
+      final dir = await getTemporaryDirectory();
+      _recordingPath = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _audioRecorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc, sampleRate: 44100),
+        path: _recordingPath!,
+      );
+      if (mounted) setState(() {
+        _isRecording = true;
+        _recordingStartTime = DateTime.now();
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Aufnahme fehlgeschlagen: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _cancelVoiceRecording() async {
+    if (!_isRecording) return;
+    try {
+      await _audioRecorder.cancel();
+      if (mounted) setState(() {
+        _isRecording = false;
+        _recordingStartTime = null;
+      });
+      _recordingPath = null;
+    } catch (_) {
+      if (mounted) setState(() {
+        _isRecording = false;
+        _recordingStartTime = null;
+      });
+    }
+  }
+
+  Future<void> _stopAndSendVoice() async {
+    try {
+      final startTime = _recordingStartTime;
+      final path = await _audioRecorder.stop();
+      if (mounted) setState(() {
+        _isRecording = false;
+        _recordingStartTime = null;
+      });
+      _recordingPath = null;
+      if (path == null || path.isEmpty || _selectedChatId == null) return;
+      // Zu kurze Aufnahme (< 0,5 s) verwerfen
+      final duration = startTime != null
+          ? DateTime.now().difference(startTime).inMilliseconds
+          : 0;
+      if (duration < 500) return;
+      final bytes = await readVoiceFileBytes(path);
+      if (bytes == null || bytes.isEmpty) return;
+      final resultId = await _chatService.sendMessageOrQueue(
+        widget.companyId,
+        _selectedChatId!,
+        '',
+        audioBytes: [bytes],
+        audioNames: ['voice.m4a'],
+      );
+      if (resultId.startsWith('pending-') && mounted) {
+        setState(() {
+          _pendingMessages.add({
+            'id': resultId,
+            'chatId': _selectedChatId,
+            'text': '',
+            'hasImages': false,
+            'hasAudio': true,
+            'createdAt': DateTime.now(),
+          });
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isRecording = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sprachnachricht fehlgeschlagen: $e')),
         );
       }
     }
@@ -1382,31 +1584,91 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   ),
                                 ),
                               GestureDetector(
+                                onTap: () {
+                                  if (_selectedMessageIds.isNotEmpty && m != null) {
+                                    final canFwd = ((m.text ?? '').trim().isNotEmpty ||
+                                        (m.attachments != null && m.attachments!.isNotEmpty));
+                                    if (canFwd) {
+                                      setState(() {
+                                        if (_selectedMessageIds.contains(m.id)) {
+                                          _selectedMessageIds.remove(m.id);
+                                        } else {
+                                          _selectedMessageIds.add(m.id);
+                                        }
+                                      });
+                                    }
+                                  }
+                                },
                                 onLongPress: () => _showMessageContextMenu(
                                   message: m,
                                   pending: pending,
                                   isSent: isSent,
                                   isRead: _isMessageRead(m),
                                 ),
-                                child: Align(
-                                  alignment:
-                                      isSent ? Alignment.centerRight : Alignment.centerLeft,
-                                  child: Container(
-                                    margin: EdgeInsets.only(
-                                      bottom: 4,
-                                      left: isSent ? 60 : 0,
-                                      right: isSent ? 0 : 60,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 10),
-                                    constraints: BoxConstraints(
-                                      maxWidth: MediaQuery.sizeOf(context).width * 0.72,
-                                    ),
-                                    decoration: BoxDecoration(
-                                    color: isSent
-                                        ? AppTheme.primary
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.only(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.max,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    if (_selectedMessageIds.isNotEmpty && m != null) ...[
+                                      SizedBox(
+                                        width: 32,
+                                        child: Center(
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              final canFwd = ((m.text ?? '').trim().isNotEmpty ||
+                                                  (m.attachments != null && m.attachments!.isNotEmpty));
+                                              if (canFwd) {
+                                                setState(() {
+                                                  if (_selectedMessageIds.contains(m.id)) {
+                                                    _selectedMessageIds.remove(m.id);
+                                                  } else {
+                                                    _selectedMessageIds.add(m.id);
+                                                  }
+                                                });
+                                              }
+                                            },
+                                            child: Container(
+                                              width: 24,
+                                              height: 24,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: _selectedMessageIds.contains(m.id)
+                                                    ? AppTheme.primary
+                                                    : Colors.transparent,
+                                                border: Border.all(
+                                                  color: _selectedMessageIds.contains(m.id)
+                                                      ? AppTheme.primary
+                                                      : Colors.grey.shade400,
+                                                  width: 2,
+                                                ),
+                                              ),
+                                              child: _selectedMessageIds.contains(m.id)
+                                                  ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                                  : null,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    Expanded(
+                                      child: Align(
+                                        alignment: isSent ? Alignment.centerRight : Alignment.centerLeft,
+                                        child: Container(
+                                          margin: EdgeInsets.only(
+                                            bottom: 4,
+                                            left: isSent && _selectedMessageIds.isEmpty ? 60 : 0,
+                                            right: isSent ? 0 : (_selectedMessageIds.isEmpty ? 60 : 0),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 10),
+                                          constraints: BoxConstraints(
+                                            maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isSent
+                                                ? AppTheme.primary
+                                                : Colors.white,
+                                            borderRadius: BorderRadius.only(
                                       topLeft: const Radius.circular(20),
                                       topRight: const Radius.circular(20),
                                       bottomLeft: Radius.circular(isSent ? 20 : 5),
@@ -1451,11 +1713,32 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                 ),
                                               ),
                                             )
+                                          else if ((a.type).startsWith('audio/'))
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.mic, size: 18,
+                                                      color: isSent ? Colors.white70 : Colors.grey[700]),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    'Sprachnachricht',
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      color: isSent
+                                                          ? Colors.white70
+                                                          : Colors.grey[700],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            )
                                           else
                                             Padding(
                                               padding: const EdgeInsets.only(top: 4),
                                               child: Text(
-                                                'ð ${a.name}',
+                                                '📎 ${a.name}',
                                                 style: TextStyle(
                                                   fontSize: 13,
                                                   color: isSent
@@ -1469,6 +1752,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                           padding: const EdgeInsets.only(top: 4),
                                           child: Text(
                                             '📎 Bild(er) werden bei Netzverbindung gesendet',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: isSent
+                                                  ? Colors.white70
+                                                  : Colors.grey[600],
+                                            ),
+                                          ),
+                                        ),
+                                      if (pending != null && (pending['hasAudio'] == true))
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 4),
+                                          child: Text(
+                                            '🎤 Sprachnachricht wird bei Netzverbindung gesendet',
                                             style: TextStyle(
                                               fontSize: 12,
                                               color: isSent
@@ -1505,6 +1801,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 ),
                               ),
                             ),
+                                  ],
+                                ),
+                              ),
                             ],
                           );
                         },
@@ -1530,6 +1829,38 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (_selectedMessageIds.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withOpacity(0.08),
+                      border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          '${_selectedMessageIds.length} ausgewählt',
+                          style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: () => setState(() => _selectedMessageIds.clear()),
+                          icon: const Icon(Icons.close, size: 18),
+                          label: const Text('Abbrechen'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () => _forwardMessages([]),
+                          icon: const Icon(Icons.forward, size: 18),
+                          label: const Text('Weiterleiten'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppTheme.primary,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (_pendingImages.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -1617,8 +1948,30 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ),
                       ),
                     ),
-                    // Senden-Button
+                    // Mikrofon (Sprachnachricht): Drücken = Aufnahme, Loslassen = Senden
                     const SizedBox(width: 8),
+                    GestureDetector(
+                      onTapDown: (_) => _startVoiceRecording(),
+                      onTapUp: (_) => _stopAndSendVoice(),
+                      onTapCancel: () => _cancelVoiceRecording(),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: _isRecording
+                              ? Colors.red.shade400
+                              : Colors.grey.shade300,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                          size: 20,
+                          color: _isRecording ? Colors.white : Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Senden-Button
                     InkWell(
                       borderRadius: BorderRadius.circular(22),
                       onTap: _sendMessage,

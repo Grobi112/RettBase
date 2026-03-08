@@ -35,6 +35,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Profilfoto aufnehmen</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sprachnachrichten aufnehmen</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Profilfoto auswählen</string>
 	<key>UIApplicationSceneManifest</key>
