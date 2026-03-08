@@ -19,7 +19,7 @@ class ChatScreen extends StatefulWidget {
   final VoidCallback? onBack;
   final bool hideAppBar;
 
-  /// Wird beim Ãffnen eines Chats aufgerufen â Badge sofort lokal zurÃ¼cksetzen.
+  /// Wird beim Ãffnen eines Chats aufgerufen â Badge sofort lokal zurücksetzen.
   final void Function(String chatId, int unreadInChat)? onChatOpened;
 
   const ChatScreen({
@@ -48,7 +48,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // ââ Nachrichten-State ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   String? _selectedChatId;
-  ChatModel? _selectedChat; // gecacht â kein zweiter Stream in AppBar nÃ¶tig
+  ChatModel? _selectedChat; // gecacht â kein zweiter Stream in AppBar nötig
   StreamSubscription<List<ChatMessage>>? _messagesSub;
   List<ChatMessage> _messages = [];
   bool _messagesLoading = false;
@@ -88,7 +88,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         setState(() {
           _chats = chats;
           _chatsLoading = false;
-          // selectedChat synchron aktualisieren â kein zweiter Stream nÃ¶tig
+          // selectedChat synchron aktualisieren â kein zweiter Stream nötig
           if (_selectedChatId != null) {
             _selectedChat = chats.where((c) => c.id == _selectedChatId).firstOrNull;
           }
@@ -130,7 +130,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _messagesLoading = false;
         });
         // Auto-Scroll: nur wenn neue Nachricht am Ende ankam
-        // oder Chat gerade frisch geÃ¶ffnet wurde
+        // oder Chat gerade frisch geöffnet wurde
         if (wasShort && _scrollController.hasClients) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_scrollController.hasClients) {
@@ -166,7 +166,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _setupVisibilityRefresh() {
     _visibilityCallback = () {
       if (_selectedChatId != null && mounted) {
-        // Stream lÃ¤uft schon â nur markChatRead erneut aufrufen
+        // Stream läuft schon â nur markChatRead erneut aufrufen
         _chatService.markChatReadPublic(widget.companyId, _selectedChatId!);
       }
     };
@@ -310,7 +310,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     if (_selectedGroupMembers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte mindestens einen Teilnehmer auswÃ¤hlen.')),
+        const SnackBar(content: Text('Bitte mindestens einen Teilnehmer auswählen.')),
       );
       return;
     }
@@ -599,8 +599,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 builder: (_) => AlertDialog(
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16)),
-                                  title: const Text('Chat lÃ¶schen?'),
-                                  content: const Text('Der Chat wird nur fÃ¼r dich entfernt.'),
+                                  title: const Text('Chat löschen?'),
+                                  content: const Text('Der Chat wird nur für dich entfernt.'),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context, false),
@@ -608,7 +608,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     ),
                                     TextButton(
                                       onPressed: () => Navigator.pop(context, true),
-                                      child: Text('LÃ¶schen',
+                                      child: Text('Löschen',
                                           style: TextStyle(color: Colors.red.shade400)),
                                     ),
                                   ],
@@ -820,7 +820,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 22),
             Text(
-              'WÃ¤hle einen Chat aus',
+              'Wähle einen Chat aus',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -1214,7 +1214,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // AnhÃ¤nge-Button
+                    // Anhänge-Button
                     Padding(
                       padding: const EdgeInsets.only(right: 8, bottom: 3),
                       child: InkWell(
@@ -1494,7 +1494,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 child: Row(
                   children: [
                     Text(
-                      'Teilnehmer wÃ¤hlen',
+                      'Teilnehmer wählen',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1512,7 +1512,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          '${_selectedGroupMembers.length} gewÃ¤hlt',
+                          '${_selectedGroupMembers.length} gewählt',
                           style: TextStyle(
                             fontSize: 11,
                             color: AppTheme.primary,
