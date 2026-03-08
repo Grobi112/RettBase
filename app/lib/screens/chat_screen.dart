@@ -304,13 +304,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return lrAt != null && !m.createdAt!.isAfter(lrAt);
     });
     final color = read ? Colors.blue.shade200 : Colors.white.withOpacity(0.65);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(read ? Icons.done_all : Icons.done, size: 14, color: color),
-        if (delivered || read) const SizedBox(width: 2),
-        if (delivered || read) Icon(read ? Icons.done_all : Icons.done, size: 14, color: color),
-      ],
+    // 1 Haken (grau) = gesendet, 2 Haken (grau) = zugestellt, 2 Haken (blau) = gelesen
+    return Icon(
+      (delivered || read) ? Icons.done_all : Icons.done,
+      size: 14,
+      color: color,
     );
   }
 
