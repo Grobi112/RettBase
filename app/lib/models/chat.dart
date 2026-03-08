@@ -33,6 +33,7 @@ class ChatModel {
       final m = e is Map ? Map<String, dynamic>.from(e as Map) : <String, dynamic>{};
       return ParticipantName(uid: m['uid']?.toString() ?? '', name: m['name']?.toString() ?? '');
     }).toList() ?? [];
+
     final unread = d['unreadCount'];
     final Map<String, int> unreadMap = {};
     if (unread is Map) {
@@ -41,8 +42,10 @@ class ChatModel {
         if (v is int) unreadMap[e.key.toString()] = v;
       }
     }
+
     final lastRead = d['lastReadAt'] as Map<String, dynamic>? ?? {};
     final deletedBy = (d['deletedBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
+
     DateTime? lastAt;
     final lma = d['lastMessageAt'];
     if (lma is Timestamp) lastAt = lma.toDate();
@@ -78,7 +81,9 @@ class ChatMessage {
   final List<MessageAttachment>? attachments;
   final DateTime? createdAt;
   final List<String> deliveredTo;
-  final List<String> readBy;
+  // BUG FIX 4: readBy entfernt – wurde im Service nie befüllt und ist inkonsistent
+  // mit dem Chat-Dokument-basierten lastReadAt/unreadCount-Ansatz. Gelesen-Status
+  // wird ausschließlich über lastReadAt im Chat-Dokument abgebildet.
   final List<String> deletedBy;
 
   ChatMessage({
@@ -89,7 +94,6 @@ class ChatMessage {
     this.attachments,
     this.createdAt,
     this.deliveredTo = const [],
-    this.readBy = const [],
     this.deletedBy = const [],
   });
 
@@ -103,12 +107,13 @@ class ChatMessage {
         duration: (m['duration'] as num?)?.toDouble(),
       );
     }).toList();
+
     DateTime? createdAt;
     final ca = d['createdAt'];
     if (ca is Timestamp) createdAt = ca.toDate();
     if (ca is DateTime) createdAt = ca;
+
     final deliveredTo = (d['deliveredTo'] as List?)?.map((e) => e.toString()).toList() ?? [];
-    final readBy = (d['readBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
     final deletedBy = (d['deletedBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
     return ChatMessage(
@@ -119,7 +124,6 @@ class ChatMessage {
       attachments: att,
       createdAt: createdAt,
       deliveredTo: deliveredTo,
-      readBy: readBy,
       deletedBy: deletedBy,
     );
   }
@@ -140,6 +144,7 @@ class MitarbeiterForChat {
   final String nachname;
   final String name;
   final String email;
+
   MitarbeiterForChat({
     required this.uid,
     required this.docId,
