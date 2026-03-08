@@ -467,4 +467,112 @@ class ChatService {
       'deletedBy': FieldValue.arrayUnion([uid]),
     });
   }
+
+  /// Nachricht für mich löschen (nur für den Nutzer ausgeblendet).
+  Future<void> deleteMessageForMe(String companyId, String chatId, String messageId) async {
+    final uid = userId;
+    if (uid == null) return;
+    await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId)
+        .update({'deletedBy': FieldValue.arrayUnion([uid])});
+  }
+
+  /// Nachricht für alle löschen (Dokument wird entfernt).
+  Future<void> deleteMessageForEveryone(String companyId, String chatId, String messageId) async {
+    await _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId)
+        .delete();
+  }
+
+  /// Pfad für Chat-Präferenzen (angepinnte Chats) pro Nutzer.
+  DocumentReference _chatPrefsRef(String companyId) {
+    final uid = userId;
+    if (uid == null) throw StateError('Nicht angemeldet');
+    return _db.collection('kunden').doc(companyId).collection('chatPrefs').doc(uid);
+  }
+
+  /// Chat anpinnen – bleibt oben in der Liste.
+  Future<void> pinChat(String companyId, String chatId) async {
+    final ref = _chatPrefsRef(companyId);
+    final snap = await ref.get();
+    final list = (snap.data()?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    if (list.contains(chatId)) return;
+    list.add(chatId);
+    await ref.set({'pinnedChatIds': list}, SetOptions(merge: true));
+  }
+
+  /// Chat von Anpinnen entfernen.
+  Future<void> unpinChat(String companyId, String chatId) async {
+    final ref = _chatPrefsRef(companyId);
+    final snap = await ref.get();
+    final data = snap.data();
+    final list = (data?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    if (list.contains(chatId)) {
+      final updated = list.where((id) => id != chatId).toList();
+      await ref.set({'pinnedChatIds': updated}, SetOptions(merge: true));
+    }
+  }
+
+  /// Stream der angepinnten Chat-IDs (Reihenfolge = Reihenfolge oben).
+  Stream<List<String>> streamPinnedChatIds(String companyId) {
+    final uid = userId;
+    if (uid == null) return Stream.value([]);
+    return _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('chatPrefs')
+        .doc(uid)
+        .snapshots()
+        .map((snap) {
+      final list = (snap.data()?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+      return list;
+    });
+  }
+
+  /// Chat stumm schalten – keine Push-Benachrichtigungen.
+  Future<void> muteChat(String companyId, String chatId) async {
+    final ref = _chatPrefsRef(companyId);
+    final snap = await ref.get();
+    final list = (snap.data()?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    if (list.contains(chatId)) return;
+    list.add(chatId);
+    await ref.set({'mutedChatIds': list}, SetOptions(merge: true));
+  }
+
+  /// Stummschaltung aufheben.
+  Future<void> unmuteChat(String companyId, String chatId) async {
+    final ref = _chatPrefsRef(companyId);
+    final snap = await ref.get();
+    final list = (snap.data()?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    if (list.contains(chatId)) {
+      final updated = list.where((id) => id != chatId).toList();
+      await ref.set({'mutedChatIds': updated}, SetOptions(merge: true));
+    }
+  }
+
+  /// Stream der stumm geschalteten Chat-IDs.
+  Stream<List<String>> streamMutedChatIds(String companyId) {
+    final uid = userId;
+    if (uid == null) return Stream.value([]);
+    return _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('chatPrefs')
+        .doc(uid)
+        .snapshots()
+        .map((snap) {
+      final list = (snap.data()?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
+      return list;
+    });
+  }
 }

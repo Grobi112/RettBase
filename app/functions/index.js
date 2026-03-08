@@ -646,6 +646,14 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
       if (!PUSH_ENABLED) return;
       for (const uid of recipients) {
         try {
+          const prefsSnap = await admin.firestore()
+            .collection("kunden").doc(companyId).collection("chatPrefs").doc(uid).get();
+          const raw = prefsSnap.data()?.mutedChatIds;
+          const mutedIds = Array.isArray(raw) ? raw.map((id) => String(id)) : [];
+          if (mutedIds.includes(String(chatId))) {
+            console.log("onNewChatMessage: Chat stumm für uid=" + uid + ", übersprungen");
+            continue;
+          }
           const token = await getFcmToken(companyId, uid);
           if (!token) {
             console.log("onNewChatMessage: Kein FCM-Token für uid=" + uid);

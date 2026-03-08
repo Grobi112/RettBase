@@ -45,7 +45,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // ââ Chat-Listen-State ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   StreamSubscription<List<ChatModel>>? _chatsSub;
+  StreamSubscription<List<String>>? _pinnedSub;
+  StreamSubscription<List<String>>? _mutedSub;
   List<ChatModel> _chats = [];
+  List<String> _pinnedChatIds = [];
+  List<String> _mutedChatIds = [];
   bool _chatsLoading = true;
 
   // ââ Nachrichten-State ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -109,6 +113,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // ââ Chat-Listen-Stream ââââââââââââââââââââââââââââââââââââââââââââââââââââ
   void _subscribeToChats() {
+    _pinnedSub = _chatService.streamPinnedChatIds(widget.companyId).listen(
+      (ids) {
+        if (!mounted) return;
+        setState(() => _pinnedChatIds = ids);
+      },
+    );
+    _mutedSub = _chatService.streamMutedChatIds(widget.companyId).listen(
+      (ids) {
+        if (!mounted) return;
+        setState(() => _mutedChatIds = ids);
+      },
+    );
     _chatsSub = _chatService.streamChats(widget.companyId).listen(
       (chats) {
         if (!mounted) return;
@@ -227,6 +243,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     WidgetsBinding.instance.removeObserver(this);
     _chatsSub?.cancel();
+    _pinnedSub?.cancel();
+    _mutedSub?.cancel();
     _messagesSub?.cancel();
     _scrollController.dispose();
     _messageController.dispose();
@@ -254,7 +272,176 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _unsubscribeFromMessages();
   }
 
-  // ââ Hilfsmethoden âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  void _showChatContextMenu(ChatModel chat) {
+    final isPinned = _pinnedChatIds.contains(chat.id);
+    final isMuted = _mutedChatIds.contains(chat.id);
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(isPinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(isPinned ? 'Von Anpinnen entfernen' : 'Anpinnen'),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (isPinned) {
+                  _chatService.unpinChat(widget.companyId, chat.id);
+                } else {
+                  _chatService.pinChat(widget.companyId, chat.id);
+                }
+              },
+            ),
+            ListTile(
+              leading: Icon(isMuted ? Icons.notifications_off : Icons.notifications_none),
+              title: Text(isMuted ? 'Stummschaltung aufheben' : 'Stumm schalten'),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (isMuted) {
+                  _chatService.unmuteChat(widget.companyId, chat.id);
+                } else {
+                  _chatService.muteChat(widget.companyId, chat.id);
+                }
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline, color: Colors.red.shade400),
+              title: Text('Chat löschen', style: TextStyle(color: Colors.red.shade400)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDeleteChat(chat);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMessageContextMenu({
+    required ChatMessage? message,
+    required Map<String, dynamic>? pending,
+    required bool isSent,
+    required bool isRead,
+  }) {
+    final isRealMessage = message != null;
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.person_remove_outlined, color: Colors.red.shade400),
+              title: Text('Für mich löschen', style: TextStyle(color: Colors.red.shade400)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDeleteMessage(
+                  message: message,
+                  pending: pending,
+                  forEveryone: false,
+                );
+              },
+            ),
+            if (isRealMessage && isSent && !isRead)
+              ListTile(
+                leading: Icon(Icons.delete_forever, color: Colors.red.shade400),
+                title: Text('Für alle löschen', style: TextStyle(color: Colors.red.shade400)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDeleteMessage(
+                    message: message,
+                    pending: null,
+                    forEveryone: true,
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteMessage({
+    required ChatMessage? message,
+    required Map<String, dynamic>? pending,
+    required bool forEveryone,
+  }) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(forEveryone ? 'Für alle löschen?' : 'Für mich löschen?'),
+        content: Text(
+          forEveryone
+              ? 'Die Nachricht wird für alle Teilnehmer entfernt. Dies kann nicht rückgängig gemacht werden.'
+              : 'Die Nachricht wird nur für dich entfernt.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted || _selectedChatId == null) return;
+    if (pending != null) {
+      setState(() => _pendingMessages.removeWhere((p) => p['id'] == pending['id']));
+    } else if (message != null) {
+      if (forEveryone) {
+        await _chatService.deleteMessageForEveryone(
+          widget.companyId,
+          _selectedChatId!,
+          message.id,
+        );
+      } else {
+        await _chatService.deleteMessageForMe(
+          widget.companyId,
+          _selectedChatId!,
+          message.id,
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteChat(ChatModel chat) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Chat löschen?'),
+        content: const Text('Der Chat wird nur für dich entfernt.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      await _chatService.deleteChatForMe(widget.companyId, chat.id);
+      if (mounted && _selectedChatId == chat.id) _deselectChat();
+    }
+  }
+
+  // Hilfsmethoden âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   String _chatDisplayName(ChatModel chat) {
     if (chat.name != null && chat.name!.isNotEmpty) return chat.name!;
     final uid = _chatService.userId ?? '';
@@ -262,6 +449,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return others.map((p) => p.name).where((n) => n.isNotEmpty).join(', ').isNotEmpty
         ? others.map((p) => p.name).where((n) => n.isNotEmpty).join(', ')
         : 'Chat';
+  }
+
+  /// Chats sortiert: angepinnte oben (in Pin-Reihenfolge), Rest nach lastMessageAt.
+  List<ChatModel> get _sortedChats {
+    final pinned = _pinnedChatIds
+        .map((id) => _chats.where((c) => c.id == id).firstOrNull)
+        .whereType<ChatModel>()
+        .toList();
+    final rest = _chats.where((c) => !_pinnedChatIds.contains(c.id)).toList();
+    rest.sort((a, b) => (b.lastMessageAt ?? DateTime(0)).compareTo(a.lastMessageAt ?? DateTime(0)));
+    return [...pinned, ...rest];
   }
 
   /// Kombiniert Firestore-Nachrichten mit ausstehenden (Offline-Queue), sortiert nach Zeit.
@@ -280,6 +478,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return at.compareTo(bt);
     });
     return combined;
+  }
+
+  /// Prüft, ob die Nachricht von allen Empfängern gelesen wurde.
+  bool _isMessageRead(ChatMessage? m) {
+    if (m == null) return false;
+    final uid = _chatService.userId;
+    final chat = _selectedChat;
+    if (uid == null || chat == null) return false;
+    final recipients = chat.participants.where((p) => p != uid).toList();
+    return recipients.every((r) {
+      final lr = chat.lastReadAt[r];
+      if (lr == null || m.createdAt == null) return false;
+      final lrAt = lr is Timestamp ? lr.toDate() : (lr is DateTime ? lr : null);
+      return lrAt != null && !m.createdAt!.isAfter(lrAt);
+    });
   }
 
   /// WhatsApp-Style: 1 Haken=verschickt, 2 grau=zugestellt, 2 blau=gelesen.
@@ -659,10 +872,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ),
                       )
                     : ListView.builder(
-                        itemCount: _chats.length,
+                        itemCount: _sortedChats.length,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         itemBuilder: (_, i) {
-                          final chat = _chats[i];
+                          final chat = _sortedChats[i];
                           var unread = chat.unreadCount[_chatService.userId] ?? 0;
                           if (unread == 0 &&
                               chat.lastMessageFrom != null &&
@@ -736,6 +949,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(14),
                                 onTap: () => _selectChat(chat),
+                                onLongPress: () => _showChatContextMenu(chat),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 11),
@@ -827,6 +1041,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                     ),
                                                   ),
                                                 ),
+                                                if (_mutedChatIds.contains(chat.id))
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(right: 4),
+                                                    child: Icon(
+                                                      Icons.notifications_off,
+                                                      size: 14,
+                                                      color: Colors.grey[400],
+                                                    ),
+                                                  ),
                                                 const SizedBox(width: 6),
                                                 Text(
                                                   _formatTime(chat.lastMessageAt),
@@ -1158,21 +1381,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     ),
                                   ),
                                 ),
-                              Align(
-                                alignment:
-                                    isSent ? Alignment.centerRight : Alignment.centerLeft,
-                                child: Container(
-                                  margin: EdgeInsets.only(
-                                    bottom: 4,
-                                    left: isSent ? 60 : 0,
-                                    right: isSent ? 0 : 60,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 10),
-                                  constraints: BoxConstraints(
-                                    maxWidth: MediaQuery.sizeOf(context).width * 0.72,
-                                  ),
-                                  decoration: BoxDecoration(
+                              GestureDetector(
+                                onLongPress: () => _showMessageContextMenu(
+                                  message: m,
+                                  pending: pending,
+                                  isSent: isSent,
+                                  isRead: _isMessageRead(m),
+                                ),
+                                child: Align(
+                                  alignment:
+                                      isSent ? Alignment.centerRight : Alignment.centerLeft,
+                                  child: Container(
+                                    margin: EdgeInsets.only(
+                                      bottom: 4,
+                                      left: isSent ? 60 : 0,
+                                      right: isSent ? 0 : 60,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 10),
+                                    constraints: BoxConstraints(
+                                      maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+                                    ),
+                                    decoration: BoxDecoration(
                                     color: isSent
                                         ? AppTheme.primary
                                         : Colors.white,
@@ -1274,6 +1504,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   ),
                                 ),
                               ),
+                            ),
                             ],
                           );
                         },
@@ -1604,7 +1835,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   controller: _groupNameController,
                   decoration: InputDecoration(
                     labelText: 'Gruppenname',
-                    hintText: 'z.B. Rettungsteam A',
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
                     enabledBorder: OutlineInputBorder(
