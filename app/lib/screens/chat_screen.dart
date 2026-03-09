@@ -1947,6 +1947,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           maxLines: 4,
                           minLines: 1,
                           maxLength: 4000,
+                          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                           onSubmitted: (_) => _sendMessage(),
                         ),
                       ),
