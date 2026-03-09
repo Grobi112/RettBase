@@ -16,9 +16,6 @@ class ChatService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  // BUG FIX 3: Weak-Reference-Pattern für Connectivity-Listener.
-  // _activeService wird bei jedem Aufruf aktualisiert, sodass immer die
-  // aktuelle Instanz verwendet wird – kein Memory-Leak durch feste Closure.
   static StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   static bool _connectivityListenerActive = false;
   static ChatService? _activeService;
@@ -190,8 +187,6 @@ class ChatService {
           .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
           .where((m) => !m.deletedBy.contains(uid))
           .toList();
-      // deliveredTo wird gesetzt sobald Empfänger den Stream öffnet.
-      // BUG FIX 1 (ergänzend): Nachrichten ohne deliveredTo-Eintrag werden nachgezogen.
       for (final d in snap.docs) {
         final data = d.data();
         final from = data['from']?.toString();
@@ -292,12 +287,9 @@ class ChatService {
     return user.email?.split('@').first ?? 'Unbekannt';
   }
 
-  // BUG FIX 3: Aktive Instanz wird bei jedem Aufruf aktualisiert.
-  // Listener läuft nur einmal, aber ruft immer die aktuellste Instanz auf.
-  // Verhindert Memory-Leak und veraltete Instanz-Referenz.
   static void ensureConnectivityListener(ChatService service) {
     if (kIsWeb) return;
-    _activeService = service; // immer aktuelle Instanz merken
+    _activeService = service;
     if (_connectivityListenerActive) return;
     _connectivityListenerActive = true;
     _connectivitySub = ChatOfflineQueue.onConnectivityChanged.listen((_) async {
@@ -343,7 +335,6 @@ class ChatService {
   }
 
   /// Sendet die Nachricht oder legt sie in die Offline-Queue (bei fehlendem Netz).
-  /// Gibt die lokale ID zurück (für Pending-Anzeige in der UI).
   Future<String> sendMessageOrQueue(
     String companyId,
     String chatId,
@@ -406,7 +397,6 @@ class ChatService {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
 
-    // BUG FIX 2: imageBytes ohne unnötiges '!'
     final hasImages = imageBytes != null && imageBytes.isNotEmpty;
     final hasAudio = audioBytes != null && audioBytes.isNotEmpty;
     if (text.trim().isEmpty && !hasImages && !hasAudio) return;
@@ -440,24 +430,15 @@ class ChatService {
     }
     if (attachments.isEmpty) attachments = null;
 
-    final messagesRef = _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages');
+    // FIX Bug 8: Batch-Write statt sequentielle Get+Set+Update Calls.
+    // participants werden beim sendMessage direkt aus dem Chat-Dokument gelesen
+    // und alle Writes in einem WriteBatch gebündelt – keine Race-Condition mehr.
+    final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(chatId);
+    final messagesRef = chatRef.collection('messages');
 
-    // BUG FIX 1: deliveredTo von Anfang an mit Sender-UID initialisieren.
-    // Vorher fehlte dieses Feld komplett – der Zustellungsstatus funktionierte
-    // nur wenn der Empfänger zufällig gerade den Stream offen hatte.
-    await messagesRef.add({
-      'from': uid,
-      'senderName': senderName,
-      'text': text.trim().isNotEmpty ? text.trim() : null,
-      'attachments': attachments,
-      'createdAt': FieldValue.serverTimestamp(),
-      'deliveredTo': [uid], // Sender direkt als delivered – Empfänger folgt via streamMessages
-    });
+    final chatSnap = await chatRef.get();
+    final chat = chatSnap.data() as Map<String, dynamic>?;
+    final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
 
     final lastPreview = text.trim().isNotEmpty
         ? text.trim()
@@ -467,12 +448,19 @@ class ChatService {
                 : '📎 Datei')
             : '');
 
-    final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(chatId);
-    final chatSnap = await chatRef.get();
-    final chat = chatSnap.data();
-    final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
+    final batch = _db.batch();
 
-    await chatRef.set({
+    final msgRef = messagesRef.doc();
+    batch.set(msgRef, {
+      'from': uid,
+      'senderName': senderName,
+      'text': text.trim().isNotEmpty ? text.trim() : null,
+      'attachments': attachments,
+      'createdAt': FieldValue.serverTimestamp(),
+      'deliveredTo': [uid],
+    });
+
+    batch.set(chatRef, {
       'lastMessageText': lastPreview,
       'lastMessageAt': FieldValue.serverTimestamp(),
       'lastMessageFrom': uid,
@@ -480,11 +468,11 @@ class ChatService {
 
     for (final pid in participants) {
       if (pid != uid && pid.isNotEmpty) {
-        try {
-          await chatRef.update({'unreadCount.$pid': FieldValue.increment(1)});
-        } catch (_) {}
+        batch.update(chatRef, {'unreadCount.$pid': FieldValue.increment(1)});
       }
     }
+
+    await batch.commit();
   }
 
   Future<void> deleteChatForMe(String companyId, String chatId) async {
@@ -510,6 +498,8 @@ class ChatService {
   }
 
   /// Nachricht(en) an anderen Chat weiterleiten.
+  /// HINWEIS: URLs aus Anhängen werden direkt weitergeleitet (gleicher Storage-Bucket,
+  /// kein Re-Upload nötig). Storage Rules müssen sicherstellen dass nur Teilnehmer Zugriff haben.
   Future<void> forwardMessages(
     String companyId,
     String targetChatId,
@@ -518,12 +508,18 @@ class ChatService {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
     final senderName = await _getSenderName(companyId);
-    final messagesRef = _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('chats')
-        .doc(targetChatId)
-        .collection('messages');
+
+    final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(targetChatId);
+    final messagesRef = chatRef.collection('messages');
+
+    final chatSnap = await chatRef.get();
+    final chat = chatSnap.data() as Map<String, dynamic>?;
+    final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
+
+    // FIX Bug 8: Batch-Write für forwardMessages
+    final batch = _db.batch();
+
+    ChatMessage? lastForwarded;
     for (final m in messages) {
       final text = (m.text ?? '').trim();
       final attachments = m.attachments
@@ -535,7 +531,9 @@ class ChatService {
               })
           .toList();
       if (text.isEmpty && (attachments == null || attachments.isEmpty)) continue;
-      await messagesRef.add({
+      lastForwarded = m;
+      final msgRef = messagesRef.doc();
+      batch.set(msgRef, {
         'from': uid,
         'senderName': senderName,
         'text': text.isNotEmpty ? text : null,
@@ -544,40 +542,49 @@ class ChatService {
         'deliveredTo': [uid],
       });
     }
-    final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(targetChatId);
-    final chatSnap = await chatRef.get();
-    final chat = chatSnap.data() as Map<String, dynamic>?;
-    final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
-    final lastMsg = messages.last;
-    final lastPreview = (lastMsg.text ?? '').trim().isNotEmpty
-        ? (lastMsg.text ?? '').trim()
-        : (lastMsg.attachments != null && lastMsg.attachments!.isNotEmpty
+
+    if (lastForwarded == null) return; // nichts zu forwarden
+
+    final lastPreview = (lastForwarded.text ?? '').trim().isNotEmpty
+        ? (lastForwarded.text ?? '').trim()
+        : (lastForwarded.attachments != null && lastForwarded.attachments!.isNotEmpty
             ? '📎 Datei'
             : '');
-    await chatRef.set({
+
+    batch.set(chatRef, {
       'lastMessageText': lastPreview,
       'lastMessageAt': FieldValue.serverTimestamp(),
       'lastMessageFrom': uid,
     }, SetOptions(merge: true));
+
     for (final pid in participants) {
       if (pid != uid && pid.isNotEmpty) {
-        try {
-          await chatRef.update({'unreadCount.$pid': FieldValue.increment(1)});
-        } catch (_) {}
+        batch.update(chatRef, {'unreadCount.$pid': FieldValue.increment(1)});
       }
     }
+
+    await batch.commit();
   }
 
-  /// Nachricht für alle löschen (Dokument wird entfernt).
+  /// FIX Bug 2: Nachricht für alle löschen – nur der Absender darf löschen.
   Future<void> deleteMessageForEveryone(String companyId, String chatId, String messageId) async {
-    await _db
+    final uid = userId;
+    if (uid == null) return;
+    final ref = _db
         .collection('kunden')
         .doc(companyId)
         .collection('chats')
         .doc(chatId)
         .collection('messages')
-        .doc(messageId)
-        .delete();
+        .doc(messageId);
+    // Sicherheitsprüfung: nur eigene Nachrichten dürfen für alle gelöscht werden
+    final doc = await ref.get();
+    if (!doc.exists) return;
+    if (doc.data()?['from'] != uid) {
+      if (kDebugMode) debugPrint('RettBase: deleteMessageForEveryone verweigert – nicht Absender');
+      return;
+    }
+    await ref.delete();
   }
 
   /// Pfad für Chat-Präferenzen (angepinnte Chats) pro Nutzer.
