@@ -1943,7 +1943,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 10),
                           ),
-                          style: const TextStyle(fontSize: 14.5, color: Colors.white),
+                          style: const TextStyle(fontSize: 14.5, color: Colors.black87),
                           maxLines: 4,
                           minLines: 1,
                           maxLength: 4000,
