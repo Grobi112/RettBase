@@ -1011,7 +1011,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               children: [
                 Expanded(
                   child: Text(
-                    'Nachrichten',
+                    'Chats',
                     style: TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.w800,
