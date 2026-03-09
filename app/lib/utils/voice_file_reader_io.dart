@@ -1,21 +1,23 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-/// FIX Bug 4: Race-Condition beim Löschen der Temp-Audiodatei.
-/// Datei wird jetzt in einem try/finally-Block gelöscht, sodass sie
-/// auch bei einem Fehler beim Lesen sicher entfernt wird.
+/// Liest eine Audiodatei vom Dateisystem und löscht sie danach.
+/// FIX: try/finally stellt sicher, dass die Temp-Datei immer gelöscht wird,
+/// auch wenn readAsBytes() einen Fehler wirft (verhindert Temp-File-Leaks).
 Future<Uint8List?> readVoiceFileBytes(String path) async {
   final file = File(path);
-  if (!await file.exists()) return null;
+  Uint8List? bytes;
   try {
-    final bytes = await file.readAsBytes();
-    return bytes;
+    bytes = await file.readAsBytes();
   } catch (_) {
-    return null;
+    // Lesen fehlgeschlagen – bytes bleibt null
   } finally {
-    // Immer löschen – egal ob readAsBytes() erfolgreich war oder nicht.
+    // Immer löschen, egal ob Lesen erfolgreich war oder nicht
     try {
-      await file.delete();
+      if (await file.exists()) {
+        await file.delete();
+      }
     } catch (_) {}
   }
+  return bytes;
 }
