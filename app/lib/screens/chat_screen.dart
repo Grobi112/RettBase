@@ -1905,11 +1905,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     // Anhänge-Button
                     Padding(
-                      padding: const EdgeInsets.only(right: 8, bottom: 3),
+                      padding: const EdgeInsets.only(right: 8),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
                         onTap: _pickImages,
