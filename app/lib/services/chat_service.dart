@@ -30,13 +30,17 @@ class ChatService {
   Future<List<MitarbeiterForChat>> loadMitarbeiter(String companyId) async {
     final uid = userId;
     if (uid == null) return [];
+
     final usersSnap = await _db.collection('kunden').doc(companyId).collection('users').get();
     final emailToUid = <String, String>{};
     for (final u in usersSnap.docs) {
       final em = (u.data()['email'] ?? '').toString().toLowerCase().trim();
       if (em.isNotEmpty) emailToUid[em] = u.id;
     }
-    final mitarbeiterSnap = await _db.collection('kunden').doc(companyId).collection('mitarbeiter').get();
+
+    final mitarbeiterSnap =
+        await _db.collection('kunden').doc(companyId).collection('mitarbeiter').get();
+
     final list = <MitarbeiterForChat>[];
     for (final d in mitarbeiterSnap.docs) {
       final data = d.data();
@@ -81,12 +85,12 @@ class ChatService {
           .map((d) => ChatModel.fromFirestore(d.id, d.data()))
           .where((c) => !c.deletedBy.contains(uid))
           .toList();
-      list.sort((a, b) => (b.lastMessageAt ?? DateTime(0)).compareTo(a.lastMessageAt ?? DateTime(0)));
+      list.sort((a, b) =>
+          (b.lastMessageAt ?? DateTime(0)).compareTo(a.lastMessageAt ?? DateTime(0)));
       return list;
     });
   }
 
-  /// Einmaliges Lesen der Ungelesen-Anzahl (für Badge-Polling, robust auf Web).
   Future<int> getUnreadCount(String companyId) async {
     final uid = userId;
     if (uid == null) return 0;
@@ -101,20 +105,25 @@ class ChatService {
       for (final d in snap.docs) {
         final data = d.data();
         if ((data['deletedBy'] as List?)?.contains(uid) == true) continue;
-        var unread = (data['unreadCount'] is Map ? (data['unreadCount'] as Map)[uid] : null);
+        var unread =
+            (data['unreadCount'] is Map ? (data['unreadCount'] as Map)[uid] : null);
         if (unread is int) {
           total += unread;
         } else if (unread == null || unread == 0) {
           final lastFrom = data['lastMessageFrom'];
           final lastAt = data['lastMessageAt'];
           if (lastFrom != null && lastFrom != uid && lastAt != null) {
-            final lastRead = (data['lastReadAt'] is Map ? (data['lastReadAt'] as Map)[uid] : null);
+            final lastRead = (data['lastReadAt'] is Map
+                ? (data['lastReadAt'] as Map)[uid]
+                : null);
             DateTime? lastReadAt;
             if (lastRead != null) {
               if (lastRead is Timestamp) lastReadAt = lastRead.toDate();
               else if (lastRead is DateTime) lastReadAt = lastRead;
             }
-            final msgAt = lastAt is Timestamp ? lastAt.toDate() : (lastAt is DateTime ? lastAt : null);
+            final msgAt = lastAt is Timestamp
+                ? lastAt.toDate()
+                : (lastAt is DateTime ? lastAt : null);
             if (msgAt != null && (lastReadAt == null || msgAt.isAfter(lastReadAt))) total += 1;
           }
         }
@@ -125,7 +134,6 @@ class ChatService {
     }
   }
 
-  /// Gesamtzahl ungelesener Nachrichten für Badge-Anzeige (Menü, Schnellstart).
   Stream<int> streamUnreadCount(String companyId) {
     return streamChats(companyId).map((chats) {
       final uid = userId;
@@ -149,7 +157,6 @@ class ChatService {
     });
   }
 
-  /// Einmaliges Laden der Nachrichten (robuster auf Flutter Web als snapshots).
   Future<List<ChatMessage>> loadMessages(String companyId, String chatId) async {
     final uid = userId;
     if (uid == null) return [];
@@ -190,9 +197,12 @@ class ChatService {
       for (final d in snap.docs) {
         final data = d.data();
         final from = data['from']?.toString();
-        final delivered = (data['deliveredTo'] as List?)?.map((e) => e.toString()).toList() ?? [];
+        final delivered =
+            (data['deliveredTo'] as List?)?.map((e) => e.toString()).toList() ?? [];
         if (from != null && from != uid && !delivered.contains(uid)) {
-          unawaited(d.reference.update({'deliveredTo': FieldValue.arrayUnion([uid])}));
+          unawaited(d.reference.update({
+            'deliveredTo': FieldValue.arrayUnion([uid])
+          }));
         }
       }
       return list;
@@ -213,7 +223,6 @@ class ChatService {
     } catch (_) {}
   }
 
-  /// Öffentliche Methode zum Markieren eines Chats als gelesen (z.B. aus dashboard_screen).
   Future<void> markChatReadPublic(String companyId, String chatId) async {
     final uid = userId;
     if (uid == null) return;
@@ -242,7 +251,8 @@ class ChatService {
     }
   }
 
-  Future<String> createGroupChat(String companyId, String name, List<MitarbeiterForChat> members) async {
+  Future<String> createGroupChat(
+      String companyId, String name, List<MitarbeiterForChat> members) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
     final senderName = await _getSenderName(companyId);
@@ -300,7 +310,6 @@ class ChatService {
     });
   }
 
-  /// Connectivity-Listener stoppen und Referenz freigeben (z.B. beim App-Ende).
   static void disposeConnectivityListener() {
     _connectivitySub?.cancel();
     _connectivitySub = null;
@@ -308,7 +317,6 @@ class ChatService {
     _activeService = null;
   }
 
-  /// Verarbeitet die Offline-Queue – sendet alle ausstehenden Nachrichten.
   Future<void> processOfflineQueue() async {
     if (kIsWeb || userId == null) return;
     try {
@@ -316,13 +324,9 @@ class ChatService {
       for (final p in pending) {
         try {
           await sendMessage(
-            p.companyId,
-            p.chatId,
-            p.text,
-            imageBytes: p.imageBytes,
-            imageNames: p.imageNames,
-            audioBytes: p.audioBytes,
-            audioNames: p.audioNames,
+            p.companyId, p.chatId, p.text,
+            imageBytes: p.imageBytes, imageNames: p.imageNames,
+            audioBytes: p.audioBytes, audioNames: p.audioNames,
           );
           await ChatOfflineQueue.remove(p.id);
         } catch (e) {
@@ -334,34 +338,23 @@ class ChatService {
     }
   }
 
-  /// Sendet die Nachricht oder legt sie in die Offline-Queue (bei fehlendem Netz).
   Future<String> sendMessageOrQueue(
-    String companyId,
-    String chatId,
-    String text, {
-    List<Uint8List>? imageBytes,
-    List<String>? imageNames,
-    List<Uint8List>? audioBytes,
-    List<String>? audioNames,
+    String companyId, String chatId, String text, {
+    List<Uint8List>? imageBytes, List<String>? imageNames,
+    List<Uint8List>? audioBytes, List<String>? audioNames,
   }) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
-
     final hasImages = imageBytes != null && imageBytes.isNotEmpty;
     final hasAudio = audioBytes != null && audioBytes.isNotEmpty;
-    if (text.trim().isEmpty && !hasImages && !hasAudio) {
-      throw Exception('Leere Nachricht');
-    }
-
+    if (text.trim().isEmpty && !hasImages && !hasAudio) throw Exception('Leere Nachricht');
     ensureConnectivityListener(this);
-
     if (kIsWeb) {
       await sendMessage(companyId, chatId, text,
           imageBytes: imageBytes, imageNames: imageNames,
           audioBytes: audioBytes, audioNames: audioNames);
       return 'web-${DateTime.now().millisecondsSinceEpoch}';
     }
-
     final online = await ChatOfflineQueue.isOnline;
     if (online) {
       await sendMessage(companyId, chatId, text,
@@ -369,40 +362,28 @@ class ChatService {
           audioBytes: audioBytes, audioNames: audioNames);
       return 'sent-${DateTime.now().millisecondsSinceEpoch}';
     }
-
     final id = 'pending-${DateTime.now().millisecondsSinceEpoch}';
     await ChatOfflineQueue.enqueue(PendingChatMessage(
-      id: id,
-      companyId: companyId,
-      chatId: chatId,
-      text: text,
-      imageBytes: imageBytes,
-      imageNames: imageNames,
-      audioBytes: audioBytes,
-      audioNames: audioNames,
+      id: id, companyId: companyId, chatId: chatId, text: text,
+      imageBytes: imageBytes, imageNames: imageNames,
+      audioBytes: audioBytes, audioNames: audioNames,
       createdAt: DateTime.now(),
     ));
     return id;
   }
 
   Future<void> sendMessage(
-    String companyId,
-    String chatId,
-    String text, {
-    List<Uint8List>? imageBytes,
-    List<String>? imageNames,
-    List<Uint8List>? audioBytes,
-    List<String>? audioNames,
+    String companyId, String chatId, String text, {
+    List<Uint8List>? imageBytes, List<String>? imageNames,
+    List<Uint8List>? audioBytes, List<String>? audioNames,
   }) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
-
     final hasImages = imageBytes != null && imageBytes.isNotEmpty;
     final hasAudio = audioBytes != null && audioBytes.isNotEmpty;
     if (text.trim().isEmpty && !hasImages && !hasAudio) return;
 
     final senderName = await _getSenderName(companyId);
-
     List<Map<String, dynamic>>? attachments = [];
     final ts = DateTime.now().millisecondsSinceEpoch;
 
@@ -417,6 +398,7 @@ class ChatService {
         attachments.add({'url': url, 'name': name, 'type': 'image/jpeg'});
       }
     }
+
     if (hasAudio) {
       for (var i = 0; i < audioBytes!.length; i++) {
         final name = (i < (audioNames?.length ?? 0) ? audioNames![i] : 'audio_$i.m4a')
@@ -428,14 +410,13 @@ class ChatService {
         attachments.add({'url': url, 'name': name, 'type': 'audio/m4a'});
       }
     }
+
     if (attachments.isEmpty) attachments = null;
 
-    // FIX Bug 8: Batch-Write statt sequentielle Get+Set+Update Calls.
-    // participants werden beim sendMessage direkt aus dem Chat-Dokument gelesen
-    // und alle Writes in einem WriteBatch gebündelt – keine Race-Condition mehr.
     final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(chatId);
-    final messagesRef = chatRef.collection('messages');
 
+    // FIX B: participants einmalig lesen, dann WriteBatch für alle Writes.
+    // Verhindert Race-Condition und reduziert Firestore-Roundtrips.
     final chatSnap = await chatRef.get();
     final chat = chatSnap.data() as Map<String, dynamic>?;
     final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
@@ -448,15 +429,17 @@ class ChatService {
                 : '📎 Datei')
             : '');
 
+    // Atomischer Batch: Nachricht + Chat-Metadaten + unreadCount
     final batch = _db.batch();
 
-    final msgRef = messagesRef.doc();
-    batch.set(msgRef, {
+    final msgDoc = chatRef.collection('messages').doc();
+    batch.set(msgDoc, {
       'from': uid,
       'senderName': senderName,
       'text': text.trim().isNotEmpty ? text.trim() : null,
       'attachments': attachments,
       'createdAt': FieldValue.serverTimestamp(),
+      // FIX 1: deliveredTo von Anfang an mit Sender-UID initialisieren
       'deliveredTo': [uid],
     });
 
@@ -483,57 +466,45 @@ class ChatService {
     });
   }
 
-  /// Nachricht für mich löschen (nur für den Nutzer ausgeblendet).
   Future<void> deleteMessageForMe(String companyId, String chatId, String messageId) async {
     final uid = userId;
     if (uid == null) return;
     await _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc(messageId)
+        .collection('kunden').doc(companyId)
+        .collection('chats').doc(chatId)
+        .collection('messages').doc(messageId)
         .update({'deletedBy': FieldValue.arrayUnion([uid])});
   }
 
-  /// Nachricht(en) an anderen Chat weiterleiten.
-  /// HINWEIS: URLs aus Anhängen werden direkt weitergeleitet (gleicher Storage-Bucket,
-  /// kein Re-Upload nötig). Storage Rules müssen sicherstellen dass nur Teilnehmer Zugriff haben.
   Future<void> forwardMessages(
-    String companyId,
-    String targetChatId,
-    List<ChatMessage> messages,
+    String companyId, String targetChatId, List<ChatMessage> messages,
   ) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
     final senderName = await _getSenderName(companyId);
 
     final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(targetChatId);
-    final messagesRef = chatRef.collection('messages');
 
+    // FIX C: participants einmalig lesen, dann Batch
     final chatSnap = await chatRef.get();
     final chat = chatSnap.data() as Map<String, dynamic>?;
     final participants = (chat?['participants'] as List?)?.cast<String>() ?? [];
 
-    // FIX Bug 8: Batch-Write für forwardMessages
     final batch = _db.batch();
+    ChatMessage? lastValidMessage;
 
-    ChatMessage? lastForwarded;
     for (final m in messages) {
       final text = (m.text ?? '').trim();
       final attachments = m.attachments
           ?.map((a) => {
-                'url': a.url,
-                'name': a.name,
-                'type': a.type,
+                'url': a.url, 'name': a.name, 'type': a.type,
                 if (a.duration != null) 'duration': a.duration,
               })
           .toList();
       if (text.isEmpty && (attachments == null || attachments.isEmpty)) continue;
-      lastForwarded = m;
-      final msgRef = messagesRef.doc();
-      batch.set(msgRef, {
+
+      final msgDoc = chatRef.collection('messages').doc();
+      batch.set(msgDoc, {
         'from': uid,
         'senderName': senderName,
         'text': text.isNotEmpty ? text : null,
@@ -541,15 +512,15 @@ class ChatService {
         'createdAt': FieldValue.serverTimestamp(),
         'deliveredTo': [uid],
       });
+      lastValidMessage = m;
     }
 
-    if (lastForwarded == null) return; // nichts zu forwarden
+    if (lastValidMessage == null) return;
 
-    final lastPreview = (lastForwarded.text ?? '').trim().isNotEmpty
-        ? (lastForwarded.text ?? '').trim()
-        : (lastForwarded.attachments != null && lastForwarded.attachments!.isNotEmpty
-            ? '📎 Datei'
-            : '');
+    final lastPreview = (lastValidMessage.text ?? '').trim().isNotEmpty
+        ? (lastValidMessage.text ?? '').trim()
+        : (lastValidMessage.attachments != null && lastValidMessage.attachments!.isNotEmpty
+            ? '📎 Datei' : '');
 
     batch.set(chatRef, {
       'lastMessageText': lastPreview,
@@ -566,35 +537,27 @@ class ChatService {
     await batch.commit();
   }
 
-  /// FIX Bug 2: Nachricht für alle löschen – nur der Absender darf löschen.
-  Future<void> deleteMessageForEveryone(String companyId, String chatId, String messageId) async {
+  /// Nachricht für alle löschen – NUR der Absender darf löschen (FIX A: Sicherheits-Check).
+  Future<void> deleteMessageForEveryone(
+      String companyId, String chatId, String messageId) async {
     final uid = userId;
     if (uid == null) return;
-    final ref = _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc(messageId);
-    // Sicherheitsprüfung: nur eigene Nachrichten dürfen für alle gelöscht werden
-    final doc = await ref.get();
-    if (!doc.exists) return;
-    if (doc.data()?['from'] != uid) {
-      if (kDebugMode) debugPrint('RettBase: deleteMessageForEveryone verweigert – nicht Absender');
-      return;
-    }
-    await ref.delete();
+    final msgRef = _db
+        .collection('kunden').doc(companyId)
+        .collection('chats').doc(chatId)
+        .collection('messages').doc(messageId);
+    final snap = await msgRef.get();
+    // Sicherheits-Check: nur eigene Nachrichten dürfen für alle gelöscht werden
+    if (snap.data()?['from']?.toString() != uid) return;
+    await msgRef.delete();
   }
 
-  /// Pfad für Chat-Präferenzen (angepinnte Chats) pro Nutzer.
   DocumentReference _chatPrefsRef(String companyId) {
     final uid = userId;
     if (uid == null) throw StateError('Nicht angemeldet');
     return _db.collection('kunden').doc(companyId).collection('chatPrefs').doc(uid);
   }
 
-  /// Chat anpinnen – bleibt oben in der Liste.
   Future<void> pinChat(String companyId, String chatId) async {
     final ref = _chatPrefsRef(companyId);
     final snap = await ref.get();
@@ -605,7 +568,6 @@ class ChatService {
     await ref.set({'pinnedChatIds': list}, SetOptions(merge: true));
   }
 
-  /// Chat von Anpinnen entfernen.
   Future<void> unpinChat(String companyId, String chatId) async {
     final ref = _chatPrefsRef(companyId);
     final snap = await ref.get();
@@ -617,24 +579,16 @@ class ChatService {
     }
   }
 
-  /// Stream der angepinnten Chat-IDs (Reihenfolge = Reihenfolge oben).
   Stream<List<String>> streamPinnedChatIds(String companyId) {
     final uid = userId;
     if (uid == null) return Stream.value([]);
-    return _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('chatPrefs')
-        .doc(uid)
-        .snapshots()
-        .map((snap) {
+    return _db.collection('kunden').doc(companyId).collection('chatPrefs').doc(uid)
+        .snapshots().map((snap) {
       final data = snap.data() as Map<String, dynamic>?;
-      final list = (data?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
-      return list;
+      return (data?['pinnedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
     });
   }
 
-  /// Chat stumm schalten – keine Push-Benachrichtigungen.
   Future<void> muteChat(String companyId, String chatId) async {
     final ref = _chatPrefsRef(companyId);
     final snap = await ref.get();
@@ -645,7 +599,6 @@ class ChatService {
     await ref.set({'mutedChatIds': list}, SetOptions(merge: true));
   }
 
-  /// Stummschaltung aufheben.
   Future<void> unmuteChat(String companyId, String chatId) async {
     final ref = _chatPrefsRef(companyId);
     final snap = await ref.get();
@@ -657,20 +610,13 @@ class ChatService {
     }
   }
 
-  /// Stream der stumm geschalteten Chat-IDs.
   Stream<List<String>> streamMutedChatIds(String companyId) {
     final uid = userId;
     if (uid == null) return Stream.value([]);
-    return _db
-        .collection('kunden')
-        .doc(companyId)
-        .collection('chatPrefs')
-        .doc(uid)
-        .snapshots()
-        .map((snap) {
+    return _db.collection('kunden').doc(companyId).collection('chatPrefs').doc(uid)
+        .snapshots().map((snap) {
       final data = snap.data() as Map<String, dynamic>?;
-      final list = (data?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
-      return list;
+      return (data?['mutedChatIds'] as List?)?.map((e) => e.toString()).toList() ?? [];
     });
   }
 }
