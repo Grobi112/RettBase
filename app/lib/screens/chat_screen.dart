@@ -16,6 +16,8 @@ import '../models/chat.dart';
 import '../services/chat_service.dart';
 import '../utils/visibility_refresh_stub.dart'
     if (dart.library.html) '../utils/visibility_refresh_web.dart' as visibility_refresh;
+import '../utils/screenshot_block_supported.dart';
+import 'package:flutter_screenshot_blocker/flutter_screenshot_blocker.dart';
 
 /// Natives Chat-Modul â ohne WebView.
 class ChatScreen extends StatefulWidget {
@@ -965,6 +967,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ],
     );
 
+    final body = isScreenshotBlockSupported()
+        ? ScreenshotBlockerWidget(blockScreenshots: true, child: content)
+        : content;
+
     if (widget.hideAppBar && widget.onBack != null) {
       return PopScope(
         canPop: false,
@@ -976,10 +982,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             widget.onBack!();
           }
         },
-        child: content,
+        child: body,
       );
     }
-    return content;
+    return body;
   }
 
   // ââ Chat-Liste ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ

@@ -444,6 +444,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0+4"
+  flutter_screenshot_blocker:
+    dependency: "direct main"
+    description:
+      name: flutter_screenshot_blocker
+      sha256: "6bc2683419c631bd79bf57e1797334397ee8f28f683582695f0949e3f9152e5b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.2"
   flutter_signature_pad:
     dependency: "direct main"
     description:
