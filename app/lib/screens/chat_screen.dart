@@ -92,6 +92,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   /// Sprachnachricht: Wiedergabe (ein Player für alle Nachrichten).
   final AudioPlayer _voicePlayer = AudioPlayer();
+ StreamSubscription<Duration>? _positionSub;
+ StreamSubscription<PlayerState>? _playerStateSub;
   String? _playingAudioUrl;
 
   // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
@@ -103,7 +105,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _subscribeToChats();
     if (kIsWeb) _setupVisibilityRefresh();
-    _voicePlayer.playerStateStream.listen((s) {
+    _playerStateSub = _voicePlayer.playerStateStream.listen((s) {
       if (s.processingState == ProcessingState.completed) {
         if (mounted) setState(() => _playingAudioUrl = null);
       }
@@ -830,6 +832,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _recordingStartTime = DateTime.now();
       });
     } catch (e) {
+      if (mounted) setState(() => _isRecording = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Aufnahme fehlgeschlagen: $e')),
@@ -924,7 +927,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         audioNames: ['voice.m4a'],
       );
       if (resultId.startsWith('pending-') && mounted) {
-        setState(() {
+        if (mounted) setState(() {
           _pendingMessages.add({
             'id': resultId,
             'chatId': _selectedChatId,
@@ -937,7 +940,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isRecording = false);
+        if (mounted) setState(() => _isRecording = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Sprachnachricht fehlgeschlagen: $e')),
         );
@@ -1646,7 +1649,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     final canFwd = ((m.text ?? '').trim().isNotEmpty ||
                                         (m.attachments != null && m.attachments!.isNotEmpty));
                                     if (canFwd) {
-                                      setState(() {
+                                      if (mounted) setState(() {
                                         if (_selectedMessageIds.contains(m.id)) {
                                           _selectedMessageIds.remove(m.id);
                                         } else {
@@ -1675,7 +1678,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                               final canFwd = ((m.text ?? '').trim().isNotEmpty ||
                                                   (m.attachments != null && m.attachments!.isNotEmpty));
                                               if (canFwd) {
-                                                setState(() {
+                                                if (mounted) setState(() {
                                                   if (_selectedMessageIds.contains(m.id)) {
                                                     _selectedMessageIds.remove(m.id);
                                                   } else {
@@ -1942,7 +1945,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               right: -4,
                               child: GestureDetector(
                                 onTap: () =>
-                                    setState(() => _pendingImages.removeAt(i)),
+                                    if (mounted) setState(() => _pendingImages.removeAt(i)),
                                 child: Container(
                                   decoration: const BoxDecoration(
                                     color: const Color(0xFF161B22),
@@ -2310,7 +2313,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           return InkWell(
                             borderRadius: BorderRadius.circular(12),
                             onTap: () {
-                              setState(() {
+                              if (mounted) setState(() {
                                 if (selected) {
                                   _selectedGroupMembers
                                       .removeWhere((s) => s.uid == m.uid);
@@ -2453,8 +2456,11 @@ class _VoiceMessagePlayerState extends State<_VoiceMessagePlayer> {
       return;
     }
     try {
+      await widget.player.stop();
+      if (!mounted) return;
       widget.onPlaybackStateChanged(widget.url);
       await widget.player.setUrl(widget.url);
+      if (!mounted) return;
       await widget.player.play();
     } catch (_) {
       widget.onPlaybackStateChanged(null);
