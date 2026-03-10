@@ -710,10 +710,31 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
               fcmOptions: { link: `${WEB_APP_BASE_URL}/#chat/${companyId}/${chatId}` },
             },
           };
+          try {
           await admin.messaging().send(payload);
+        } catch (eSend) {
+          const ecode = eSend.errorInfo?.code || eSend.code || "";
+          if (ecode.includes("registration-token-not-registered") || ecode.includes("invalid-registration-token")) {
+            try {
+              await admin.firestore().collection("users").doc(uid).update({ fcmToken: admin.firestore.FieldValue.delete() });
+              console.info("onNewGroupChat: Abgelaufener FCM-Token f\u00fcr", uid, "gel\u00f6scht");
+            } catch (_) {}
+          } else {
+            console.warn("onNewGroupChat: FCM an", uid, "fehlgeschlagen:", eSend.message);
+          }
+        }
           console.log("onNewChatMessage: FCM an uid=" + uid + " erfolgreich gesendet");
         } catch (e) {
-          console.warn("onNewChatMessage: FCM an", uid, "fehlgeschlagen:", e.message);
+          const code = e.errorInfo?.code || e.code || "";
+          if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token")) {
+            // Abgelaufener Token: aus Firestore entfernen
+            try {
+              await admin.firestore().collection("users").doc(uid).update({ fcmToken: admin.firestore.FieldValue.delete() });
+              console.info("onNewChatMessage: Abgelaufener FCM-Token für", uid, "gelöscht");
+            } catch (_) {}
+          } else {
+            console.warn("onNewChatMessage: FCM an", uid, "fehlgeschlagen:", e.message);
+          }
         }
       }
     } catch (e) {
