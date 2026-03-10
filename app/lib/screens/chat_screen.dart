@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:record/record.dart';
 import '../theme/app_theme.dart';
 import '../models/chat.dart';
@@ -89,6 +90,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   String? _recordingPath;
   DateTime? _recordingStartTime;
 
+  /// Sprachnachricht: Wiedergabe (ein Player für alle Nachrichten).
+  final AudioPlayer _voicePlayer = AudioPlayer();
+  String? _playingAudioUrl;
+
   // ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   Timer? _pendingCheckTimer;
 
@@ -98,6 +103,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _subscribeToChats();
     if (kIsWeb) _setupVisibilityRefresh();
+    _voicePlayer.playerStateStream.listen((s) {
+      if (s.processingState == ProcessingState.completed) {
+        if (mounted) setState(() => _playingAudioUrl = null);
+      }
+    });
 
     if (widget.initialChatId != null && widget.initialChatId!.isNotEmpty) {
       _selectedChatId = widget.initialChatId;
@@ -268,6 +278,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _mutedSub?.cancel();
     _messagesSub?.cancel();
     unawaited(_audioRecorder.dispose());
+    _voicePlayer.dispose();
     _scrollController.dispose();
     _messageController.dispose();
     _groupNameController.dispose();
@@ -845,22 +856,66 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _stopAndSendVoice() async {
+    if (!_isRecording) {
+      // Aufnahme wurde nie gestartet (z.B. zu schnell losgelassen)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mikrofon länger gedrückt halten (mind. 0,5 s).')),
+        );
+      }
+      return;
+    }
     try {
       final startTime = _recordingStartTime;
-      final path = await _audioRecorder.stop();
+      final savedPath = _recordingPath; // Fallback falls stop() null liefert
+      final pathFromStop = await _audioRecorder.stop();
       if (mounted) setState(() {
         _isRecording = false;
         _recordingStartTime = null;
       });
       _recordingPath = null;
-      if (path == null || path.isEmpty || _selectedChatId == null) return;
+      // record 6.x: stop() kann null liefern; Fallback auf den an start() übergebenen Pfad
+      String? path = pathFromStop;
+      if (path == null || path.isEmpty) path = savedPath;
+      if (path == null || path.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Aufnahme konnte nicht gespeichert werden. Bitte erneut versuchen.')),
+          );
+        }
+        return;
+      }
+      // file:// URL ggf. bereinigen (iOS kann URL zurückgeben)
+      if (path.startsWith('file://')) path = path.substring(7);
+      if (_selectedChatId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Bitte zuerst einen Chat auswählen.')),
+          );
+        }
+        return;
+      }
       // Zu kurze Aufnahme (< 0,5 s) verwerfen
       final duration = startTime != null
           ? DateTime.now().difference(startTime).inMilliseconds
           : 0;
-      if (duration < 500) return;
+      if (duration < 500) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Aufnahme zu kurz. Mindestens 0,5 Sekunden halten.')),
+          );
+        }
+        return;
+      }
       final bytes = await readVoiceFileBytes(path);
-      if (bytes == null || bytes.isEmpty) return;
+      if (bytes == null || bytes.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Audiodatei konnte nicht gelesen werden. Bitte erneut aufnehmen.')),
+          );
+        }
+        return;
+      }
       final resultId = await _chatService.sendMessageOrQueue(
         widget.companyId,
         _selectedChatId!,
@@ -1718,22 +1773,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                           else if ((a.type).startsWith('audio/'))
                                             Padding(
                                               padding: const EdgeInsets.only(top: 4),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.mic, size: 18,
-                                                      color: isSent ? Colors.white70 : const Color(0xFF8B949E)),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    'Sprachnachricht',
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      color: isSent
-                                                          ? Colors.white70
-                                                          : const Color(0xFFCDD5DF),
-                                                    ),
-                                                  ),
-                                                ],
+                                              child: _VoiceMessagePlayer(
+                                                url: a.url,
+                                                isSent: isSent,
+                                                player: _voicePlayer,
+                                                playingUrl: _playingAudioUrl,
+                                                onPlaybackStateChanged: (url) {
+                                                  if (mounted) setState(() => _playingAudioUrl = url);
+                                                },
+                                                onError: () {
+                                                  if (mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Sprachnachricht konnte nicht abgespielt werden')),
+                                                    );
+                                                  }
+                                                },
                                               ),
                                             )
                                           else
@@ -2361,6 +2415,99 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// In-Chat-Wiedergabe einer Sprachnachricht (kein externes Öffnen).
+class _VoiceMessagePlayer extends StatefulWidget {
+  final String url;
+  final bool isSent;
+  final AudioPlayer player;
+  final String? playingUrl;
+  final void Function(String? url) onPlaybackStateChanged;
+  final VoidCallback onError;
+
+  const _VoiceMessagePlayer({
+    required this.url,
+    required this.isSent,
+    required this.player,
+    required this.playingUrl,
+    required this.onPlaybackStateChanged,
+    required this.onError,
+  });
+
+  @override
+  State<_VoiceMessagePlayer> createState() => _VoiceMessagePlayerState();
+}
+
+class _VoiceMessagePlayerState extends State<_VoiceMessagePlayer> {
+  Future<void> _togglePlay() async {
+    if (widget.playingUrl == widget.url) {
+      if (widget.player.playing) {
+        await widget.player.pause();
+      } else {
+        await widget.player.play();
+      }
+      return;
+    }
+    try {
+      widget.onPlaybackStateChanged(widget.url);
+      await widget.player.setUrl(widget.url);
+      await widget.player.play();
+    } catch (_) {
+      widget.onPlaybackStateChanged(null);
+      widget.onError();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isThisPlaying = widget.playingUrl == widget.url;
+    final color = widget.isSent ? Colors.white70 : const Color(0xFF8B949E);
+    return GestureDetector(
+      onTap: _togglePlay,
+      child: StreamBuilder<PlayerState>(
+        stream: widget.player.playerStateStream,
+        builder: (context, snapshot) {
+          final playing = isThisPlaying && (snapshot.data?.playing ?? false);
+          final processing = isThisPlaying &&
+              (snapshot.data?.processingState == ProcessingState.buffering ||
+                  snapshot.data?.processingState == ProcessingState.loading);
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (processing)
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: color),
+                )
+              else
+                Icon(
+                  playing ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                  size: 28,
+                  color: color,
+                ),
+              const SizedBox(width: 8),
+              if (isThisPlaying)
+                StreamBuilder<Duration>(
+                  stream: widget.player.positionStream,
+                  builder: (context, posSnap) {
+                    final pos = posSnap.data ?? Duration.zero;
+                    final dur = widget.player.duration ?? Duration.zero;
+                    final txt = dur.inSeconds > 0
+                        ? '${pos.inMinutes}:${(pos.inSeconds % 60).toString().padLeft(2, '0')} / ${dur.inMinutes}:${(dur.inSeconds % 60).toString().padLeft(2, '0')}'
+                        : 'Sprachnachricht';
+                    return Text(txt, style: TextStyle(fontSize: 13, color: color));
+                  },
+                )
+              else
+                Text('Sprachnachricht', style: TextStyle(fontSize: 13, color: color)),
+            ],
+          );
+        },
       ),
     );
   }
