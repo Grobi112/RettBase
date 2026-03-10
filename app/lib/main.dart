@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -25,17 +26,36 @@ import 'utils/splash_loader_stub.dart'
     if (dart.library.html) 'utils/splash_loader_web.dart' as splash_loader;
 
 /// Top-Level-Handler für Push-Nachrichten im Hintergrund/beendet – Badge sofort setzen.
+/// Stumme Chats: Badge-Update überspringen (Cloud Function sendet idealerweise keinen Push).
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   final data = message.data;
-  if (data != null && data['type'] == 'chat') {
-    final badgeStr = data['totalUnread'] ?? data['badge'];
-    if (badgeStr != null && badgeStr.toString().isNotEmpty) {
-      final badge = int.tryParse(badgeStr.toString());
-      if (badge != null && badge >= 0) {
-        await PushNotificationService.updateBadge(badge);
-      }
+  if (data == null || (data['type'] as String? ?? '') != 'chat') return;
+  final companyId = (data['companyId'] as String? ?? '').trim();
+  final chatId = (data['chatId'] as String? ?? '').trim();
+  if (companyId.isEmpty || chatId.isEmpty) return;
+
+  // Stummschaltung prüfen – wenn Chat stumm, kein Badge-Update
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final prefs = await FirebaseFirestore.instance
+          .collection('kunden')
+          .doc(companyId)
+          .collection('chatPrefs')
+          .doc(user.uid)
+          .get();
+      final muted = (prefs.data()?['mutedChatIds'] as List?)?.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList() ?? [];
+      if (muted.contains(chatId)) return; // Stumm – nichts tun
+    }
+  } catch (_) {}
+
+  final badgeStr = data['totalUnread'] ?? data['badge'];
+  if (badgeStr != null && badgeStr.toString().isNotEmpty) {
+    final badge = int.tryParse(badgeStr.toString());
+    if (badge != null && badge >= 0) {
+      await PushNotificationService.updateBadge(badge);
     }
   }
 }
