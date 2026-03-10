@@ -4,7 +4,7 @@ const nodemailer = require("nodemailer");
 const { ImapFlow } = require("imapflow");
 const { simpleParser } = require("mailparser");
 
-// Projekt explizit für Auth-Konsistenz (rett-fe0fa = Flutter-App + alle Module)
+// Projekt explizit fÃ¼r Auth-Konsistenz (rett-fe0fa = Flutter-App + alle Module)
 admin.initializeApp({
   projectId: process.env.GCLOUD_PROJECT || "rett-fe0fa",
   storageBucket: "rett-fe0fa.firebasestorage.app",
@@ -12,7 +12,7 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-/** Rate-Limit für kundeExists und resolveLoginInfo: pro Client maximal 5 Aufrufe/Minute (Schutz vor Enumerations-Angriffen). */
+/** Rate-Limit fÃ¼r kundeExists und resolveLoginInfo: pro Client maximal 5 Aufrufe/Minute (Schutz vor Enumerations-Angriffen). */
 const _kundeExistsRateLimit = new Map();
 const KUNDE_EXISTS_MAX_PER_MINUTE = 5;
 
@@ -30,19 +30,19 @@ function _checkKundeExistsRateLimit(context) {
   }
   entry.count++;
   if (entry.count > KUNDE_EXISTS_MAX_PER_MINUTE) {
-    throw new functions.https.HttpsError("resource-exhausted", "Zu viele Anfragen. Bitte später erneut versuchen.");
+    throw new functions.https.HttpsError("resource-exhausted", "Zu viele Anfragen. Bitte spÃ¤ter erneut versuchen.");
   }
 }
 
-/** Basis-URL der Web-App für Push-Klick-Links (zentral gehostet, z.B. app.rettbase.de). */
+/** Basis-URL der Web-App fÃ¼r Push-Klick-Links (zentral gehostet, z.B. app.rettbase.de). */
 const WEB_APP_BASE_URL = "https://app.rettbase.de";
 
-/** Push-Benachrichtigungen (und Badge bei geschlossener App – SW setzt Badge beim Push-Empfang). */
+/** Push-Benachrichtigungen (und Badge bei geschlossener App â SW setzt Badge beim Push-Empfang). */
 const PUSH_ENABLED = true;
 
-/** Tauscht Auth gegen Custom-Token für iframe-Auth-Bridge.
- *  Nutzt context.auth (automatisch vom Callable-Client) – robuster als manuelles idToken.
- *  Fallback: idToken aus data (für Clients, die ihn explizit senden).
+/** Tauscht Auth gegen Custom-Token fÃ¼r iframe-Auth-Bridge.
+ *  Nutzt context.auth (automatisch vom Callable-Client) â robuster als manuelles idToken.
+ *  Fallback: idToken aus data (fÃ¼r Clients, die ihn explizit senden).
  */
 exports.exchangeToken = functions.region("europe-west1").https.onCall(async (data, context) => {
   let uid = context?.auth?.uid;
@@ -54,7 +54,7 @@ exports.exchangeToken = functions.region("europe-west1").https.onCall(async (dat
         uid = decoded.uid;
       } catch (e) {
         console.warn("exchangeToken verifyIdToken Fehler:", e.message);
-        throw new functions.https.HttpsError("unauthenticated", "Token ungültig oder abgelaufen");
+        throw new functions.https.HttpsError("unauthenticated", "Token ungÃ¼ltig oder abgelaufen");
       }
     }
   }
@@ -74,7 +74,7 @@ exports.exchangeToken = functions.region("europe-west1").https.onCall(async (dat
   }
 });
 
-/** Prüft ob der Aufrufer Admin/Superadmin/LeiterSSD ist (für createAuthUser, updateMitarbeiterPassword). */
+/** PrÃ¼ft ob der Aufrufer Admin/Superadmin/LeiterSSD ist (fÃ¼r createAuthUser, updateMitarbeiterPassword). */
 async function _requireAdminRole(context, companyId) {
   if (!context?.auth?.uid) {
     throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
@@ -85,7 +85,7 @@ async function _requireAdminRole(context, companyId) {
   const isGlobalSuperadmin = email === "admin@rettbase.de" || email === "admin@rettbase";
   const is112Admin = companyId === "admin" && email === "112@admin.rettbase.de";
   if (isGlobalSuperadmin || is112Admin) return;
-  // Admin-Superadmins (users/mitarbeiter in admin mit role superadmin) dürfen in allen Firmen Admin-Aktionen ausführen
+  // Admin-Superadmins (users/mitarbeiter in admin mit role superadmin) dÃ¼rfen in allen Firmen Admin-Aktionen ausfÃ¼hren
   if (companyId !== "admin") {
     const [adminUser, adminMitarbeiter] = await Promise.all([
       db.collection("kunden").doc("admin").collection("users").doc(uid).get(),
@@ -110,11 +110,11 @@ async function _requireAdminRole(context, companyId) {
     const adminMitarbeiter = await db.collection("kunden").doc("admin").collection("mitarbeiter").where("personalnummer", "==", "112").limit(1).get();
     if (!adminMitarbeiter.empty && adminMitarbeiter.docs[0].data()?.uid === uid) return;
   }
-  throw new functions.https.HttpsError("permission-denied", "Nur Admin, Superadmin oder LeiterSSD können diese Aktion ausführen.");
+  throw new functions.https.HttpsError("permission-denied", "Nur Admin, Superadmin oder LeiterSSD kÃ¶nnen diese Aktion ausfÃ¼hren.");
 }
 
 /** Erstellt einen Firebase Auth Nutzer (Admin-Funktion).
- *  Wird von der Mitgliederverwaltung aufgerufen – Admin bleibt eingeloggt.
+ *  Wird von der Mitgliederverwaltung aufgerufen â Admin bleibt eingeloggt.
  */
 exports.createAuthUser = functions.region("europe-west1").https.onCall(async (data, context) => {
   if (!context?.auth) {
@@ -138,7 +138,7 @@ exports.createAuthUser = functions.region("europe-west1").https.onCall(async (da
   } catch (e) {
     const code = e.code || e.errorInfo?.code || "";
     if (code === "auth/email-already-in-use" || code === "auth/email-already-exists") {
-      throw new functions.https.HttpsError("already-exists", "E-Mail bereits registriert. Nutzen Sie „Passwort setzen“ bei bestehendem Mitglied.");
+      throw new functions.https.HttpsError("already-exists", "E-Mail bereits registriert. Nutzen Sie âPasswort setzenâ bei bestehendem Mitglied.");
     }
     throw new functions.https.HttpsError("internal", e.message);
   }
@@ -182,7 +182,7 @@ exports.updateMitarbeiterPassword = functions.region("europe-west1").https.onCal
   ]);
   const isInCompany = userInCompany.exists || !mitarbeiterSnap.empty;
   if (!isInCompany) {
-    throw new functions.https.HttpsError("permission-denied", "Nutzer gehört nicht zu dieser Firma – Passwort-Änderung nicht erlaubt.");
+    throw new functions.https.HttpsError("permission-denied", "Nutzer gehÃ¶rt nicht zu dieser Firma â Passwort-Ãnderung nicht erlaubt.");
   }
   try {
     await admin.auth().updateUser(targetUid, { password: newPassword });
@@ -212,7 +212,7 @@ function toPlainObject(obj) {
 const ROOT_DOMAIN = "rettbase.de";
 
 /** Login-Lookup ohne Auth. Rate-Limit wie kundeExists. Ersetzt direkten Firestore-Zugriff durch Client
- *  (mitarbeiter war allow read: if true – DSGVO/Sicherheitsrisiko). */
+ *  (mitarbeiter war allow read: if true â DSGVO/Sicherheitsrisiko). */
 exports.resolveLoginInfo = functions.region("europe-west1").https.onCall(async (data, context) => {
   _checkKundeExistsRateLimit(context);
   const { companyId: companyIdParam, emailOrPersonalnummer } = data || {};
@@ -265,7 +265,7 @@ exports.resolveLoginInfo = functions.region("europe-west1").https.onCall(async (
   const isPseudo = realEmail && realEmail.endsWith("." + ROOT_DOMAIN);
   let email;
   // PseudoEmail hat Vorrang: Firebase Auth wurde damit erstellt; echte E-Mail im Profil
-  // ändert die Auth-Identity nicht – Login muss immer mit pseudoEmail erfolgen
+  // Ã¤ndert die Auth-Identity nicht â Login muss immer mit pseudoEmail erfolgen
   if (docPseudo) {
     email = docPseudo;
   } else if (realEmail && !isPseudo) {
@@ -277,7 +277,7 @@ exports.resolveLoginInfo = functions.region("europe-west1").https.onCall(async (
   return { email, mitarbeiterDocPath: path, effectiveCompanyId: companyId };
 });
 
-/** Prüft ob eine Kunden-ID existiert (ohne Auth, für Eingabe beim Start).
+/** PrÃ¼ft ob eine Kunden-ID existiert (ohne Auth, fÃ¼r Eingabe beim Start).
  *  Sucht kundenId + subdomain zusammen (keg hat subdomain kkg, evtl. kein kundenId),
  *  bevorzugt Doc mit anderer ID (Umbenennung), dann per Document-ID.
  *  Rate-Limit: max 5 Aufrufe/Minute pro Client (Schutz vor Enumerations-Angriffen). */
@@ -352,7 +352,7 @@ function _pickBestDocId(docs, searchId) {
   return docs[0].id;
 }
 
-/** Prüft ob der Aufrufer Superadmin ist (für loadKunden, Kundenverwaltung). */
+/** PrÃ¼ft ob der Aufrufer Superadmin ist (fÃ¼r loadKunden, Kundenverwaltung). */
 async function _requireSuperadminRole(context) {
   if (!context?.auth?.uid) {
     throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
@@ -368,7 +368,7 @@ async function _requireSuperadminRole(context) {
   throw new functions.https.HttpsError("permission-denied", "Nur Superadmin kann die Kundenverwaltung nutzen.");
 }
 
-/** Lädt alle Kunden (Firmen) – nur für Superadmin. Projekt: rett-fe0fa, Collection: kunden. */
+/** LÃ¤dt alle Kunden (Firmen) â nur fÃ¼r Superadmin. Projekt: rett-fe0fa, Collection: kunden. */
 exports.loadKunden = functions.region("europe-west1").https.onCall(async (data, context) => {
   const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || "(unknown)";
   console.log("loadKunden: Projekt=", projectId, "Collection=kunden");
@@ -410,7 +410,7 @@ function sanitizeForFirestore(obj) {
   return out;
 }
 
-/** Schreibt Mitarbeiter-Dokument (umgeht Firestore-Regeln für Web-App). Nur Admin/Superadmin/LeiterSSD. */
+/** Schreibt Mitarbeiter-Dokument (umgeht Firestore-Regeln fÃ¼r Web-App). Nur Admin/Superadmin/LeiterSSD. */
 exports.saveMitarbeiterDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
   try {
     if (!context?.auth) {
@@ -434,9 +434,9 @@ exports.saveMitarbeiterDoc = functions.region("europe-west1").https.onCall(async
   }
 });
 
-/** Stellt sicher, dass users-Dokument existiert (für Firestore-Zugriffsregeln nach Login).
- *  Prüft, ob Aufrufer in mitarbeiter der Firma ist; erstellt users-Doc falls nötig.
- *  Löst kundenId → docId auf (z.B. kkg-luenen → keg-luenen). */
+/** Stellt sicher, dass users-Dokument existiert (fÃ¼r Firestore-Zugriffsregeln nach Login).
+ *  PrÃ¼ft, ob Aufrufer in mitarbeiter der Firma ist; erstellt users-Doc falls nÃ¶tig.
+ *  LÃ¶st kundenId â docId auf (z.B. kkg-luenen â keg-luenen). */
 exports.ensureUsersDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
   if (!context?.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Benutzer muss authentifiziert sein");
@@ -488,7 +488,7 @@ exports.ensureUsersDoc = functions.region("europe-west1").https.onCall(async (da
   return { success: true };
 });
 
-/** Setzt Custom Claims für Storage-Regeln (companyId / superadmin). Nur bei Änderung, um Token-Invalidierung zu vermeiden. */
+/** Setzt Custom Claims fÃ¼r Storage-Regeln (companyId / superadmin). Nur bei Ãnderung, um Token-Invalidierung zu vermeiden. */
 async function _setStorageClaims(uid, companyId, isSuperadmin) {
   try {
     const user = await admin.auth().getUser(uid);
@@ -509,7 +509,7 @@ async function _setStorageClaims(uid, companyId, isSuperadmin) {
   }
 }
 
-/** Schreibt users-Dokument (umgeht Firestore-Regeln für Web-App). Nur Admin/Superadmin/LeiterSSD. */
+/** Schreibt users-Dokument (umgeht Firestore-Regeln fÃ¼r Web-App). Nur Admin/Superadmin/LeiterSSD. */
 exports.saveUsersDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
   try {
     if (!context?.auth) {
@@ -532,7 +532,7 @@ exports.saveUsersDoc = functions.region("europe-west1").https.onCall(async (data
   }
 });
 
-/** Callable: Prüft ob FCM-Token für aktuellen Nutzer in Firestore ist (für Debug/Status-Anzeige). */
+/** Callable: PrÃ¼ft ob FCM-Token fÃ¼r aktuellen Nutzer in Firestore ist (fÃ¼r Debug/Status-Anzeige). */
 exports.getFcmTokenStatus = functions.region("europe-west1").https.onCall(async (data, context) => {
   if (!context?.auth?.uid) {
     throw new functions.https.HttpsError("unauthenticated", "Nicht angemeldet");
@@ -567,7 +567,7 @@ async function getFcmToken(companyId, uid) {
   return token;
 }
 
-/** Summiert ungelesene Nachrichten über alle Chats eines Nutzers (inkl. neuer Nachricht). */
+/** Summiert ungelesene Nachrichten Ã¼ber alle Chats eines Nutzers (inkl. neuer Nachricht). */
 async function getTotalUnreadForUser(companyId, uid, currentChatId) {
   try {
     const chatsSnap = await admin.firestore()
@@ -588,9 +588,9 @@ async function getTotalUnreadForUser(companyId, uid, currentChatId) {
   }
 }
 
-async function sendChatPush(token, title, body, companyId, chatId, extraData = {}) {
+async function sendChatPush(token, title, body, companyId, chatId, extraData = {}, badgeCount = 1) {
   if (!PUSH_ENABLED || !token) return;
-  const data = { type: "chat", companyId, chatId, badge: "1", ...extraData };
+  const data = { type: "chat", companyId, chatId, badge: String(badgeCount), ...extraData };
   await admin.messaging().send({
     token,
     notification: { title, body },
@@ -601,6 +601,7 @@ async function sendChatPush(token, title, body, companyId, chatId, extraData = {
         channelId: "chat_messages",
         defaultSound: true,
         defaultVibrateTimings: true,
+        notificationCount: badgeCount,
       },
     },
     apns: {
@@ -608,7 +609,9 @@ async function sendChatPush(token, title, body, companyId, chatId, extraData = {
       payload: {
         aps: {
           alert: { title, body },
+          badge: badgeCount,
           sound: "default",
+          "content-available": 1,
         },
       },
       fcmOptions: {},
@@ -620,7 +623,30 @@ async function sendChatPush(token, title, body, companyId, chatId, extraData = {
   });
 }
 
-/** Firestore-Trigger: Bei neuer Chat-Nachricht → Push an Empfänger senden. */
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX: Hilfsfunktion zum Löschen eines abgelaufenen FCM-Tokens
+// Nutzt KORREKTEN Firestore-Pfad: kunden/{companyId}/users/{uid}
+// ─────────────────────────────────────────────────────────────────────────────
+async function _deleteStaleToken(companyId, uid) {
+  try {
+    await admin.firestore()
+      .collection("kunden").doc(companyId)
+      .collection("users").doc(uid)
+      .update({ fcmToken: admin.firestore.FieldValue.delete() });
+    console.info(`FCM-Token-Cleanup: Token für uid=${uid} in companyId=${companyId} gelöscht`);
+  } catch (e) {
+    console.warn(`FCM-Token-Cleanup: Fehler bei uid=${uid}:`, e.message);
+  }
+}
+
+function _isStaleTokenError(code) {
+  return (
+    code.includes("registration-token-not-registered") ||
+    code.includes("invalid-registration-token")
+  );
+}
+
+/** Firestore-Trigger: Bei neuer Chat-Nachricht â Push an EmpfÃ¤nger senden. */
 exports.onNewChatMessage = functions.region("europe-west1").firestore
   .document("kunden/{companyId}/chats/{chatId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
@@ -655,12 +681,12 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
             : [];
           const chatIdNorm = String(chatId).trim();
           if (mutedIds.includes(chatIdNorm)) {
-            console.log("onNewChatMessage: Chat " + chatIdNorm + " stumm für uid=" + uid + ", Push übersprungen");
+            console.log("onNewChatMessage: Chat " + chatIdNorm + " stumm fÃ¼r uid=" + uid + ", Push Ã¼bersprungen");
             continue;
           }
           const token = await getFcmToken(companyId, uid);
           if (!token) {
-            console.log("onNewChatMessage: Kein FCM-Token für uid=" + uid);
+            console.log("onNewChatMessage: Kein FCM-Token fÃ¼r uid=" + uid);
             continue;
           }
           const unread = (chat && chat.unreadCount && chat.unreadCount[uid]) || 0;
@@ -716,7 +742,7 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
           const ecode = eSend.errorInfo?.code || eSend.code || "";
           if (ecode.includes("registration-token-not-registered") || ecode.includes("invalid-registration-token")) {
             try {
-              await admin.firestore().collection("users").doc(uid).update({ fcmToken: admin.firestore.FieldValue.delete() });
+              await _deleteStaleToken(companyId, uid);
               console.info("onNewGroupChat: Abgelaufener FCM-Token f\u00fcr", uid, "gel\u00f6scht");
             } catch (_) {}
           } else {
@@ -729,8 +755,8 @@ exports.onNewChatMessage = functions.region("europe-west1").firestore
           if (code.includes("registration-token-not-registered") || code.includes("invalid-registration-token")) {
             // Abgelaufener Token: aus Firestore entfernen
             try {
-              await admin.firestore().collection("users").doc(uid).update({ fcmToken: admin.firestore.FieldValue.delete() });
-              console.info("onNewChatMessage: Abgelaufener FCM-Token für", uid, "gelöscht");
+              await _deleteStaleToken(companyId, uid);
+              console.info("onNewChatMessage: Abgelaufener FCM-Token fÃ¼r", uid, "gelÃ¶scht");
             } catch (_) {}
           } else {
             console.warn("onNewChatMessage: FCM an", uid, "fehlgeschlagen:", e.message);
@@ -759,14 +785,29 @@ exports.onNewGroupChat = functions.region("europe-west1").firestore
     try {
       for (const uid of recipients) {
         try {
-          const token = await getFcmToken(companyId, uid);
-          await sendChatPush(
-            token,
-            "Zur Gruppe hinzugefügt",
-            `Du wurdest zu "${groupName}" hinzugefügt.`,
-            companyId,
-            chatId,
-          );
+          const prefsRef = admin.firestore()
+              .collection("kunden").doc(companyId).collection("chatPrefs").doc(uid);
+            const prefsSnap = await prefsRef.get();
+            const rawMuted = prefsSnap.exists ? (prefsSnap.data()?.mutedChatIds) : null;
+            const mutedIds = Array.isArray(rawMuted)
+              ? rawMuted.map((id) => String(id).trim()).filter(Boolean)
+              : [];
+            if (mutedIds.includes(String(chatId).trim())) {
+              console.log(`onNewGroupChat: Gruppe ${chatId} stumm für uid=${uid}, Push übersprungen`);
+              continue;
+            }
+            const token = await getFcmToken(companyId, uid);
+            if (!token) { console.log(`onNewGroupChat: Kein FCM-Token für uid=${uid}`); continue; }
+            const totalUnread = await getTotalUnreadForUser(companyId, uid, chatId);
+            await sendChatPush(
+              token,
+              "Zur Gruppe hinzugefügt",
+              `Du wurdest zu "${groupName}" hinzugefügt.`,
+              companyId,
+              chatId,
+              {},
+              totalUnread
+            )
         } catch (e) {
           console.warn("onNewGroupChat: FCM an", uid, "fehlgeschlagen:", e.message);
         }
@@ -776,7 +817,7 @@ exports.onNewGroupChat = functions.region("europe-west1").firestore
     }
   });
 
-/** Vollständige Löschung eines Mitglieds (DSGVO). Entfernt alle personenbezogenen Daten:
+/** VollstÃ¤ndige LÃ¶schung eines Mitglieds (DSGVO). Entfernt alle personenbezogenen Daten:
  *  - Firebase Auth Nutzer
  *  - Firestore: mitarbeiter, users, userTiles, fcmTokens
  *  - Storage: Profil-Fotos
@@ -873,7 +914,7 @@ async function _deleteUserData(db, companyId, uid, _email) {
   await Promise.all((files || []).map((f) => f.delete().catch(() => {})));
 }
 
-/** Erstellt neues Mitarbeiter-Dokument (für Neuanlage). Nur Admin/Superadmin/LeiterSSD. */
+/** Erstellt neues Mitarbeiter-Dokument (fÃ¼r Neuanlage). Nur Admin/Superadmin/LeiterSSD. */
 exports.createMitarbeiterDoc = functions.region("europe-west1").https.onCall(async (data, context) => {
   try {
     if (!context?.auth) {
@@ -900,7 +941,7 @@ exports.createMitarbeiterDoc = functions.region("europe-west1").https.onCall(asy
   }
 });
 
-/** Versendet externe E-Mails (z.B. aus E-Mail-Modul, Schnittstellenmeldung, Übergriffsmeldung).
+/** Versendet externe E-Mails (z.B. aus E-Mail-Modul, Schnittstellenmeldung, Ãbergriffsmeldung).
  *  SMTP: .env (SMTP_USER, SMTP_HOST, SMTP_PORT, SMTP_SECURE) + Secret SMTP_PASS.
  *  Siehe .env.example. "SMTP_PASS" = feste Name des Secrets (nicht ersetzen!). */
 exports.sendEmail = functions
@@ -917,7 +958,7 @@ exports.sendEmail = functions
     const toTrim = String(to).trim();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(toTrim)) {
-      throw new functions.https.HttpsError("invalid-argument", "Ungültige E-Mail-Adresse");
+      throw new functions.https.HttpsError("invalid-argument", "UngÃ¼ltige E-Mail-Adresse");
     }
 
     const user = process.env.SMTP_USER;
@@ -927,10 +968,10 @@ exports.sendEmail = functions
     const secure = process.env.SMTP_SECURE === "true";
 
     if (!user || !pass) {
-      console.error("sendEmail: SMTP nicht konfiguriert. .env mit SMTP_USER anlegen, firebase functions:secrets:set SMTP_PASS ausführen.");
+      console.error("sendEmail: SMTP nicht konfiguriert. .env mit SMTP_USER anlegen, firebase functions:secrets:set SMTP_PASS ausfÃ¼hren.");
       throw new functions.https.HttpsError(
         "failed-precondition",
-        "E-Mail-Versand ist nicht konfiguriert. Bitte .env mit SMTP_USER anlegen und firebase functions:secrets:set SMTP_PASS ausführen."
+        "E-Mail-Versand ist nicht konfiguriert. Bitte .env mit SMTP_USER anlegen und firebase functions:secrets:set SMTP_PASS ausfÃ¼hren."
       );
     }
 
@@ -939,7 +980,7 @@ exports.sendEmail = functions
 
     let htmlBody = String(body);
     if (messageId && String(messageId).trim()) {
-      htmlBody += `<p style="margin-top:24px;font-size:11px;color:#888;">──<br>Gesendet über RettBase. Nur Antworten auf diese E-Mail sind möglich. Direktmails an mail@rettbase.de werden nicht bearbeitet.</p>`;
+      htmlBody += `<p style="margin-top:24px;font-size:11px;color:#888;">ââ<br>Gesendet Ã¼ber RettBase. Nur Antworten auf diese E-Mail sind mÃ¶glich. Direktmails an mail@rettbase.de werden nicht bearbeitet.</p>`;
     }
 
     const transporter = nodemailer.createTransport({
@@ -967,10 +1008,10 @@ exports.sendEmail = functions
     }
   });
 
-/** Pollt IMAP-Inbox für eingehende Antworten auf externe E-Mails.
+/** Pollt IMAP-Inbox fÃ¼r eingehende Antworten auf externe E-Mails.
  *  Sucht nach: (1) mail+companyId_emailId@rettbase.de in To/CC oder
  *  (2) rettbase.companyId.emailId@rettbase.de in In-Reply-To/References (Message-ID).
- *  Läuft jede Minute. IMAP: IMAP_HOST, IMAP_PORT, SMTP_USER, SMTP_PASS. */
+ *  LÃ¤uft jede Minute. IMAP: IMAP_HOST, IMAP_PORT, SMTP_USER, SMTP_PASS. */
 const RETTBASE_DOMAIN = "rettbase.de";
 const MAIL_PLUS_REGEX = new RegExp(`mail\\+([a-zA-Z0-9_-]+)_([a-zA-Z0-9]+)@${RETTBASE_DOMAIN.replace(".", "\\.")}`, "i");
 const MESSAGE_ID_REGEX = new RegExp(`rettbase\\.([a-zA-Z0-9_-]+)\\.([a-zA-Z0-9]+)@${RETTBASE_DOMAIN.replace(".", "\\.")}`, "i");
@@ -985,7 +1026,7 @@ exports.pollInboundEmail = functions
     const host = process.env.IMAP_HOST || "imap.strato.de";
     const port = parseInt(process.env.IMAP_PORT || "993", 10);
     if (!user || !pass) {
-      console.warn("pollInboundEmail: SMTP_USER/SMTP_PASS nicht gesetzt, überspringe.");
+      console.warn("pollInboundEmail: SMTP_USER/SMTP_PASS nicht gesetzt, Ã¼berspringe.");
       return null;
     }
     const client = new ImapFlow({
