@@ -345,8 +345,8 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 
 ### Login nur mit Mitarbeiterverwaltung
 - **LoginService:** E-Mail-Login wirft Exception, wenn Nutzer nicht in `mitarbeiter` oder deaktiviert
-- **AuthDataService:** Kein Mitarb.-Treffer → `role: 'guest'` statt `role: 'user'`
-- **Dashboard:** Bei `role == 'guest'` und `uid != null` → Sign-out, Weiterleitung zu Login
+- **AuthDataService:** Kein Mitarb.-Treffer → `AuthNotAuthorizedException` (kein Guest-Login)
+- **Dashboard:** Bei `AuthNotAuthorizedException` → Sign-out, Weiterleitung zu Login
 - **Superadmin 112@admin.rettbase.de** weiterhin ohne Mitarb.-Eintrag möglich
 
 ### Passwort vergessen

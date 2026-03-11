@@ -227,6 +227,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             initialChatId: chat.$2,
             onBack: _goToHome,
             hideAppBar: true,
+            userRole: _userRole,
             onChatOpened: (chatId, unreadInChat) {
               _chatUnreadNotifier.value = _chatUnreadNotifier.value - unreadInChat;
               if (_chatUnreadNotifier.value < 0) _chatUnreadNotifier.value = 0;
@@ -295,19 +296,21 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         }
         await user.getIdToken(true);
       } catch (_) {}
-      final authData = await _authDataService.getAuthData(
-        user.uid,
-        user.email ?? '',
-        widget.companyId,
-      );
-      debugPrint('RettBase Dashboard: authData role=${authData.role} companyId=${authData.companyId} displayName=${authData.displayName} vorname=${authData.vorname}');
-      if (authData.role == 'guest' && authData.uid != null) {
+      AuthData authData;
+      try {
+        authData = await _authDataService.getAuthData(
+          user.uid,
+          user.email ?? '',
+          widget.companyId,
+        );
+      } on AuthNotAuthorizedException catch (_) {
         debugPrint('RettBase Dashboard: Nutzer nicht in Mitarbeiterverwaltung -> Abmelden');
         await _authService.logout();
         if (!mounted) return;
         _goToLogin();
         return;
       }
+      debugPrint('RettBase Dashboard: authData role=${authData.role} companyId=${authData.companyId} displayName=${authData.displayName} vorname=${authData.vorname}');
       final effectiveCompanyId = authData.companyId.trim().isNotEmpty ? authData.companyId : widget.companyId;
       // Token im Hintergrund speichern – darf Dashboard-Lade nicht blockieren (getToken kann auf Web hängen)
       unawaited(PushNotificationService().saveToken(effectiveCompanyId, user.uid).timeout(const Duration(seconds: 30), onTimeout: () {}));
@@ -700,6 +703,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           title: mod.label,
           onBack: onBack,
           hideAppBar: true,
+          userRole: _userRole,
           onChatOpened: (chatId, unreadInChat) {
             _chatUnreadNotifier.value = _chatUnreadNotifier.value - unreadInChat;
             if (_chatUnreadNotifier.value < 0) _chatUnreadNotifier.value = 0;

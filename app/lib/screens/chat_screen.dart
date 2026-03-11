@@ -8,7 +8,6 @@ import '../services/chat_offline_queue.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_audio/just_audio.dart';
@@ -16,6 +15,9 @@ import 'package:record/record.dart';
 import '../theme/app_theme.dart';
 import '../models/chat.dart';
 import '../services/chat_service.dart';
+import '../services/profile_service.dart';
+import 'group_info_screen.dart';
+import '../utils/chat_permissions.dart';
 import '../utils/visibility_refresh_stub.dart'
     if (dart.library.html) '../utils/visibility_refresh_web.dart' as visibility_refresh;
 
@@ -26,8 +28,9 @@ class ChatScreen extends StatefulWidget {
   final String? title;
   final VoidCallback? onBack;
   final bool hideAppBar;
+  final String? userRole;
 
-  /// Wird beim ÃÂÃÂffnen eines Chats aufgerufen ÃÂ¢ÃÂÃÂ Badge sofort lokal zurÃÂ¼cksetzen.
+  /// Wird beim Ãffnen eines Chats aufgerufen – Badge sofort lokal zurücksetzen.
   final void Function(String chatId, int unreadInChat)? onChatOpened;
 
   const ChatScreen({
@@ -37,6 +40,7 @@ class ChatScreen extends StatefulWidget {
     this.title,
     this.onBack,
     this.hideAppBar = false,
+    this.userRole,
     this.onChatOpened,
   });
 
@@ -46,6 +50,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _chatService = ChatService();
+  final _profileService = ProfileService();
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
 
@@ -88,7 +93,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// Ausstehende Nachrichten (Offline-Queue) fÃÂ¼r den aktuellen Chat.
   final List<Map<String, dynamic>> _pendingMessages = [];
 
-  /// Auswahlmodus fÃÂ¼r Weiterleiten: ausgewÃÂ¤hlte Nachrichten.
+  /// Auswahlmodus fÃÂ¼r Weiterleiten: ausgewählte Nachrichten.
   final Set<String> _selectedMessageIds = {};
 
   /// Sprachnachricht: Aufnahme-Status.
@@ -96,6 +101,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isRecording = false;
   String? _recordingPath;
   DateTime? _recordingStartTime;
+
+  bool get _hasLeftGroup =>
+      _selectedChat?.type == 'group' &&
+      (_selectedChat?.leftBy.contains(_chatService.userId) ?? false);
+
+  bool get _canManageGroups => ChatPermissions.canManageGroups(widget.userRole);
 
   /// Sprachnachricht: Wiedergabe (ein Player fÃÂ¼r alle Nachrichten).
   final AudioPlayer _voicePlayer = AudioPlayer();
@@ -317,22 +328,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
 
-  /// LÃ¤dt Profilbild eines Nutzers (gecacht).
+  /// Lädt Profilbild eines Nutzers (gecacht). Nutzt ProfileService wie der Profil-Screen.
   Future<void> _loadProfileImage(String uid) async {
     if (_profileImageCache.containsKey(uid)) return;
     _profileImageCache[uid] = null;
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('kunden')
-          .doc(widget.companyId)
-          .collection('mitarbeiter')
-          .where('uid', isEqualTo: uid)
-          .limit(1)
-          .get();
-      if (snap.docs.isNotEmpty) {
-        final d = snap.docs.first.data();
+      final profile = await _profileService.loadProfile(
+        widget.companyId,
+        uid,
+        '', // E-Mail optional; Suche erfolgt über uid
+      );
+      if (profile != null && mounted) {
+        final d = profile.data;
         final url = (d['fotoUrl'] ?? d['photoUrl'] ?? d['profilfoto'])?.toString().trim();
-        if (mounted) setState(() => _profileImageCache[uid] = (url != null && url.isNotEmpty) ? url : null);
+        setState(() => _profileImageCache[uid] = (url != null && url.isNotEmpty) ? url : null);
       }
     } catch (_) {}
   }
@@ -397,71 +406,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _unsubscribeFromMessages();
   }
 
-  Future<void> _pickAndUploadGroupAvatar(ChatModel chat) async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Aus Galerie'),
-              onTap: () => Navigator.pop(ctx, 'gallery'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.folder_outlined),
-              title: const Text('Aus Datei'),
-              onTap: () => Navigator.pop(ctx, 'file'),
-            ),
-          ],
+  void _openGroupInfo(ChatModel chat) {
+    if (chat.type != 'group') return;
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => GroupInfoScreen(
+          companyId: widget.companyId,
+          chat: chat,
+          initialMuted: _mutedChatIds.contains(chat.id),
+          userRole: widget.userRole,
         ),
       ),
     );
-    if (choice == null || !mounted) return;
-    Uint8List? bytes;
-    String? filename;
-    if (choice == 'gallery') {
-      final picker = ImagePicker();
-      final x = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 600,
-        maxHeight: 800,
-        imageQuality: 85,
-      );
-      if (x != null) {
-        bytes = await x.readAsBytes();
-        filename = x.name;
-      }
-    } else if (choice == 'file') {
-      const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic', 'ico'];
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ext,
-        allowMultiple: false,
-        withData: true,
-      );
-      if (result != null && result.files.single.size > 0) {
-        final f = result.files.single;
-        bytes = f.bytes;
-        filename = f.name;
-      }
-    }
-    if (bytes == null || bytes.isEmpty || filename == null || filename.isEmpty || !mounted) return;
-    try {
-      await _chatService.uploadGroupAvatar(widget.companyId, chat.id, bytes, filename);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gruppenavatar wurde aktualisiert.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Hochladen: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
   }
 
   void _showChatContextMenu(ChatModel chat) {
@@ -498,18 +455,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 }
               },
             ),
-            if (chat.type == 'group')
-              ListTile(
-                leading: const Icon(Icons.image_outlined),
-                title: const Text('Gruppenavatar ändern'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickAndUploadGroupAvatar(chat);
-                },
-              ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: Colors.red.shade400),
-              title: Text('Chat lÃÂ¶schen', style: TextStyle(color: Colors.red.shade400)),
+              title: Text('Chat löschen', style: TextStyle(color: Colors.red.shade400)),
               onTap: () {
                 Navigator.pop(ctx);
                 _confirmDeleteChat(chat);
@@ -550,7 +498,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ),
             ListTile(
               leading: Icon(Icons.person_remove_outlined, color: Colors.red.shade400),
-              title: Text('FÃÂ¼r mich lÃÂ¶schen', style: TextStyle(color: Colors.red.shade400)),
+              title: Text('Für mich löschen', style: TextStyle(color: Colors.red.shade400)),
               onTap: () {
                 Navigator.pop(ctx);
                 _confirmDeleteMessage(
@@ -563,7 +511,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             if (isRealMessage && isSent && !isRead)
               ListTile(
                 leading: Icon(Icons.delete_forever, color: Colors.red.shade400),
-                title: Text('FÃÂ¼r alle lÃÂ¶schen', style: TextStyle(color: Colors.red.shade400)),
+                title: Text('Für alle löschen', style: TextStyle(color: Colors.red.shade400)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _confirmDeleteMessage(
@@ -655,11 +603,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(forEveryone ? 'FÃÂ¼r alle lÃÂ¶schen?' : 'FÃÂ¼r mich lÃÂ¶schen?'),
+        title: Text(forEveryone ? 'Für alle löschen?' : 'Für mich löschen?'),
         content: Text(
           forEveryone
-              ? 'Die Nachricht wird fÃÂ¼r alle Teilnehmer entfernt. Dies kann nicht rÃÂ¼ckgÃÂ¤ngig gemacht werden.'
-              : 'Die Nachricht wird nur fÃÂ¼r dich entfernt.',
+              ? 'Die Nachricht wird für alle Teilnehmer entfernt. Dies kann nicht rückgängig gemacht werden.'
+              : 'Die Nachricht wird nur für dich entfernt.',
         ),
         actions: [
           TextButton(
@@ -668,7 +616,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('LÃÂ¶schen', style: TextStyle(color: Colors.red.shade400)),
+            child: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
           ),
         ],
       ),
@@ -702,8 +650,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Chat lÃÂ¶schen?'),
-        content: const Text('Der Chat wird nur fÃÂ¼r dich entfernt.'),
+        title: const Text('Chat löschen?'),
+        content: const Text('Der Chat wird nur für dich entfernt.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -711,7 +659,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('LÃÂ¶schen', style: TextStyle(color: Colors.red.shade400)),
+            child: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
           ),
         ],
       ),
@@ -744,15 +692,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   /// Kombiniert ältere Nachrichten, Firestore-Nachrichten und ausstehende (Offline-Queue), sortiert nach Zeit.
+  /// Wenn Nutzer Gruppe verlassen hat: nur Nachrichten bis leftAt anzeigen.
   List<({ChatMessage? message, Map<String, dynamic>? pending})> _getDisplayMessages() {
+    final uid = _chatService.userId;
+    final leftAt = _selectedChat?.type == 'group' && uid != null
+        ? _selectedChat!.leftAt[uid]
+        : null;
+
+    bool includeMessage(ChatMessage? m, Map<String, dynamic>? p) {
+      if (leftAt == null) return true;
+      final createdAt = m?.createdAt ?? (p?['createdAt'] as DateTime?);
+      if (createdAt == null) return false;
+      return !createdAt.isAfter(leftAt);
+    }
+
     final pendingForChat = _pendingMessages
         .where((p) => p['chatId'] == _selectedChatId)
         .map((p) => (message: null as ChatMessage?, pending: Map<String, dynamic>.from(p)))
+        .where((x) => includeMessage(null, x.pending))
         .toList();
     final fromFirestore = [
       ..._olderMessages.map((m) => (message: m, pending: null as Map<String, dynamic>?)),
       ..._messages.map((m) => (message: m, pending: null as Map<String, dynamic>?)),
-    ];
+    ].where((x) => includeMessage(x.message, null)).toList();
     final combined = [...fromFirestore, ...pendingForChat];
     combined.sort((a, b) {
       final at = a.message?.createdAt ?? (a.pending!['createdAt'] as DateTime);
@@ -894,7 +856,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     if (_selectedGroupMembers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte mindestens einen Teilnehmer auswÃÂ¤hlen.')),
+        const SnackBar(content: Text('Bitte mindestens einen Teilnehmer auswählen.')),
       );
       return;
     }
@@ -933,7 +895,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty && _pendingImages.isEmpty) return;
-    if (_selectedChatId == null) return;
+    if (_selectedChatId == null || _hasLeftGroup) return;
 
     _messageController.clear();
     final images = List<Uint8List>.from(_pendingImages);
@@ -1058,7 +1020,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (_selectedChatId == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Bitte zuerst einen Chat auswÃÂ¤hlen.')),
+            const SnackBar(content: Text('Bitte zuerst einen Chat auswählen.')),
           );
         }
         return;
@@ -1115,9 +1077,110 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ AppBar ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
   PreferredSizeWidget _buildAppBar(bool isNarrow, VoidCallback onBack) {
+    if (isNarrow && _selectedChatId != null && _selectedChat != null) {
+      final chat = _selectedChat!;
+      final isGroup = chat.type == 'group';
+      final groupImageUrl = isGroup ? chat.groupImageUrl : null;
+      String? photoUrl;
+      if (!isGroup) {
+        final otherUid = chat.participants
+            .firstWhere((p) => p != _chatService.userId, orElse: () => '');
+        if (otherUid.isNotEmpty) {
+          Future.microtask(() => _loadProfileImage(otherUid));
+          photoUrl = _profileImageCache[otherUid];
+        }
+      }
+      final avatarUrl = groupImageUrl ?? photoUrl;
+      final title = _chatDisplayName(chat);
+      final titleWidget = Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              gradient: (avatarUrl == null || avatarUrl.isEmpty)
+                  ? LinearGradient(
+                      colors: [
+                        const Color(0xFF388BFD).withOpacity(0.8),
+                        const Color(0xFF2F81F7),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              shape: BoxShape.circle,
+            ),
+            clipBehavior: Clip.antiAlias,
+            alignment: Alignment.center,
+            child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                ? Image.network(
+                    avatarUrl,
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Text(
+                      _getInitials(title),
+                      style: const TextStyle(
+                        color: Color(0xFF161B22),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                : Text(
+                    _getInitials(title),
+                    style: const TextStyle(
+                      color: Color(0xFF161B22),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: isGroup
+                ? GestureDetector(
+                    onTap: () => _openGroupInfo(chat),
+                    behavior: HitTestBehavior.opaque,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Color(0xFF2F81F7),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                : Text(
+                    title,
+                    style: const TextStyle(
+                      color: Color(0xFF2F81F7),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+          ),
+        ],
+      );
+      return AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _deselectChat,
+          color: const Color(0xFF2F81F7),
+        ),
+        title: titleWidget,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF2F81F7),
+        elevation: 1,
+        scrolledUnderElevation: 1,
+      );
+    }
     if (isNarrow && _selectedChatId != null) {
-      // Chat-Titel kommt aus _selectedChat (gecacht) ÃÂ¢ÃÂÃÂ kein separater Stream
-      final title = _selectedChat != null ? _chatDisplayName(_selectedChat!) : 'Chat';
       return AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -1125,9 +1188,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           color: const Color(0xFF2F81F7),
         ),
         title: Text(
-          title,
+          'Chat',
           style: const TextStyle(
-            color: const Color(0xFF2F81F7),
+            color: Color(0xFF2F81F7),
             fontWeight: FontWeight.w600,
             fontSize: 18,
           ),
@@ -1244,8 +1307,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 _buildIconAction(Icons.edit_square, 'Neuer Chat', _openNewChat),
-                const SizedBox(width: 6),
-                _buildIconAction(Icons.group_add_outlined, 'Neue Gruppe', _openNewGroup),
+                if (_canManageGroups) ...[
+                  const SizedBox(width: 6),
+                  _buildIconAction(Icons.group_add_outlined, 'Neue Gruppe', _openNewGroup),
+                ],
                 const SizedBox(width: 2),
               ],
             ),
@@ -1339,8 +1404,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 builder: (_) => AlertDialog(
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16)),
-                                  title: const Text('Chat lÃÂ¶schen?'),
-                                  content: const Text('Der Chat wird nur fÃÂ¼r dich entfernt.'),
+                                  title: const Text('Chat löschen?'),
+                                  content: const Text('Der Chat wird nur für dich entfernt.'),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context, false),
@@ -1348,7 +1413,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     ),
                                     TextButton(
                                       onPressed: () => Navigator.pop(context, true),
-                                      child: Text('LÃÂ¶schen',
+                                      child: Text('Löschen',
                                           style: TextStyle(color: Colors.red.shade400)),
                                     ),
                                   ],
@@ -1592,7 +1657,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 22),
             Text(
-              'WÃÂ¤hle einen Chat aus',
+              'Wähle einen Chat aus',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -1622,17 +1687,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: _openNewGroup,
-                  icon: const Icon(Icons.group_add_outlined, size: 17),
-                  label: const Text('Neue Gruppe'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    side: BorderSide(color: const Color(0xFF2F81F7).withOpacity(0.35)),
+                if (_canManageGroups)
+                  OutlinedButton.icon(
+                    onPressed: _openNewGroup,
+                    icon: const Icon(Icons.group_add_outlined, size: 17),
+                    label: const Text('Neue Gruppe'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: const Color(0xFF2F81F7).withOpacity(0.35)),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -1746,38 +1812,53 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               ),
                             ),
                     );
-                    if (isGroup) {
-                      return GestureDetector(
-                        onTap: () => _pickAndUploadGroupAvatar(chat),
-                        child: avatar,
-                      );
-                    }
                     return avatar;
                   },
                 ),
                 const SizedBox(width: 13),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _chatDisplayName(_selectedChat!),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: const Color(0xFFE6EDF3),
-                          letterSpacing: -0.2,
+                  child: _selectedChat!.type == 'group'
+                      ? GestureDetector(
+                          onTap: () => _openGroupInfo(_selectedChat!),
+                          behavior: HitTestBehavior.opaque,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _chatDisplayName(_selectedChat!),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: const Color(0xFFE6EDF3),
+                                  letterSpacing: -0.2,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _chatDisplayName(_selectedChat!),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                                color: const Color(0xFFE6EDF3),
+                                letterSpacing: -0.2,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
           ),
-        // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Nachrichten ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
+        //Â¢ÃÂÃÂÃÂ¢ÃÂÃÂ Nachrichten ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
         Expanded(
           child: Stack(
             children: [
@@ -2172,7 +2253,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     child: Row(
                       children: [
                         Text(
-                          '${_selectedMessageIds.length} ausgewÃÂ¤hlt',
+                          '${_selectedMessageIds.length} ausgewählt',
                           style: TextStyle(fontSize: 14, color: const Color(0xFF8B949E)),
                         ),
                         const Spacer(),
@@ -2194,7 +2275,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ],
                     ),
                   ),
-                if (_pendingImages.isNotEmpty)
+                if (_pendingImages.isNotEmpty && !_hasLeftGroup)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: SizedBox(
@@ -2236,107 +2317,124 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // AnhÃÂ¤nge-Button
-                    // AnhÃ¤nge-Button (wÃ¤hrend Aufnahme: blinkendes Mikrofon)
-                    if (_isRecording)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _BlinkingMicButton(),
-                      ),
-                    if (!_isRecording)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap: _pickImages,
-                          child: Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1C2333),
-                              shape: BoxShape.circle,
+                if (_hasLeftGroup)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF21262D).withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0xFF30363D).withOpacity(0.5), width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 20, color: Colors.grey[500]),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Du hast die Gruppe verlassen. Du kannst keine Nachrichten mehr senden.',
+                            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      if (_isRecording)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _BlinkingMicButton(),
+                        ),
+                      if (!_isRecording)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: _pickImages,
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1C2333),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.add_photo_alternate_outlined, size: 20, color: Colors.grey[600]),
                             ),
-                            child: Icon(Icons.add_photo_alternate_outlined, size: 20, color: Colors.grey[600]),
+                          ),
+                        ),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF21262D),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: const Color(0xFF30363D), width: 1),
+                          ),
+                          child: TextField(
+                            controller: _messageController,
+                            decoration: InputDecoration(
+                              hintText: 'Nachricht...',
+                              hintStyle: TextStyle(
+                                  color: const Color(0xFF6E7681), fontSize: 14.5),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 10),
+                            ),
+                            style: const TextStyle(fontSize: 14.5, color: Colors.black87),
+                            maxLines: 4,
+                            minLines: 1,
+                            maxLength: 4000,
+                            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                            onSubmitted: (_) => _sendMessage(),
                           ),
                         ),
                       ),
-                    // Texteingabe
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF21262D),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFF30363D), width: 1),
-                        ),
-                        child: TextField(
-                          controller: _messageController,
-                          decoration: InputDecoration(
-                            hintText: 'Nachricht...',
-                            hintStyle: TextStyle(
-                                color: const Color(0xFF6E7681), fontSize: 14.5),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onLongPressStart: (_) => _startVoiceRecording(),
+                        onLongPressEnd: (_) => _stopAndSendVoice(),
+                        onLongPressCancel: () => _cancelVoiceRecording(),
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: _isRecording
+                                ? Colors.red.shade400
+                                : Colors.grey.shade300,
+                            shape: BoxShape.circle,
                           ),
-                          style: const TextStyle(fontSize: 14.5, color: Colors.black87),
-                          maxLines: 4,
-                          minLines: 1,
-                          maxLength: 4000,
-                          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
-                          onSubmitted: (_) => _sendMessage(),
+                          child: Icon(
+                            _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                            size: 20,
+                            color: _isRecording ? Colors.white : const Color(0xFF8B949E),
+                          ),
                         ),
                       ),
-                    ),
-                    // Mikrofon (Sprachnachricht): DrÃÂ¼cken = Aufnahme, Loslassen = Senden
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onLongPressStart: (_) => _startVoiceRecording(),
-                      onLongPressEnd: (_) => _stopAndSendVoice(),
-                      onLongPressCancel: () => _cancelVoiceRecording(),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: _isRecording
-                              ? Colors.red.shade400
-                              : Colors.grey.shade300,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                          size: 20,
-                          color: _isRecording ? Colors.white : const Color(0xFF8B949E),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(22),
+                        onTap: _sendMessage,
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2F81F7),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF2F81F7).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.send_rounded,
+                              size: 19, color: Colors.white),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Senden-Button
-                    InkWell(
-                      borderRadius: BorderRadius.circular(22),
-                      onTap: _sendMessage,
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2F81F7),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF2F81F7).withOpacity(0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(Icons.send_rounded,
-                            size: 19, color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -2543,9 +2641,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
                 child: TextField(
                   controller: _groupNameController,
+                  style: const TextStyle(color: Color(0xFFE6EDF3)),
+                  cursorColor: const Color(0xFF2F81F7),
                   decoration: InputDecoration(
                     labelText: 'Gruppenname',
-              labelStyle: const TextStyle(color: Color(0xFF8B949E)),
+                    labelStyle: const TextStyle(color: Color(0xFF8B949E)),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12)),
                     enabledBorder: OutlineInputBorder(
@@ -2564,7 +2664,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 child: Row(
                   children: [
                     Text(
-                      'Teilnehmer wÃÂ¤hlen',
+                      'Teilnehmer wählen',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -2582,7 +2682,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          '${_selectedGroupMembers.length} gewÃÂ¤hlt',
+                          '${_selectedGroupMembers.length} gewählt',
                           style: TextStyle(
                             fontSize: 11,
                             color: const Color(0xFF2F81F7),

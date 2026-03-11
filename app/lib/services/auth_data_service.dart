@@ -2,6 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../app_config.dart';
 
+/// Wird geworfen, wenn der Nutzer nicht in der Mitarbeiterverwaltung gefunden wurde.
+/// Kein Guest-Login – Nutzer muss abgemeldet werden.
+class AuthNotAuthorizedException implements Exception {
+  AuthNotAuthorizedException([this.message]);
+  final String? message;
+}
+
 /// Holt Rolle und Benutzerdaten aus Firestore – analog zu getAuthData in auth.js
 class AuthDataService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -24,8 +31,8 @@ class AuthDataService {
 
   Future<AuthData> getAuthData(String uid, String email, String companyId) async {
     if (uid.isEmpty || email.isEmpty) {
-      debugPrint('RettBase getAuthData: uid oder email leer -> guest');
-      return AuthData(role: 'guest', companyId: companyId, uid: null, displayName: null, vorname: null);
+      debugPrint('RettBase getAuthData: uid oder email leer -> nicht berechtigt');
+      throw AuthNotAuthorizedException('uid oder email leer');
     }
 
     final cid = companyId.trim().toLowerCase();
@@ -253,8 +260,8 @@ class AuthDataService {
     }
 
     final nameFromEmail = _nameFromEmail(email);
-    debugPrint('RettBase getAuthData: kein Mitarb.-Treffer unter $cid -> role=guest (nicht berechtigt, Sign-out)');
-    return AuthData(role: 'guest', companyId: cid, uid: uid, displayName: nameFromEmail.isNotEmpty ? nameFromEmail : 'Benutzer', vorname: null);
+    debugPrint('RettBase getAuthData: kein Mitarb.-Treffer unter $cid -> nicht berechtigt (Sign-out)');
+    throw AuthNotAuthorizedException('Kein Mitarbeiter-Treffer unter $cid');
   }
 
   String _nameFromEmail(String email) {

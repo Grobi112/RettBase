@@ -5,6 +5,7 @@ class ChatModel {
   final String type; // 'direct' | 'group'
   final String? name;
   final String? groupImageUrl;
+  final String? groupDescription;
   final List<String> participants;
   final List<ParticipantName> participantNames;
   final String? lastMessageText;
@@ -13,12 +14,15 @@ class ChatModel {
   final Map<String, int> unreadCount;
   final Map<String, dynamic> lastReadAt;
   final List<String> deletedBy;
+  final List<String> leftBy;
+  final Map<String, DateTime> leftAt;
 
   ChatModel({
     required this.id,
     required this.type,
     this.name,
     this.groupImageUrl,
+    this.groupDescription,
     required this.participants,
     this.participantNames = const [],
     this.lastMessageText,
@@ -27,7 +31,34 @@ class ChatModel {
     this.unreadCount = const {},
     this.lastReadAt = const {},
     this.deletedBy = const [],
+    this.leftBy = const [],
+    this.leftAt = const {},
   });
+
+  ChatModel copyWith({
+    List<String>? leftBy,
+    Map<String, DateTime>? leftAt,
+    List<String>? participants,
+    List<ParticipantName>? participantNames,
+  }) {
+    return ChatModel(
+      id: id,
+      type: type,
+      name: name,
+      groupImageUrl: groupImageUrl,
+      groupDescription: groupDescription,
+      participants: participants ?? this.participants,
+      participantNames: participantNames ?? this.participantNames,
+      lastMessageText: lastMessageText,
+      lastMessageAt: lastMessageAt,
+      lastMessageFrom: lastMessageFrom,
+      unreadCount: unreadCount,
+      lastReadAt: lastReadAt,
+      deletedBy: deletedBy,
+      leftBy: leftBy ?? this.leftBy,
+      leftAt: leftAt ?? this.leftAt,
+    );
+  }
 
   factory ChatModel.fromFirestore(String id, Map<String, dynamic> d) {
     final participants = (d['participants'] as List?)?.map((e) => e.toString()).toList() ?? [];
@@ -47,6 +78,16 @@ class ChatModel {
 
     final lastRead = d['lastReadAt'] as Map<String, dynamic>? ?? {};
     final deletedBy = (d['deletedBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final leftBy = (d['leftBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final leftAtRaw = d['leftAt'] as Map<String, dynamic>? ?? {};
+    final leftAt = <String, DateTime>{};
+    for (final e in leftAtRaw.entries) {
+      final v = e.value;
+      DateTime? dt;
+      if (v is Timestamp) dt = v.toDate();
+      if (v is DateTime) dt = v;
+      if (dt != null) leftAt[e.key] = dt;
+    }
 
     DateTime? lastAt;
     final lma = d['lastMessageAt'];
@@ -58,6 +99,7 @@ class ChatModel {
       type: d['type']?.toString() ?? 'direct',
       name: d['name']?.toString(),
       groupImageUrl: d['groupImageUrl']?.toString(),
+      groupDescription: d['groupDescription']?.toString(),
       participants: participants,
       participantNames: pn,
       lastMessageText: d['lastMessageText']?.toString(),
@@ -66,6 +108,8 @@ class ChatModel {
       unreadCount: unreadMap,
       lastReadAt: Map<String, dynamic>.from(lastRead),
       deletedBy: deletedBy,
+      leftBy: leftBy,
+      leftAt: leftAt,
     );
   }
 }

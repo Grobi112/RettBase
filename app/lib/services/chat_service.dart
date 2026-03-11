@@ -174,8 +174,7 @@ class ChatService {
         .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
         .where((m) => !m.deletedBy.contains(uid))
         .toList();
-    list.reverse(); // Anzeige: älteste oben, neueste unten
-    return list;
+    return list.reversed.toList(); // Anzeige: älteste oben, neueste unten
   }
 
   /// Lädt ältere Nachrichten (vor dem angegebenen Zeitpunkt). Für Pagination "Mehr laden".
@@ -186,7 +185,7 @@ class ChatService {
     DateTime beforeCreatedAt,
   ) async {
     final uid = userId;
-    if (uid == null) return (messages: [], hasMore: false);
+    if (uid == null) return (messages: <ChatMessage>[], hasMore: false);
     final ref = _db
         .collection('kunden')
         .doc(companyId)
@@ -201,8 +200,9 @@ class ChatService {
     final list = snap.docs
         .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
         .where((m) => !m.deletedBy.contains(uid))
+        .toList()
+        .reversed
         .toList();
-    list.reverse();
     final hasMore = snap.docs.length > 100;
     return (messages: list.take(100).toList(), hasMore: hasMore);
   }
@@ -224,8 +224,9 @@ class ChatService {
       final list = snap.docs
           .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
           .where((m) => !m.deletedBy.contains(uid))
-          .toList();
-      list.reverse(); // Anzeige: älteste oben, neueste unten
+          .toList()
+          .reversed
+          .toList(); // Anzeige: älteste oben, neueste unten
       for (final d in snap.docs) {
         final data = d.data();
         final from = data['from']?.toString();
@@ -307,6 +308,60 @@ class ChatService {
     final url = await ref.getDownloadURL();
     await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
       'groupImageUrl': url,
+    });
+  }
+
+  Future<void> updateGroupName(String companyId, String chatId, String name) async {
+    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+      'name': name.trim(),
+    });
+  }
+
+  Future<void> updateGroupDescription(String companyId, String chatId, String description) async {
+    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+      'groupDescription': description.trim().isEmpty ? FieldValue.delete() : description.trim(),
+    });
+  }
+
+  /// Nutzer verlässt Gruppe: wird zu leftBy hinzugefügt, leftAt[uid] = jetzt.
+  /// Nutzer sieht nur noch alte Nachrichten (vor leftAt), keine neuen.
+  Future<void> leaveGroup(String companyId, String chatId) async {
+    final uid = userId;
+    if (uid == null) throw Exception('Nicht angemeldet');
+    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+      'leftBy': FieldValue.arrayUnion([uid]),
+      'leftAt.$uid': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Nutzer wieder zur Gruppe hinzufügen (nach Verlassen). Kann ab dann wieder lesen und schreiben.
+  Future<void> reAddToGroup(String companyId, String chatId, String targetUid) async {
+    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+      'leftBy': FieldValue.arrayRemove([targetUid]),
+      'leftAt.$targetUid': FieldValue.delete(),
+    });
+  }
+
+  /// Neue Mitglieder zu bestehender Gruppe hinzufügen.
+  Future<void> addMembersToGroup(
+      String companyId, String chatId, List<MitarbeiterForChat> newMembers) async {
+    if (newMembers.isEmpty) return;
+    final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(chatId);
+    final snap = await chatRef.get();
+    final data = snap.data();
+    if (data == null) throw Exception('Chat nicht gefunden');
+    final participants = List<String>.from((data['participants'] as List?)?.cast<String>() ?? []);
+    final participantNames = List<Map<String, dynamic>>.from(
+        (data['participantNames'] as List?)?.map((e) => Map<String, dynamic>.from(e as Map)) ?? []);
+    for (final m in newMembers) {
+      if (!participants.contains(m.uid)) {
+        participants.add(m.uid);
+        participantNames.add({'uid': m.uid, 'name': m.name});
+      }
+    }
+    await chatRef.update({
+      'participants': participants,
+      'participantNames': participantNames,
     });
   }
 
