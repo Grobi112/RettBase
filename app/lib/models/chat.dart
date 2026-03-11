@@ -16,6 +16,11 @@ class ChatModel {
   final List<String> deletedBy;
   final List<String> leftBy;
   final Map<String, DateTime> leftAt;
+  /// Von Admin/Koordinator etc. entfernte Mitglieder – können weiterhin lesen (bis removedAt).
+  final List<String> removedBy;
+  final Map<String, DateTime> removedAt;
+  /// Wenn Nutzer Chat gelöscht hat (ohne Gruppe zu verlassen): ab wann Nachrichten sichtbar sind.
+  final Map<String, DateTime> historyClearedAt;
 
   ChatModel({
     required this.id,
@@ -33,19 +38,26 @@ class ChatModel {
     this.deletedBy = const [],
     this.leftBy = const [],
     this.leftAt = const {},
+    this.removedBy = const [],
+    this.removedAt = const {},
+    this.historyClearedAt = const {},
   });
 
   ChatModel copyWith({
     List<String>? leftBy,
     Map<String, DateTime>? leftAt,
+    List<String>? removedBy,
+    Map<String, DateTime>? removedAt,
     List<String>? participants,
     List<ParticipantName>? participantNames,
+    Map<String, DateTime>? historyClearedAt,
+    String? groupImageUrl,
   }) {
     return ChatModel(
       id: id,
       type: type,
       name: name,
-      groupImageUrl: groupImageUrl,
+      groupImageUrl: groupImageUrl ?? this.groupImageUrl,
       groupDescription: groupDescription,
       participants: participants ?? this.participants,
       participantNames: participantNames ?? this.participantNames,
@@ -57,6 +69,7 @@ class ChatModel {
       deletedBy: deletedBy,
       leftBy: leftBy ?? this.leftBy,
       leftAt: leftAt ?? this.leftAt,
+      historyClearedAt: historyClearedAt ?? this.historyClearedAt,
     );
   }
 
@@ -79,6 +92,7 @@ class ChatModel {
     final lastRead = d['lastReadAt'] as Map<String, dynamic>? ?? {};
     final deletedBy = (d['deletedBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
     final leftBy = (d['leftBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final removedBy = (d['removedBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
     final leftAtRaw = d['leftAt'] as Map<String, dynamic>? ?? {};
     final leftAt = <String, DateTime>{};
     for (final e in leftAtRaw.entries) {
@@ -87,6 +101,24 @@ class ChatModel {
       if (v is Timestamp) dt = v.toDate();
       if (v is DateTime) dt = v;
       if (dt != null) leftAt[e.key] = dt;
+    }
+    final removedAtRaw = d['removedAt'] as Map<String, dynamic>? ?? {};
+    final removedAt = <String, DateTime>{};
+    for (final e in removedAtRaw.entries) {
+      final v = e.value;
+      DateTime? dt;
+      if (v is Timestamp) dt = v.toDate();
+      if (v is DateTime) dt = v;
+      if (dt != null) removedAt[e.key] = dt;
+    }
+    final hcaRaw = d['historyClearedAt'] as Map<String, dynamic>? ?? {};
+    final historyClearedAt = <String, DateTime>{};
+    for (final e in hcaRaw.entries) {
+      final v = e.value;
+      DateTime? dt;
+      if (v is Timestamp) dt = v.toDate();
+      if (v is DateTime) dt = v;
+      if (dt != null) historyClearedAt[e.key] = dt;
     }
 
     DateTime? lastAt;
@@ -110,6 +142,9 @@ class ChatModel {
       deletedBy: deletedBy,
       leftBy: leftBy,
       leftAt: leftAt,
+      removedBy: removedBy,
+      removedAt: removedAt,
+      historyClearedAt: historyClearedAt,
     );
   }
 }

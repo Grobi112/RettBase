@@ -9,6 +9,7 @@
 - **Nur Flutter-App** (`app/`) wird weiterentwickelt
 - **rettbase/** wurde entfernt (März 2026) – Legacy JS/HTML-Web-App gelöscht, keine Kunden-Subdomains mehr. Commit: a95249c
 - **Legacy-*.html-Redirects** in `dashboard_screen.dart` entfernt – Fallbacks für `mitarbeiterverwaltung.html`, `kundenverwaltung.html`, `modulverwaltung.html`, `menue.html` waren tot (url immer `''` durch `_normalizeItem`). Default: nur noch `mod.url.isNotEmpty` → ModuleWebViewScreen, sonst PlaceholderModuleScreen.
+- **webseite/** entfernt (März 2026) – keine separate Webseite mehr; ausschließlich Flutter (inkl. Flutter Web).
 - **Zielplattformen:** iOS, Android, macOS, Web (`flutter build web`)
 - **Firebase-Projekt:** rett-fe0fa (einheitlich für alle Plattformen)
 

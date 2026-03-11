@@ -97,7 +97,7 @@ class FleetService {
   }
 
   /// Mängel streamen (neueste zuerst)
-  /// Nutzt Collection "maengel" – gleicher Name wie in der Webseite (kunden/{id}/maengel)
+  /// Nutzt Collection "maengel" (kunden/{id}/maengel)
   Stream<List<FahrzeugMangel>> streamMaengel(String companyId) {
     return _maengel(companyId, 'maengel')
         .orderBy('createdAt', descending: true)

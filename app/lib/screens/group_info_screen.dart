@@ -134,13 +134,16 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     if (bytes == null || bytes.isEmpty || filename == null || filename.isEmpty || !mounted) return;
     setState(() => _saving = true);
     try {
-      await _chatService.uploadGroupAvatar(
+      final newUrl = await _chatService.uploadGroupAvatar(
         widget.companyId,
         widget.chat.id,
         bytes,
         filename,
       );
       if (mounted) {
+        // Cache-Busting: neue URL mit Timestamp, damit Bild sofort sichtbar wird
+        final urlWithCacheBust = '$newUrl${newUrl.contains('?') ? '&' : '?'}_=${DateTime.now().millisecondsSinceEpoch}';
+        setState(() => _chat = _chat.copyWith(groupImageUrl: urlWithCacheBust));
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Gruppenavatar wurde aktualisiert.')),
         );
@@ -266,6 +269,12 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 
   Future<void> _confirmLeaveGroup() async {
+    final members = _chat.participantNames
+        .where((p) => !_chat.leftBy.contains(p.uid))
+        .toList();
+    final isLastPerson = members.length == 1 &&
+        members.single.uid == _chatService.userId;
+
     final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -276,9 +285,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           'Gruppe wirklich verlassen?',
           style: TextStyle(color: Color(0xFFE6EDF3)),
         ),
-        content: const Text(
-          'Du kannst den Chat weiterhin lesen, aber keine Nachrichten mehr senden.',
-          style: TextStyle(color: Color(0xFF8B949E)),
+        content: Text(
+          isLastPerson
+              ? 'Du bist die letzte Person in dieser Gruppe. Wenn du die Gruppe verlässt, wird sie mit dem gesamten Inhalt unwiderruflich gelöscht.'
+              : 'Du kannst den Chat weiterhin lesen, aber keine Nachrichten mehr senden.',
+          style: const TextStyle(color: Color(0xFF8B949E)),
         ),
         actions: [
           TextButton(
@@ -298,7 +309,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       await _chatService.leaveGroup(widget.companyId, widget.chat.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Du hast die Gruppe verlassen.')),
+          SnackBar(
+            content: Text(
+              isLastPerson
+                  ? 'Die Gruppe wurde mit dem gesamten Inhalt gelöscht.'
+                  : 'Du hast die Gruppe verlassen.',
+            ),
+          ),
         );
         widget.onBack?.call();
         Navigator.pop(context);
@@ -313,16 +330,97 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     if (mounted) setState(() => _saving = false);
   }
 
+  Future<void> _confirmRemoveMember(ParticipantName p) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161B22),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Mitglied entfernen?', style: TextStyle(color: Color(0xFFE6EDF3))),
+        content: Text(
+          '${p.name} wird aus der Gruppe entfernt. Die Person kann den Chat weiterhin einsehen (bis zur Entfernung), aber keine Nachrichten mehr senden.',
+          style: const TextStyle(color: Color(0xFF8B949E)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Abbrechen', style: TextStyle(color: Color(0xFF8B949E))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Entfernen', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _saving = true);
+    try {
+      await _chatService.removeMemberFromGroup(widget.companyId, widget.chat.id, p.uid);
+      if (mounted) {
+        setState(() {
+          _chat = _chat.copyWith(
+            removedBy: [..._chat.removedBy, p.uid],
+            removedAt: {..._chat.removedAt, p.uid: DateTime.now()},
+          );
+          _saving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${p.name} wurde aus der Gruppe entfernt.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
+        );
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _reAddMember(ParticipantName p) async {
+    setState(() => _saving = true);
+    try {
+      await _chatService.reAddRemovedMemberToGroup(widget.companyId, widget.chat.id, p.uid);
+      if (mounted) {
+        setState(() {
+          _chat = _chat.copyWith(
+            removedBy: _chat.removedBy.where((u) => u != p.uid).toList(),
+            removedAt: Map.from(_chat.removedAt)..remove(p.uid),
+            historyClearedAt: {..._chat.historyClearedAt, p.uid: DateTime.now()},
+          );
+          _saving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${p.name} wurde wieder zur Gruppe hinzugefügt.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
+        );
+        setState(() => _saving = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chat = _chat;
     final avatarUrl = chat.groupImageUrl;
-    final members = chat.participantNames
-        .where((p) => !chat.leftBy.contains(p.uid))
+    final activeMembers = chat.participantNames
+        .where((p) => !chat.leftBy.contains(p.uid) && !chat.removedBy.contains(p.uid))
         .toList()
       ..sort((a, b) => (a.name).toLowerCase().compareTo((b.name).toLowerCase()));
+    final removedMembers = chat.participantNames
+        .where((p) => chat.removedBy.contains(p.uid))
+        .toList()
+      ..sort((a, b) => (a.name).toLowerCase().compareTo((b.name).toLowerCase()));
+    final members = activeMembers;
 
-    for (final p in members) {
+    for (final p in [...activeMembers, ...removedMembers]) {
       if (p.uid.isNotEmpty) Future.microtask(() => _loadProfileImage(p.uid));
     }
 
@@ -434,14 +532,14 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   const SizedBox(height: 4),
                   // 3. Gruppe - (Teilnehmerzahl) direkt unter Gruppenname
                   Text(
-                    'Gruppe – ${members.length} ${members.length == 1 ? 'Mitglied' : 'Mitglieder'}',
+                    'Gruppe – ${activeMembers.length} ${activeMembers.length == 1 ? 'Mitglied' : 'Mitglieder'}',
                     style: const TextStyle(
                       color: Color(0xFF2F81F7),
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (!chat.leftBy.contains(_chatService.userId)) ...[
+                  if (!chat.leftBy.contains(_chatService.userId) && !chat.removedBy.contains(_chatService.userId)) ...[
                     const SizedBox(height: 16),
                     Center(
                       child: GestureDetector(
@@ -615,7 +713,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Mitglieder (${members.length})',
+                      'Mitglieder (${activeMembers.length})',
                       style: TextStyle(
                         color: Colors.grey[400],
                         fontSize: 14,
@@ -624,9 +722,17 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...members.map((p) {
+                  ...activeMembers.map((p) {
                     final photoUrl = p.uid.isNotEmpty ? _profileImageCache[p.uid] : null;
+                    final canRemove = ChatPermissions.canManageGroups(widget.userRole) &&
+                        p.uid != _chatService.userId;
                     return ListTile(
+                      trailing: canRemove
+                          ? TextButton(
+                              onPressed: () => _confirmRemoveMember(p),
+                              child: const Text('Entfernen', style: TextStyle(color: Colors.red, fontSize: 13)),
+                            )
+                          : null,
                       leading: Container(
                         width: 40,
                         height: 40,
@@ -673,10 +779,79 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                       ),
                     );
                   }),
+                  if (removedMembers.isNotEmpty && ChatPermissions.canManageGroups(widget.userRole)) ...[
+                    const SizedBox(height: 24),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Entfernte Mitglieder (${removedMembers.length})',
+                        style: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...removedMembers.map((p) {
+                      final photoUrl = p.uid.isNotEmpty ? _profileImageCache[p.uid] : null;
+                      return ListTile(
+                        trailing: TextButton(
+                          onPressed: () => _reAddMember(p),
+                          child: const Text('Wieder hinzufügen', style: TextStyle(color: Color(0xFF2F81F7), fontSize: 13)),
+                        ),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: (photoUrl == null || photoUrl.isEmpty)
+                                ? LinearGradient(
+                                    colors: [
+                                      const Color(0xFF388BFD).withOpacity(0.8),
+                                      const Color(0xFF2F81F7),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  )
+                                : null,
+                            shape: BoxShape.circle,
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          alignment: Alignment.center,
+                          child: (photoUrl != null && photoUrl.isNotEmpty)
+                              ? Image.network(photoUrl, width: 40, height: 40, fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Text(
+                                    _getInitials(p.name),
+                                    style: const TextStyle(
+                                      color: Color(0xFF161B22),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ))
+                              : Text(
+                                  _getInitials(p.name),
+                                  style: const TextStyle(
+                                    color: Color(0xFF161B22),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                        ),
+                        title: Text(
+                          p.name,
+                          style: TextStyle(
+                            color: const Color(0xFFE6EDF3).withOpacity(0.7),
+                            fontSize: 15,
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                   const SizedBox(height: 24),
 
-                  // 7. Gruppe verlassen (nur wenn noch nicht verlassen)
-                  if (!(chat.leftBy.contains(_chatService.userId)))
+                  // 7. Gruppe verlassen (nur wenn noch aktiv, nicht entfernt)
+                  if (!(chat.leftBy.contains(_chatService.userId)) &&
+                      !(chat.removedBy.contains(_chatService.userId)))
                     GestureDetector(
                       onTap: _confirmLeaveGroup,
                       child: Container(

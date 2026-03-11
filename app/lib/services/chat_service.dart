@@ -157,19 +157,26 @@ class ChatService {
     });
   }
 
-  Future<List<ChatMessage>> loadMessages(String companyId, String chatId) async {
+  Future<List<ChatMessage>> loadMessages(
+    String companyId,
+    String chatId, {
+    DateTime? historyClearedAfter,
+  }) async {
     final uid = userId;
     if (uid == null) return [];
     _markChatRead(companyId, chatId, uid);
-    final snap = await _db
+    var query = _db
         .collection('kunden')
         .doc(companyId)
         .collection('chats')
         .doc(chatId)
         .collection('messages')
         .orderBy('createdAt', descending: true)
-        .limit(100)
-        .get();
+        .limit(100);
+    if (historyClearedAfter != null) {
+      query = query.where('createdAt', isGreaterThan: Timestamp.fromDate(historyClearedAfter));
+    }
+    final snap = await query.get();
     final list = snap.docs
         .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
         .where((m) => !m.deletedBy.contains(uid))
@@ -182,21 +189,24 @@ class ChatService {
   Future<({List<ChatMessage> messages, bool hasMore})> loadOlderMessages(
     String companyId,
     String chatId,
-    DateTime beforeCreatedAt,
-  ) async {
+    DateTime beforeCreatedAt, {
+    DateTime? historyClearedAfter,
+  }) async {
     final uid = userId;
     if (uid == null) return (messages: <ChatMessage>[], hasMore: false);
-    final ref = _db
+    var query = _db
         .collection('kunden')
         .doc(companyId)
         .collection('chats')
         .doc(chatId)
-        .collection('messages');
-    final snap = await ref
+        .collection('messages')
         .orderBy('createdAt', descending: true)
         .endBefore([Timestamp.fromDate(beforeCreatedAt)])
-        .limit(101) // 101 prüfen, ob es mehr gibt
-        .get();
+        .limit(101);
+    if (historyClearedAfter != null) {
+      query = query.where('createdAt', isGreaterThan: Timestamp.fromDate(historyClearedAfter));
+    }
+    final snap = await query.get();
     final list = snap.docs
         .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
         .where((m) => !m.deletedBy.contains(uid))
@@ -207,19 +217,26 @@ class ChatService {
     return (messages: list.take(100).toList(), hasMore: hasMore);
   }
 
-  Stream<List<ChatMessage>> streamMessages(String companyId, String chatId) {
+  Stream<List<ChatMessage>> streamMessages(
+    String companyId,
+    String chatId, {
+    DateTime? historyClearedAfter,
+  }) {
     final uid = userId;
     if (uid == null) return Stream.value([]);
     _markChatRead(companyId, chatId, uid);
-    return _db
+    var query = _db
         .collection('kunden')
         .doc(companyId)
         .collection('chats')
         .doc(chatId)
         .collection('messages')
         .orderBy('createdAt', descending: true)
-        .limit(100)
-        .snapshots()
+        .limit(100);
+    if (historyClearedAfter != null) {
+      query = query.where('createdAt', isGreaterThan: Timestamp.fromDate(historyClearedAfter));
+    }
+    return query.snapshots()
         .map((snap) {
       final list = snap.docs
           .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
@@ -292,7 +309,8 @@ class ChatService {
   };
 
   /// Lädt Gruppenavatar in Firebase Storage, aktualisiert Chat-Dokument.
-  Future<void> uploadGroupAvatar(
+  /// Gibt die neue Download-URL zurück für sofortige UI-Aktualisierung.
+  Future<String> uploadGroupAvatar(
     String companyId,
     String chatId,
     Uint8List bytes,
@@ -309,6 +327,7 @@ class ChatService {
     await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
       'groupImageUrl': url,
     });
+    return url;
   }
 
   Future<void> updateGroupName(String companyId, String chatId, String name) async {
@@ -325,13 +344,32 @@ class ChatService {
 
   /// Nutzer verlässt Gruppe: wird zu leftBy hinzugefügt, leftAt[uid] = jetzt.
   /// Nutzer sieht nur noch alte Nachrichten (vor leftAt), keine neuen.
+  /// Wenn die letzte Person die Gruppe verlässt: Chat und alle Nachrichten werden gelöscht.
   Future<void> leaveGroup(String companyId, String chatId) async {
     final uid = userId;
     if (uid == null) throw Exception('Nicht angemeldet');
-    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
-      'leftBy': FieldValue.arrayUnion([uid]),
-      'leftAt.$uid': FieldValue.serverTimestamp(),
-    });
+    final chatRef = _db.collection('kunden').doc(companyId).collection('chats').doc(chatId);
+    final snap = await chatRef.get();
+    final data = snap.data();
+    final participants = List<String>.from((data?['participants'] as List?)?.map((e) => e.toString()) ?? []);
+    final leftBy = List<String>.from((data?['leftBy'] as List?)?.map((e) => e.toString()) ?? []);
+    final remaining = participants.where((p) => !leftBy.contains(p)).toList();
+
+    if (remaining.length == 1 && remaining.single == uid) {
+      // Letzte Person verlässt → Gruppe mit gesamten Inhalt löschen
+      final messagesSnap = await chatRef.collection('messages').get();
+      final batch = _db.batch();
+      for (final d in messagesSnap.docs) {
+        batch.delete(d.reference);
+      }
+      batch.delete(chatRef);
+      await batch.commit();
+    } else {
+      await chatRef.update({
+        'leftBy': FieldValue.arrayUnion([uid]),
+        'leftAt.$uid': FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   /// Nutzer wieder zur Gruppe hinzufügen (nach Verlassen). Kann ab dann wieder lesen und schreiben.
@@ -339,6 +377,23 @@ class ChatService {
     await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
       'leftBy': FieldValue.arrayRemove([targetUid]),
       'leftAt.$targetUid': FieldValue.delete(),
+    });
+  }
+
+  /// Mitglied aus Gruppe entfernen (nur für canManageGroups). Entfernte können weiterhin lesen (bis removedAt).
+  Future<void> removeMemberFromGroup(String companyId, String chatId, String targetUid) async {
+    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+      'removedBy': FieldValue.arrayUnion([targetUid]),
+      'removedAt.$targetUid': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Entferntes Mitglied wieder hinzufügen. Sieht ab Eintritt nur noch aktuelle Nachrichten.
+  Future<void> reAddRemovedMemberToGroup(String companyId, String chatId, String targetUid) async {
+    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+      'removedBy': FieldValue.arrayRemove([targetUid]),
+      'removedAt.$targetUid': FieldValue.delete(),
+      'historyClearedAt.$targetUid': FieldValue.serverTimestamp(),
     });
   }
 
@@ -572,12 +627,26 @@ class ChatService {
     await batch.commit();
   }
 
+  /// Chat löschen für den Nutzer.
+  /// - Nutzer hat Gruppe verlassen (leftBy): Chat komplett weg (deletedBy), für alle anderen erhalten.
+  /// - Nutzer noch in Gruppe/Direct: Nur Verlauf löschen (historyClearedAt), Chat bleibt; neue Nachrichten sichtbar.
   Future<void> deleteChatForMe(String companyId, String chatId) async {
     final uid = userId;
     if (uid == null) return;
-    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
-      'deletedBy': FieldValue.arrayUnion([uid]),
-    });
+    final chatSnap = await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).get();
+    final data = chatSnap.data();
+    final leftBy = (data?['leftBy'] as List?)?.map((e) => e.toString()).toList() ?? [];
+    final hasLeft = leftBy.contains(uid);
+    if (hasLeft) {
+      await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+        'deletedBy': FieldValue.arrayUnion([uid]),
+      });
+    } else {
+      await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+        'historyClearedAt.$uid': FieldValue.serverTimestamp(),
+        'deletedBy': FieldValue.arrayRemove([uid]),
+      });
+    }
   }
 
   Future<void> deleteMessageForMe(String companyId, String chatId, String messageId) async {

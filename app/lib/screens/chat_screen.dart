@@ -106,6 +106,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _selectedChat?.type == 'group' &&
       (_selectedChat?.leftBy.contains(_chatService.userId) ?? false);
 
+  bool get _hasBeenRemovedFromGroup =>
+      _selectedChat?.type == 'group' &&
+      (_selectedChat?.removedBy.contains(_chatService.userId) ?? false);
+
+  bool get _cannotSendInGroup => _hasLeftGroup || _hasBeenRemovedFromGroup;
+
   bool get _canManageGroups => ChatPermissions.canManageGroups(widget.userRole);
 
   /// Sprachnachricht: Wiedergabe (ein Player fÃÂ¼r alle Nachrichten).
@@ -224,8 +230,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
     }
 
+    final chat = _chats.where((c) => c.id == chatId).firstOrNull ?? _selectedChat;
+    final uid = _chatService.userId;
+    final historyClearedAfter = uid != null ? (chat?.historyClearedAt[uid]) : null;
+
     _messagesSub = _chatService
-        .streamMessages(widget.companyId, chatId)
+        .streamMessages(widget.companyId, chatId, historyClearedAfter: historyClearedAfter)
         .listen(
       (msgs) {
         if (!mounted) return;
@@ -292,11 +302,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (oldestMsg?.createdAt == null) return;
     final oldest = oldestMsg!.createdAt!;
     setState(() => _loadingOlderMessages = true);
+    final chat = _chats.where((c) => c.id == _selectedChatId).firstOrNull ?? _selectedChat;
+    final uid = _chatService.userId;
+    final historyClearedAfter = uid != null ? (chat?.historyClearedAt[uid]) : null;
+
     try {
       final result = await _chatService.loadOlderMessages(
         widget.companyId,
         _selectedChatId!,
         oldest,
+        historyClearedAfter: historyClearedAfter,
       );
       if (!mounted) return;
       setState(() {
@@ -458,9 +473,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ListTile(
               leading: Icon(Icons.delete_outline, color: Colors.red.shade400),
               title: Text('Chat löschen', style: TextStyle(color: Colors.red.shade400)),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(ctx);
-                _confirmDeleteChat(chat);
+                await Future.delayed(const Duration(milliseconds: 150));
+                if (!mounted) return;
+                await _confirmDeleteChat(chat);
               },
             ),
           ],
@@ -496,29 +513,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   }
                 },
               ),
-            ListTile(
-              leading: Icon(Icons.person_remove_outlined, color: Colors.red.shade400),
-              title: Text('Für mich löschen', style: TextStyle(color: Colors.red.shade400)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _confirmDeleteMessage(
-                  message: message,
-                  pending: pending,
-                  forEveryone: false,
-                );
-              },
-            ),
+            if (pending != null)
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                title: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await Future.delayed(const Duration(milliseconds: 150));
+                  if (!mounted) return;
+                  await _confirmDeletePending(pending);
+                },
+              ),
             if (isRealMessage && isSent && !isRead)
               ListTile(
                 leading: Icon(Icons.delete_forever, color: Colors.red.shade400),
-                title: Text('Für alle löschen', style: TextStyle(color: Colors.red.shade400)),
-                onTap: () {
+                title: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
+                onTap: () async {
                   Navigator.pop(ctx);
-                  _confirmDeleteMessage(
-                    message: message,
-                    pending: null,
-                    forEveryone: true,
-                  );
+                  await Future.delayed(const Duration(milliseconds: 150));
+                  if (!mounted) return;
+                  await _confirmDeleteMessageForEveryone(message!);
                 },
               ),
           ],
@@ -594,71 +608,84 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _confirmDeleteMessage({
-    required ChatMessage? message,
-    required Map<String, dynamic>? pending,
-    required bool forEveryone,
-  }) async {
+  Future<void> _confirmDeletePending(Map<String, dynamic> pending) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(forEveryone ? 'Für alle löschen?' : 'Für mich löschen?'),
-        content: Text(
-          forEveryone
-              ? 'Die Nachricht wird für alle Teilnehmer entfernt. Dies kann nicht rückgängig gemacht werden.'
-              : 'Die Nachricht wird nur für dich entfernt.',
+        title: const Text('Nachricht löschen?'),
+        content: const Text(
+          'Die noch nicht zugestellte Nachricht wird rückstandslos verworfen.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Abbrechen'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    final id = pending['id'] as String?;
+    if (id != null && id.startsWith('pending-')) {
+      unawaited(ChatOfflineQueue.remove(id));
+    }
+    setState(() => _pendingMessages.removeWhere((p) => p['id'] == pending['id']));
+  }
+
+  Future<void> _confirmDeleteMessageForEveryone(ChatMessage message) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Nachricht löschen?'),
+        content: const Text(
+          'Diese Nachricht wird für alle dauerhaft gelöscht.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Abbrechen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
             child: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
           ),
         ],
       ),
     );
     if (confirm != true || !mounted || _selectedChatId == null) return;
-    if (pending != null) {
-      final id = pending['id'] as String?;
-      if (id != null && id.startsWith('pending-')) {
-        unawaited(ChatOfflineQueue.remove(id));
-      }
-      setState(() => _pendingMessages.removeWhere((p) => p['id'] == pending['id']));
-    } else if (message != null) {
-      if (forEveryone) {
-        await _chatService.deleteMessageForEveryone(
-          widget.companyId,
-          _selectedChatId!,
-          message.id,
-        );
-      } else {
-        await _chatService.deleteMessageForMe(
-          widget.companyId,
-          _selectedChatId!,
-          message.id,
-        );
-      }
+    await _chatService.deleteMessageForEveryone(
+      widget.companyId,
+      _selectedChatId!,
+      message.id,
+    );
+    if (mounted) {
+      setState(() {
+        _messages.removeWhere((m) => m.id == message.id);
+        _olderMessages.removeWhere((m) => m.id == message.id);
+      });
     }
   }
 
   Future<void> _confirmDeleteChat(ChatModel chat) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Chat löschen?'),
         content: const Text('Der Chat wird nur für dich entfernt.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogCtx, false),
             child: const Text('Abbrechen'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogCtx, true),
             child: Text('Löschen', style: TextStyle(color: Colors.red.shade400)),
           ),
         ],
@@ -692,18 +719,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   /// Kombiniert ältere Nachrichten, Firestore-Nachrichten und ausstehende (Offline-Queue), sortiert nach Zeit.
-  /// Wenn Nutzer Gruppe verlassen hat: nur Nachrichten bis leftAt anzeigen.
+  /// Wenn Nutzer Gruppe verlassen oder entfernt hat: nur Nachrichten bis leftAt/removedAt anzeigen.
   List<({ChatMessage? message, Map<String, dynamic>? pending})> _getDisplayMessages() {
     final uid = _chatService.userId;
-    final leftAt = _selectedChat?.type == 'group' && uid != null
-        ? _selectedChat!.leftAt[uid]
-        : null;
+    DateTime? cutoff;
+    if (_selectedChat?.type == 'group' && uid != null) {
+      cutoff = _selectedChat!.removedBy.contains(uid)
+          ? _selectedChat!.removedAt[uid]
+          : _selectedChat!.leftAt[uid];
+    }
 
     bool includeMessage(ChatMessage? m, Map<String, dynamic>? p) {
-      if (leftAt == null) return true;
+      if (m != null && uid != null && m.deletedBy.contains(uid)) return false;
+      if (cutoff == null) return true;
       final createdAt = m?.createdAt ?? (p?['createdAt'] as DateTime?);
       if (createdAt == null) return false;
-      return !createdAt.isAfter(leftAt);
+      return !createdAt.isAfter(cutoff);
     }
 
     final pendingForChat = _pendingMessages
@@ -717,9 +748,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     ].where((x) => includeMessage(x.message, null)).toList();
     final combined = [...fromFirestore, ...pendingForChat];
     combined.sort((a, b) {
-      final at = a.message?.createdAt ?? (a.pending!['createdAt'] as DateTime);
-      final bt = b.message?.createdAt ?? (b.pending!['createdAt'] as DateTime);
-      return at.compareTo(bt);
+      final at = a.message?.createdAt ?? (a.pending?['createdAt'] as DateTime?);
+      final bt = b.message?.createdAt ?? (b.pending?['createdAt'] as DateTime?);
+      final aDate = at ?? DateTime(0);
+      final bDate = bt ?? DateTime(0);
+      return aDate.compareTo(bDate);
     });
     return combined;
   }
@@ -895,7 +928,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty && _pendingImages.isEmpty) return;
-    if (_selectedChatId == null || _hasLeftGroup) return;
+    if (_selectedChatId == null || _cannotSendInGroup) return;
 
     _messageController.clear();
     final images = List<Uint8List>.from(_pendingImages);
@@ -1443,18 +1476,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             confirmDismiss: (_) async {
                               final confirm = await showDialog<bool>(
                                 context: context,
-                                builder: (_) => AlertDialog(
+                                builder: (dialogCtx) => AlertDialog(
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(16)),
                                   title: const Text('Chat löschen?'),
                                   content: const Text('Der Chat wird nur für dich entfernt.'),
                                   actions: [
                                     TextButton(
-                                      onPressed: () => Navigator.pop(context, false),
+                                      onPressed: () => Navigator.pop(dialogCtx, false),
                                       child: const Text('Abbrechen'),
                                     ),
                                     TextButton(
-                                      onPressed: () => Navigator.pop(context, true),
+                                      onPressed: () => Navigator.pop(dialogCtx, true),
                                       child: Text('Löschen',
                                           style: TextStyle(color: Colors.red.shade400)),
                                     ),
@@ -2317,7 +2350,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ],
                     ),
                   ),
-                if (_pendingImages.isNotEmpty && !_hasLeftGroup)
+                if (_pendingImages.isNotEmpty && !_cannotSendInGroup)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: SizedBox(
@@ -2359,7 +2392,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       ),
                     ),
                   ),
-                if (_hasLeftGroup)
+                if (_cannotSendInGroup)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
@@ -2373,7 +2406,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Du hast die Gruppe verlassen. Du kannst keine Nachrichten mehr senden.',
+                            _hasBeenRemovedFromGroup
+                                ? 'Du wurdest aus der Gruppe entfernt.'
+                                : 'Du hast die Gruppe verlassen. Du kannst keine Nachrichten mehr senden.',
                             style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                           ),
                         ),
