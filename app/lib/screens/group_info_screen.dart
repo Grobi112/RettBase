@@ -586,7 +586,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // 5. Benachrichtigungen (Stumm oder nicht)
+                  // 5. Benachrichtigungen (Stumm oder nicht) – Glocke-Icon, tippen zum Umschalten
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -598,16 +598,16 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Switch(
-                        value: !_muted,
-                        onChanged: (_) => _toggleMute(),
-                        activeColor: const Color(0xFF2F81F7),
+                      IconButton(
+                        onPressed: _toggleMute,
+                        icon: Icon(
+                          _muted ? Icons.notifications_off_rounded : Icons.notifications_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                        tooltip: _muted ? 'Benachrichtigungen aktivieren' : 'Benachrichtigungen stummschalten',
                       ),
                     ],
-                  ),
-                  Text(
-                    _muted ? 'Stumm' : 'Nicht stumm',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                   ),
                   const SizedBox(height: 24),
 

@@ -1076,8 +1076,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ AppBar ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
+  /// Designausnahme Chat: Dunkler Header wie Gruppeninfo, [<] für Rückkehr.
+  static const _chatHeaderBg = Color(0xFF161B22);
+  static const _chatHeaderFg = Color(0xFFE6EDF3);
+
   PreferredSizeWidget _buildAppBar(bool isNarrow, VoidCallback onBack) {
-    if (isNarrow && _selectedChatId != null && _selectedChat != null) {
+    // Unterhaltung: Gruppeninfo-Style, Pfeil zurück zu Chats
+    if (_selectedChatId != null && _selectedChat != null) {
       final chat = _selectedChat!;
       final isGroup = chat.type == 'group';
       final groupImageUrl = isGroup ? chat.groupImageUrl : null;
@@ -1121,7 +1126,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     errorBuilder: (_, __, ___) => Text(
                       _getInitials(title),
                       style: const TextStyle(
-                        color: Color(0xFF161B22),
+                        color: Color(0xFFE6EDF3),
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
                       ),
@@ -1130,7 +1135,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 : Text(
                     _getInitials(title),
                     style: const TextStyle(
-                      color: Color(0xFF161B22),
+                      color: Color(0xFFE6EDF3),
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
@@ -1147,7 +1152,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       child: Text(
                         title,
                         style: const TextStyle(
-                          color: Color(0xFF2F81F7),
+                          color: _chatHeaderFg,
                           fontWeight: FontWeight.w600,
                           fontSize: 18,
                         ),
@@ -1158,7 +1163,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 : Text(
                     title,
                     style: const TextStyle(
-                      color: Color(0xFF2F81F7),
+                      color: _chatHeaderFg,
                       fontWeight: FontWeight.w600,
                       fontSize: 18,
                     ),
@@ -1168,43 +1173,79 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ],
       );
       return AppBar(
+        backgroundColor: _chatHeaderBg,
+        foregroundColor: _chatHeaderFg,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _deselectChat,
-          color: const Color(0xFF2F81F7),
+          color: _chatHeaderFg,
         ),
         title: titleWidget,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF2F81F7),
-        elevation: 1,
-        scrolledUnderElevation: 1,
+        elevation: 0,
+        scrolledUnderElevation: 0,
       );
     }
-    if (isNarrow && _selectedChatId != null) {
+    // Ladezustand (Chat gewählt, aber noch nicht geladen)
+    if (_selectedChatId != null) {
       return AppBar(
+        backgroundColor: _chatHeaderBg,
+        foregroundColor: _chatHeaderFg,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _deselectChat,
-          color: const Color(0xFF2F81F7),
+          color: _chatHeaderFg,
         ),
-        title: Text(
+        title: const Text(
           'Chat',
-          style: const TextStyle(
-            color: Color(0xFF2F81F7),
+          style: TextStyle(
+            color: _chatHeaderFg,
             fontWeight: FontWeight.w600,
             fontSize: 18,
           ),
         ),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF2F81F7),
-        elevation: 1,
-        scrolledUnderElevation: 1,
+        elevation: 0,
+        scrolledUnderElevation: 0,
       );
     }
-    return AppTheme.buildModuleAppBar(
-      title: widget.title ?? 'Chat',
-      onBack: onBack,
-      actions: const [],
+    // Chat-Liste: [<] Chats, Rückkehr zum Dashboard
+    return AppBar(
+      backgroundColor: _chatHeaderBg,
+      foregroundColor: _chatHeaderFg,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: onBack,
+        color: _chatHeaderFg,
+        tooltip: 'Zurück zum Dashboard',
+      ),
+      title: const Text(
+        'Chats',
+        style: TextStyle(
+          color: _chatHeaderFg,
+          fontWeight: FontWeight.w600,
+          fontSize: 18,
+        ),
+      ),
+      actions: [
+        _buildAppBarIconAction(Icons.edit_square, 'Neuer Chat', _openNewChat),
+        if (_canManageGroups) ...[
+          const SizedBox(width: 4),
+          _buildAppBarIconAction(Icons.group_add_outlined, 'Neue Gruppe', _openNewGroup),
+        ],
+        const SizedBox(width: 8),
+      ],
+      elevation: 0,
+      scrolledUnderElevation: 0,
+    );
+  }
+
+  Widget _buildAppBarIconAction(IconData icon, String tooltip, VoidCallback onPressed) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        icon: Icon(icon, size: 22),
+        onPressed: onPressed,
+        color: _chatHeaderFg,
+      ),
     );
   }
 
@@ -1279,6 +1320,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ),
       child: Column(
         children: [
+          if (!isNarrow)
           // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Header ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
           Container(
             padding: const EdgeInsets.fromLTRB(16, 16, 10, 12),
