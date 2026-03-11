@@ -167,13 +167,44 @@ class ChatService {
         .collection('chats')
         .doc(chatId)
         .collection('messages')
-        .orderBy('createdAt', descending: false)
+        .orderBy('createdAt', descending: true)
         .limit(100)
         .get();
-    return snap.docs
+    final list = snap.docs
         .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
         .where((m) => !m.deletedBy.contains(uid))
         .toList();
+    list.reverse(); // Anzeige: älteste oben, neueste unten
+    return list;
+  }
+
+  /// Lädt ältere Nachrichten (vor dem angegebenen Zeitpunkt). Für Pagination "Mehr laden".
+  /// Gibt maximal 100 Nachrichten zurück. Weniger als 100 = keine weiteren älteren.
+  Future<({List<ChatMessage> messages, bool hasMore})> loadOlderMessages(
+    String companyId,
+    String chatId,
+    DateTime beforeCreatedAt,
+  ) async {
+    final uid = userId;
+    if (uid == null) return (messages: [], hasMore: false);
+    final ref = _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages');
+    final snap = await ref
+        .orderBy('createdAt', descending: true)
+        .endBefore([Timestamp.fromDate(beforeCreatedAt)])
+        .limit(101) // 101 prüfen, ob es mehr gibt
+        .get();
+    final list = snap.docs
+        .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
+        .where((m) => !m.deletedBy.contains(uid))
+        .toList();
+    list.reverse();
+    final hasMore = snap.docs.length > 100;
+    return (messages: list.take(100).toList(), hasMore: hasMore);
   }
 
   Stream<List<ChatMessage>> streamMessages(String companyId, String chatId) {
@@ -186,7 +217,7 @@ class ChatService {
         .collection('chats')
         .doc(chatId)
         .collection('messages')
-        .orderBy('createdAt', descending: false)
+        .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
         .map((snap) {
@@ -194,6 +225,7 @@ class ChatService {
           .map((d) => ChatMessage.fromFirestore(d.id, d.data()))
           .where((m) => !m.deletedBy.contains(uid))
           .toList();
+      list.reverse(); // Anzeige: älteste oben, neueste unten
       for (final d in snap.docs) {
         final data = d.data();
         final from = data['from']?.toString();
@@ -249,6 +281,33 @@ class ChatService {
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
+  }
+
+  static const _imageExtensions = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic', 'ico'};
+  static const _mimeTypes = {
+    'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif',
+    'webp': 'image/webp', 'bmp': 'image/bmp', 'tiff': 'image/tiff', 'tif': 'image/tiff',
+    'heic': 'image/heic', 'ico': 'image/x-icon',
+  };
+
+  /// Lädt Gruppenavatar in Firebase Storage, aktualisiert Chat-Dokument.
+  Future<void> uploadGroupAvatar(
+    String companyId,
+    String chatId,
+    Uint8List bytes,
+    String filename,
+  ) async {
+    var ext = filename.split('.').last.toLowerCase();
+    if (ext.isEmpty || !_imageExtensions.contains(ext)) ext = 'jpg';
+    if (ext == 'jpg') ext = 'jpeg';
+    final path = 'kunden/$companyId/group-avatars/$chatId.$ext';
+    final ref = _storage.ref().child(path);
+    final contentType = _mimeTypes[ext] ?? 'image/jpeg';
+    await ref.putData(bytes, SettableMetadata(contentType: contentType));
+    final url = await ref.getDownloadURL();
+    await _db.collection('kunden').doc(companyId).collection('chats').doc(chatId).update({
+      'groupImageUrl': url,
+    });
   }
 
   Future<String> createGroupChat(

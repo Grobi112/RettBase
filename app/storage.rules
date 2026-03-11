@@ -27,6 +27,11 @@ service firebase.storage {
       allow read, write: if canAccessCompany(companyId);
     }
 
+    // Gruppenavatare: Gruppenmitglieder können Avatar hochladen/lesen
+    match /kunden/{companyId}/group-avatars/{fileName} {
+      allow read, write: if canAccessCompany(companyId);
+    }
+
     match /kunden/{companyId}/maengel-attachments/{allPaths=**} {
       allow read, write: if canAccessCompany(companyId);
     }

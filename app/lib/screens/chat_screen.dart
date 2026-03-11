@@ -8,6 +8,7 @@ import '../services/chat_offline_queue.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_audio/just_audio.dart';
@@ -63,8 +64,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   ChatModel? _selectedChat; // gecacht ÃÂ¢ÃÂÃÂ kein zweiter Stream in AppBar nÃÂ¶tig
   StreamSubscription<List<ChatMessage>>? _messagesSub;
   List<ChatMessage> _messages = [];
+  List<ChatMessage> _olderMessages = []; // Pagination: ältere Nachrichten
   bool _messagesLoading = false;
   bool _messagesError = false;
+  bool _loadingOlderMessages = false;
+  bool _hasMoreOlderMessages = true;
+  bool _showScrollToBottomButton = false;
+  static const double _scrollToBottomThreshold = 120;
+  static const double _loadMoreThreshold = 150;
 
   // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Web Visibility ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
   void Function()? _visibilityCallback;
@@ -120,6 +127,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!kIsWeb) {
       _startPendingCheckTimer();
       unawaited(_chatService.processOfflineQueue());
+    }
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    final showBtn = pos.pixels > _scrollToBottomThreshold;
+    if (showBtn != _showScrollToBottomButton && mounted) {
+      setState(() => _showScrollToBottomButton = showBtn);
+    }
+    if (_hasMoreOlderMessages && !_loadingOlderMessages && pos.pixels > pos.maxScrollExtent - _loadMoreThreshold) {
+      _loadOlderMessages();
     }
   }
 
@@ -186,6 +206,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (mounted) {
       setState(() {
         _messages = [];
+        _olderMessages = [];
+        _hasMoreOlderMessages = true;
         _messagesLoading = true;
         _messagesError = false;
       });
@@ -247,9 +269,33 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _messagesSub = null;
     if (mounted) setState(() {
       _messages = [];
+      _olderMessages = [];
       _messagesLoading = false;
       _messagesError = false;
     });
+  }
+
+  Future<void> _loadOlderMessages() async {
+    if (_selectedChatId == null || _loadingOlderMessages || !_hasMoreOlderMessages) return;
+    final oldestMsg = _olderMessages.isNotEmpty ? _olderMessages.first : _messages.firstOrNull;
+    if (oldestMsg?.createdAt == null) return;
+    final oldest = oldestMsg!.createdAt!;
+    setState(() => _loadingOlderMessages = true);
+    try {
+      final result = await _chatService.loadOlderMessages(
+        widget.companyId,
+        _selectedChatId!,
+        oldest,
+      );
+      if (!mounted) return;
+      setState(() {
+        _olderMessages = [...result.messages, ..._olderMessages];
+        _hasMoreOlderMessages = result.hasMore;
+        _loadingOlderMessages = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingOlderMessages = false);
+    }
   }
 
   // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Web Tab-Visibility ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
@@ -284,8 +330,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           .limit(1)
           .get();
       if (snap.docs.isNotEmpty) {
-        final url = snap.docs.first.data()['photoUrl']?.toString();
-        if (mounted) setState(() => _profileImageCache[uid] = url);
+        final d = snap.docs.first.data();
+        final url = (d['fotoUrl'] ?? d['photoUrl'] ?? d['profilfoto'])?.toString().trim();
+        if (mounted) setState(() => _profileImageCache[uid] = (url != null && url.isNotEmpty) ? url : null);
       }
     } catch (_) {}
   }
@@ -309,6 +356,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _messagesSub?.cancel();
     unawaited(_audioRecorder.dispose());
     _voicePlayer.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _messageController.dispose();
     _groupNameController.dispose();
@@ -349,6 +397,73 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _unsubscribeFromMessages();
   }
 
+  Future<void> _pickAndUploadGroupAvatar(ChatModel chat) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Aus Galerie'),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_outlined),
+              title: const Text('Aus Datei'),
+              onTap: () => Navigator.pop(ctx, 'file'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    Uint8List? bytes;
+    String? filename;
+    if (choice == 'gallery') {
+      final picker = ImagePicker();
+      final x = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 600,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (x != null) {
+        bytes = await x.readAsBytes();
+        filename = x.name;
+      }
+    } else if (choice == 'file') {
+      const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'heic', 'ico'];
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ext,
+        allowMultiple: false,
+        withData: true,
+      );
+      if (result != null && result.files.single.size > 0) {
+        final f = result.files.single;
+        bytes = f.bytes;
+        filename = f.name;
+      }
+    }
+    if (bytes == null || bytes.isEmpty || filename == null || filename.isEmpty || !mounted) return;
+    try {
+      await _chatService.uploadGroupAvatar(widget.companyId, chat.id, bytes, filename);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gruppenavatar wurde aktualisiert.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler beim Hochladen: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   void _showChatContextMenu(ChatModel chat) {
     final isPinned = _pinnedChatIds.contains(chat.id);
     final isMuted = _mutedChatIds.contains(chat.id);
@@ -383,6 +498,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 }
               },
             ),
+            if (chat.type == 'group')
+              ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text('Gruppenavatar ändern'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickAndUploadGroupAvatar(chat);
+                },
+              ),
             ListTile(
               leading: Icon(Icons.delete_outline, color: Colors.red.shade400),
               title: Text('Chat lÃÂ¶schen', style: TextStyle(color: Colors.red.shade400)),
@@ -619,15 +743,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return [...pinned, ...rest];
   }
 
-  /// Kombiniert Firestore-Nachrichten mit ausstehenden (Offline-Queue), sortiert nach Zeit.
+  /// Kombiniert ältere Nachrichten, Firestore-Nachrichten und ausstehende (Offline-Queue), sortiert nach Zeit.
   List<({ChatMessage? message, Map<String, dynamic>? pending})> _getDisplayMessages() {
     final pendingForChat = _pendingMessages
         .where((p) => p['chatId'] == _selectedChatId)
         .map((p) => (message: null as ChatMessage?, pending: Map<String, dynamic>.from(p)))
         .toList();
-    final fromFirestore = _messages
-        .map((m) => (message: m, pending: null as Map<String, dynamic>?))
-        .toList();
+    final fromFirestore = [
+      ..._olderMessages.map((m) => (message: m, pending: null as Map<String, dynamic>?)),
+      ..._messages.map((m) => (message: m, pending: null as Map<String, dynamic>?)),
+    ];
     final combined = [...fromFirestore, ...pendingForChat];
     combined.sort((a, b) {
       final at = a.message?.createdAt ?? (a.pending!['createdAt'] as DateTime);
@@ -1263,18 +1388,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                               children: [
                                                 Builder(
                                                   builder: (ctx) {
-                                                    // Profilbild laden (einmalig, gecacht)
-                                                    final otherUid = chat.participants
-                                                      .firstWhere((p) => p != _chatService.userId, orElse: () => '');
-                                                    if (otherUid.isNotEmpty) {
-                                                      Future.microtask(() => _loadProfileImage(otherUid));
+                                                    final isGroup = chat.type == 'group';
+                                                    final groupImageUrl = isGroup ? chat.groupImageUrl : null;
+                                                    String? photoUrl;
+                                                    if (!isGroup) {
+                                                      final otherUid = chat.participants
+                                                          .firstWhere((p) => p != _chatService.userId, orElse: () => '');
+                                                      if (otherUid.isNotEmpty) {
+                                                        Future.microtask(() => _loadProfileImage(otherUid));
+                                                        photoUrl = _profileImageCache[otherUid];
+                                                      }
                                                     }
-                                                    final photoUrl = otherUid.isNotEmpty ? _profileImageCache[otherUid] : null;
+                                                    final avatarUrl = groupImageUrl ?? photoUrl;
                                                     return Container(
                                                       width: 48,
                                                       height: 48,
                                                       decoration: BoxDecoration(
-                                                        gradient: (photoUrl == null || photoUrl.isEmpty)
+                                                        gradient: (avatarUrl == null || avatarUrl.isEmpty)
                                                           ? LinearGradient(
                                                             colors: [
                                                               const Color(0xFF388BFD).withOpacity(0.8),
@@ -1295,8 +1425,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                       ),
                                                       clipBehavior: Clip.antiAlias,
                                                       alignment: Alignment.center,
-                                                      child: (photoUrl != null && photoUrl.isNotEmpty)
-                                                        ? Image.network(photoUrl, width: 48, height: 48, fit: BoxFit.cover,
+                                                      child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                                                        ? Image.network(avatarUrl, width: 48, height: 48, fit: BoxFit.cover,
                                                           errorBuilder: (_, __, ___) => Text(_getInitials(name),
                                                           style: const TextStyle(color: const Color(0xFF161B22),
                                                           fontWeight: FontWeight.w700, fontSize: 16, letterSpacing: 0.5)),
@@ -1351,6 +1481,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                                     ),
                                                   ),
                                                 ),
+                                                if (_pinnedChatIds.contains(chat.id))
+                                                  Padding(
+                                                    padding: const EdgeInsets.only(right: 4),
+                                                    child: Icon(
+                                                      Icons.push_pin,
+                                                      size: 14,
+                                                      color: const Color(0xFF6E7681),
+                                                    ),
+                                                  ),
                                                 if (_mutedChatIds.contains(chat.id))
                                                   Padding(
                                                     padding: const EdgeInsets.only(right: 4),
@@ -1549,34 +1688,72 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [const Color(0xFF388BFD).withOpacity(0.8), const Color(0xFF2F81F7)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF2F81F7).withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                Builder(
+                  builder: (_) {
+                    final chat = _selectedChat!;
+                    final isGroup = chat.type == 'group';
+                    final groupImageUrl = isGroup ? chat.groupImageUrl : null;
+                    String? photoUrl;
+                    if (!isGroup) {
+                      final otherUid = chat.participants
+                          .firstWhere((p) => p != _chatService.userId, orElse: () => '');
+                      if (otherUid.isNotEmpty) {
+                        Future.microtask(() => _loadProfileImage(otherUid));
+                        photoUrl = _profileImageCache[otherUid];
+                      }
+                    }
+                    final avatarUrl = groupImageUrl ?? photoUrl;
+                    final avatar = Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: (avatarUrl == null || avatarUrl.isEmpty)
+                            ? LinearGradient(
+                                colors: [const Color(0xFF388BFD).withOpacity(0.8), const Color(0xFF2F81F7)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : null,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF2F81F7).withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    _getInitials(_chatDisplayName(_selectedChat!)),
-                    style: const TextStyle(
-                      color: const Color(0xFF161B22),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                      clipBehavior: Clip.antiAlias,
+                      alignment: Alignment.center,
+                      child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                          ? Image.network(avatarUrl, width: 40, height: 40, fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Text(
+                                _getInitials(_chatDisplayName(chat)),
+                                style: const TextStyle(
+                                  color: Color(0xFF161B22),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  letterSpacing: 0.5,
+                                ),
+                              ))
+                          : Text(
+                              _getInitials(_chatDisplayName(chat)),
+                              style: const TextStyle(
+                                color: Color(0xFF161B22),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                    );
+                    if (isGroup) {
+                      return GestureDetector(
+                        onTap: () => _pickAndUploadGroupAvatar(chat),
+                        child: avatar,
+                      );
+                    }
+                    return avatar;
+                  },
                 ),
                 const SizedBox(width: 13),
                 Expanded(
@@ -1602,9 +1779,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Nachrichten ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
         Expanded(
-          child: Container(
-            color: const Color(0xFF0D1117),
-            child: _messagesLoading
+          child: Stack(
+            children: [
+              Container(
+                color: const Color(0xFF0D1117),
+                child: _messagesLoading
                 ? const Center(child: CircularProgressIndicator(color: const Color(0xFF2F81F7)))
                 : _messages.isEmpty && _pendingMessages.where((p) => p['chatId'] == _selectedChatId).isEmpty
                     ? Center(
@@ -1650,9 +1829,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         controller: _scrollController,
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                         reverse: true,
-                        itemCount: _getDisplayMessages().length,
+                        itemCount: () {
+                          final items = _getDisplayMessages();
+                          return items.length + (_loadingOlderMessages ? 1 : 0);
+                        }(),
                         itemBuilder: (_, i) {
                           final items = _getDisplayMessages();
+                          if (_loadingOlderMessages && i == items.length) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF2F81F7)),
+                                ),
+                              ),
+                            );
+                          }
                           final item = items[items.length - 1 - i];
                           final m = item.message;
                           final pending = item.pending;
@@ -1915,6 +2109,38 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           );
                         },
                       ),
+              ),
+              if (_showScrollToBottomButton)
+                Positioned(
+                  bottom: 90,
+                  right: 16,
+                  child: Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    elevation: 4,
+                    child: InkWell(
+                      onTap: () {
+                        if (_scrollController.hasClients) {
+                          _scrollController.animateTo(
+                            0,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                          );
+                          setState(() => _showScrollToBottomButton = false);
+                        }
+                      },
+                      customBorder: const CircleBorder(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Transform.rotate(
+                          angle: 1.5708,
+                          child: Icon(Icons.chevron_right, size: 24, color: Color(0xFF0D1117)),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
         // ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Eingabebereich ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
@@ -1992,8 +2218,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               top: -4,
                               right: -4,
                               child: GestureDetector(
-                                onTap: () =>
-                                    if (mounted) setState(() => _pendingImages.removeAt(i)),
+                                onTap: () {
+                                  if (mounted) setState(() => _pendingImages.removeAt(i));
+                                },
                                 child: Container(
                                   decoration: const BoxDecoration(
                                     color: const Color(0xFF161B22),
@@ -2183,6 +2410,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         itemCount: _mitarbeiter.length,
                         itemBuilder: (_, i) {
                           final m = _mitarbeiter[i];
+                          if (m.uid.isNotEmpty) Future.microtask(() => _loadProfileImage(m.uid));
+                          final photoUrl = m.uid.isNotEmpty ? _profileImageCache[m.uid] : null;
                           return InkWell(
                             borderRadius: BorderRadius.circular(12),
                             onTap: () => _startDirectChat(m),
@@ -2195,25 +2424,38 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     width: 40,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: [
-                                          const Color(0xFF388BFD).withOpacity(0.7),
-                                          const Color(0xFF2F81F7),
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
+                                      gradient: (photoUrl == null || photoUrl.isEmpty)
+                                          ? LinearGradient(
+                                              colors: [
+                                                const Color(0xFF388BFD).withOpacity(0.7),
+                                                const Color(0xFF2F81F7),
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            )
+                                          : null,
                                       shape: BoxShape.circle,
                                     ),
+                                    clipBehavior: Clip.antiAlias,
                                     alignment: Alignment.center,
-                                    child: Text(
-                                      _getInitials(m.name),
-                                      style: const TextStyle(
-                                        color: const Color(0xFF161B22),
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14,
-                                      ),
-                                    ),
+                                    child: (photoUrl != null && photoUrl.isNotEmpty)
+                                        ? Image.network(photoUrl, width: 40, height: 40, fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Text(
+                                              _getInitials(m.name),
+                                              style: const TextStyle(
+                                                color: Color(0xFF161B22),
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14,
+                                              ),
+                                            ))
+                                        : Text(
+                                            _getInitials(m.name),
+                                            style: const TextStyle(
+                                              color: Color(0xFF161B22),
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                            ),
+                                          ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -2362,6 +2604,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         itemCount: _mitarbeiter.length,
                         itemBuilder: (_, i) {
                           final m = _mitarbeiter[i];
+                          if (m.uid.isNotEmpty) Future.microtask(() => _loadProfileImage(m.uid));
+                          final photoUrl = m.uid.isNotEmpty ? _profileImageCache[m.uid] : null;
                           final selected =
                               _selectedGroupMembers.any((s) => s.uid == m.uid);
                           return InkWell(
@@ -2392,32 +2636,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     width: 40,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                      gradient: selected
-                                          ? LinearGradient(
-                                              colors: [
-                                                const Color(0xFF388BFD).withOpacity(0.7),
-                                                const Color(0xFF2F81F7),
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            )
+                                      gradient: (photoUrl == null || photoUrl.isEmpty)
+                                          ? (selected
+                                              ? LinearGradient(
+                                                  colors: [
+                                                    const Color(0xFF388BFD).withOpacity(0.7),
+                                                    const Color(0xFF2F81F7),
+                                                  ],
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                )
+                                              : null)
                                           : null,
-                                      color: selected
-                                          ? null
-                                          : const Color(0xFF2F81F7).withOpacity(0.15),
+                                      color: (photoUrl == null || photoUrl.isEmpty) && !selected
+                                          ? const Color(0xFF2F81F7).withOpacity(0.15)
+                                          : null,
                                       shape: BoxShape.circle,
                                     ),
+                                    clipBehavior: Clip.antiAlias,
                                     alignment: Alignment.center,
-                                    child: Text(
-                                      _getInitials(m.name),
-                                      style: TextStyle(
-                                        color: selected
-                                            ? Colors.white
-                                            : const Color(0xFF2F81F7),
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 14,
-                                      ),
-                                    ),
+                                    child: (photoUrl != null && photoUrl.isNotEmpty)
+                                        ? Image.network(photoUrl, width: 40, height: 40, fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Text(
+                                              _getInitials(m.name),
+                                              style: TextStyle(
+                                                color: selected ? Colors.white : const Color(0xFF2F81F7),
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14,
+                                              ),
+                                            ))
+                                        : Text(
+                                            _getInitials(m.name),
+                                            style: TextStyle(
+                                              color: selected
+                                                  ? Colors.white
+                                                  : const Color(0xFF2F81F7),
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14,
+                                            ),
+                                          ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(

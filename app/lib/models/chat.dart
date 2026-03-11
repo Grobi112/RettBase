@@ -4,6 +4,7 @@ class ChatModel {
   final String id;
   final String type; // 'direct' | 'group'
   final String? name;
+  final String? groupImageUrl;
   final List<String> participants;
   final List<ParticipantName> participantNames;
   final String? lastMessageText;
@@ -17,6 +18,7 @@ class ChatModel {
     required this.id,
     required this.type,
     this.name,
+    this.groupImageUrl,
     required this.participants,
     this.participantNames = const [],
     this.lastMessageText,
@@ -55,6 +57,7 @@ class ChatModel {
       id: id,
       type: d['type']?.toString() ?? 'direct',
       name: d['name']?.toString(),
+      groupImageUrl: d['groupImageUrl']?.toString(),
       participants: participants,
       participantNames: pn,
       lastMessageText: d['lastMessageText']?.toString(),
