@@ -1154,7 +1154,7 @@ class _MitarbeiterDatenblatt extends StatelessWidget {
           const SizedBox(height: 16),
           _DataRow(
             label: 'E-Mail',
-            value: (m.email != null && m.email!.isNotEmpty && !m.email!.endsWith('.${AppConfig.rootDomain}'))
+            value: (m.email != null && m.email!.isNotEmpty && !AppConfig.isPseudoOrAliasEmail(m.email))
                 ? m.email!
                 : '—',
           ),

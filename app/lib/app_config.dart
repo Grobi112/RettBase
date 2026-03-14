@@ -9,6 +9,14 @@ class AppConfig {
   static const String? fcmWebVapidKey = 'BOry5KP4SOhFgMZXOEAC2L5kttPU47Tuc8VBBCGk3NGqHqumnF1-bfPbwVTxdXD2rntuCt1azw48FejwsunG5u4';
   static const String rootDomain = 'rettbase.de';
 
+  /// Prüft, ob E-Mail eine Pseudo-/Alias-Adresse ist (z.B. 112@nfsunna.rettbase.de).
+  /// Diese sollen nirgends angezeigt werden.
+  static bool isPseudoOrAliasEmail(String? email) {
+    if (email == null || email.isEmpty || !email.contains('@')) return false;
+    final domain = email.split('@').last.toLowerCase();
+    return domain == rootDomain || domain.endsWith('.$rootDomain');
+  }
+
   /// URL zur version.json (für Web-Versionscheck und ggf. zukünftige native Updates).
   static const String? androidUpdateCheckUrl = 'https://app.rettbase.de/version.json';
 

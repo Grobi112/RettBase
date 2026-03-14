@@ -58,7 +58,7 @@ kunden/{companyId}/
 
 ## 7. Mitarbeiter-Datenblatt
 
-- **Pseudo-Email nicht anzeigen:** Wenn E-Mail mit `.rettbase.de` endet → „—“ statt anzeigen
+- **Pseudo-/Alias-Email nirgends anzeigen:** `AppConfig.isPseudoOrAliasEmail()` – z.B. 112@nfsunna.rettbase.de → „—“ bzw. nicht in Listen. Gilt für: Datenblatt, Einstellungen-Übersicht, Bearbeiten-Feld.
 - Zeigt nur echte, vom Nutzer hinterlegte Werte (E-Mail, Telefon, Ort)
 
 ## 8. Wichtige Dateien

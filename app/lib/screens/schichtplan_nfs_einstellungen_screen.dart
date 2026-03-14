@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_config.dart';
 import '../theme/app_theme.dart';
 import '../services/schichtanmeldung_service.dart';
 import '../services/schichtplan_nfs_service.dart';
@@ -426,7 +427,7 @@ class _NfsMitarbeiterScreenState extends State<_NfsMitarbeiterScreen> {
                     title: Text(m.displayName),
                     subtitle: Text([
                       if (m.ort != null && m.ort!.isNotEmpty) m.ort!,
-                      if (m.email != null && m.email!.isNotEmpty) m.email!,
+                      if (m.email != null && m.email!.isNotEmpty && !AppConfig.isPseudoOrAliasEmail(m.email)) m.email!,
                       if (m.role != null && m.role!.isNotEmpty) _rollenAnzeige(m.role!),
                     ].where((x) => x.isNotEmpty).join(' · ')),
                     trailing: const Icon(Icons.edit),
@@ -477,7 +478,7 @@ class _NfsMitarbeiterBearbeitenScreenState
     final m = widget.mitarbeiter;
     if (m != null) {
       _personalnummerCtrl.text = m.personalnummer ?? '';
-      _emailCtrl.text = m.email ?? '';
+      _emailCtrl.text = (m.email != null && !AppConfig.isPseudoOrAliasEmail(m.email)) ? m.email! : '';
       _vornameCtrl.text = m.vorname ?? '';
       _nachnameCtrl.text = m.nachname ?? '';
       _strasseCtrl.text = m.strasse ?? '';
@@ -505,10 +506,17 @@ class _NfsMitarbeiterBearbeitenScreenState
   }
 
   Future<void> _speichern() async {
-    final email = _emailCtrl.text.trim();
+    final emailInput = _emailCtrl.text.trim();
     final vorname = _vornameCtrl.text.trim();
     final nachname = _nachnameCtrl.text.trim();
-    if (email.isEmpty || vorname.isEmpty || nachname.isEmpty) return;
+    if (vorname.isEmpty || nachname.isEmpty) return;
+    final m = widget.mitarbeiter;
+    final email = emailInput.isNotEmpty
+        ? emailInput
+        : (m != null && m.email != null && AppConfig.isPseudoOrAliasEmail(m.email)
+            ? m.email!
+            : null);
+    if (email == null && m == null) return;
     final personalnummer = _personalnummerCtrl.text.trim().isEmpty ? null : _personalnummerCtrl.text.trim();
     final strasse = _strasseCtrl.text.trim().isEmpty ? null : _strasseCtrl.text.trim();
     final hausnummer = _hausnummerCtrl.text.trim().isEmpty ? null : _hausnummerCtrl.text.trim();
@@ -522,7 +530,7 @@ class _NfsMitarbeiterBearbeitenScreenState
         widget.mitarbeiter!.id,
         {
           'personalnummer': personalnummer,
-          'email': email,
+          if (email != null) 'email': email,
           'vorname': vorname,
           'nachname': nachname,
           'strasse': strasse,
@@ -534,6 +542,7 @@ class _NfsMitarbeiterBearbeitenScreenState
         },
       );
     } else {
+      if (email == null || email.isEmpty) return;
       final mitarbeiter = Mitarbeiter(
         id: '',
         vorname: vorname,

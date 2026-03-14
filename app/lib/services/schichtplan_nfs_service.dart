@@ -712,20 +712,35 @@ class SchichtplanNfsService {
           .collection('schichtplanNfsMeldungen')
           .where('status', isEqualTo: 'pending')
           .get();
-      final data = snap.docs.map((d) => (d: d, m: NfsMeldung.fromFirestore(d.id, d.data()))).toList();
-      data.sort((a, b) {
-        final tsA = a.d.data()['createdAt'] as Timestamp?;
-        final tsB = b.d.data()['createdAt'] as Timestamp?;
-        if (tsA == null && tsB == null) return 0;
-        if (tsA == null) return 1;
-        if (tsB == null) return -1;
-        return tsB.compareTo(tsA);
-      });
-      return data.map((e) => e.m).toList();
+      return _snapToMeldungenList(snap);
     } catch (e) {
       // Index-Fehler oder Berechtigungen – Fehler weiterwerfen für Anzeige
       rethrow;
     }
+  }
+
+  /// Stream der pending-Meldungen (Echtzeit-Updates wie beim Badge).
+  Stream<List<NfsMeldung>> streamMeldungen(String companyId) {
+    return _db
+        .collection('kunden')
+        .doc(companyId)
+        .collection('schichtplanNfsMeldungen')
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snap) => _snapToMeldungenList(snap));
+  }
+
+  List<NfsMeldung> _snapToMeldungenList(QuerySnapshot<Map<String, dynamic>> snap) {
+    final data = snap.docs.map((d) => (d: d, m: NfsMeldung.fromFirestore(d.id, d.data()))).toList();
+    data.sort((a, b) {
+      final tsA = a.d.data()['createdAt'] as Timestamp?;
+      final tsB = b.d.data()['createdAt'] as Timestamp?;
+      if (tsA == null && tsB == null) return 0;
+      if (tsA == null) return 1;
+      if (tsB == null) return -1;
+      return tsB.compareTo(tsA);
+    });
+    return data.map((e) => e.m).toList();
   }
 
   /// Meldung als angenommen markieren und in Kalender eintragen

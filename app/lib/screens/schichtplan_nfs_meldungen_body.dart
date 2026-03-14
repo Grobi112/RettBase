@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/schichtanmeldung_service.dart';
@@ -32,15 +33,22 @@ class _SchichtplanNfsMeldungenBodyState extends State<SchichtplanNfsMeldungenBod
   List<BereitschaftsTyp> _typen = [];
   bool _loading = true;
   String? _error;
+  StreamSubscription<List<NfsMeldung>>? _meldungenSub;
 
   @override
   void initState() {
     super.initState();
     widget.onRegisterRefresh?.call(_load);
-    _load();
+    _loadTypenAndStartStream();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _meldungenSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadTypenAndStartStream() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -50,14 +58,21 @@ class _SchichtplanNfsMeldungenBodyState extends State<SchichtplanNfsMeldungenBod
       final typen = SchichtplanNfsBereitschaftstypUtils.filterAndSortS1S2B(
         alleTypen,
       );
-      final list = await _service.loadMeldungen(widget.companyId);
-      if (mounted) {
-        setState(() {
-          _typen = typen;
-          _meldungen = list;
-          _loading = false;
+      if (!mounted) return;
+      setState(() {
+        _typen = typen;
+        _loading = false;
+      });
+      _meldungenSub?.cancel();
+      _meldungenSub = _service
+          .streamMeldungen(widget.companyId)
+          .listen((list) {
+        if (mounted) setState(() => _meldungen = list);
+      }, onError: (e) {
+        if (mounted) setState(() {
+          _error = e.toString();
         });
-      }
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -66,6 +81,10 @@ class _SchichtplanNfsMeldungenBodyState extends State<SchichtplanNfsMeldungenBod
         });
       }
     }
+  }
+
+  Future<void> _load() async {
+    await _loadTypenAndStartStream();
   }
 
   String _typName(String typId) =>
