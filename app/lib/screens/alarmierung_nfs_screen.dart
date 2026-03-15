@@ -116,6 +116,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
   final _hausNrCtrl = TextEditingController();
   final _plzCtrl = TextEditingController();
   final _ortCtrl = TextEditingController();
+  final _bemerkungenCtrl = TextEditingController();
   String? _einsatzindikation;
 
   List<Map<String, dynamic>> _alleMitarbeiter = [];
@@ -170,6 +171,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
     _hausNrCtrl.dispose();
     _plzCtrl.dispose();
     _ortCtrl.dispose();
+    _bemerkungenCtrl.dispose();
     _kraefteSearchCtrl.dispose();
     super.dispose();
   }
@@ -315,6 +317,18 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
         ),
       );
 
+  Widget _bemerkungenField() => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextField(
+          controller: _bemerkungenCtrl,
+          maxLines: 5,
+          decoration: _inputDecoration.copyWith(
+            labelText: 'Bemerkungen',
+            alignLabelWithHint: true,
+          ),
+        ),
+      );
+
   Widget _buildStrasseAutocomplete() {
     final list = _adressVorschlaege ?? [];
     return RawAutocomplete<GebaeudeAdresseVorschlag>(
@@ -447,6 +461,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
         'plz': _plzCtrl.text.trim(),
         'ort': _ortCtrl.text.trim(),
         'einsatzindikation': _einsatzindikation,
+        'bemerkungen': _bemerkungenCtrl.text.trim().isEmpty ? null : _bemerkungenCtrl.text.trim(),
         'alarmierteMitarbeiterIds': _selectedMitarbeiterIds.toList(),
       };
 
@@ -464,6 +479,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
           SnackBar(content: Text('Einsatz ${_einsatzNrCtrl.text.trim()} erstellt. ${_selectedMitarbeiterIds.length} Kräfte alarmiert.')),
         );
         _resetForm();
+        _tabController.animateTo(2); // Offene Einsätze
       }
     } catch (e) {
       if (mounted) {
@@ -493,6 +509,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
       _hausNrCtrl.clear();
       _plzCtrl.clear();
       _ortCtrl.clear();
+      _bemerkungenCtrl.clear();
       _einsatzindikation = null;
       _selectedMitarbeiterIds.clear();
       _verfuegbareMitarbeiter = [];
@@ -686,7 +703,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
             child: FilledButton(
               onPressed: _saving ? null : _speichern,
               style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.primary,
+                backgroundColor: Colors.red.shade700,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
@@ -822,39 +839,52 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
 
   /// Einsatzdaten-Card für „Neue Alarmierung“: Einsatzindikation + Alarmierte Mitarbeiter in einer Spalte.
   Widget _buildEinsatzdatenCardWithAlarmierte() {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Einsatzdaten',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade800,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 400;
+        return Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SizedBox(
-                  width: 140,
-                  child: _field(_laufendeNrCtrl, 'Laufende-Nr.', required: false),
+                Text(
+                  'Einsatzdaten',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true),
-                ),
-              ],
-            ),
+                const SizedBox(height: 16),
+                if (narrow)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _field(_laufendeNrCtrl, 'Laufende-Nr.', required: false),
+                      const SizedBox(height: 12),
+                      _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true),
+                    ],
+                  )
+                else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 140,
+                        child: _field(_laufendeNrCtrl, 'Laufende-Nr.', required: false),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true),
+                      ),
+                    ],
+                  ),
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: InkWell(
@@ -875,51 +905,33 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
               required: true,
               onPick: () => _pickUhrzeit((t) => _uhrzeitBeginn = t, initial: _uhrzeitBeginn),
             ),
-            _uhrzeitField(
-              'Einsatz übernommen',
-              _uhrzeitEinsatzUebernommen,
-              (t) => setState(() => _uhrzeitEinsatzUebernommen = t),
-              required: false,
-              onPick: () => _pickUhrzeit((t) => setState(() => _uhrzeitEinsatzUebernommen = t), initial: _uhrzeitEinsatzUebernommen),
-            ),
-            _uhrzeitField(
-              'Am Einsatzort',
-              _uhrzeitAnEinsatzort,
-              (t) => setState(() => _uhrzeitAnEinsatzort = t),
-              required: false,
-              onPick: () => _pickUhrzeit((t) => setState(() => _uhrzeitAnEinsatzort = t), initial: _uhrzeitAnEinsatzort),
-            ),
-            _uhrzeitField(
-              'Einsatzstelle verlassen',
-              _uhrzeitAbfahrt,
-              (t) => setState(() => _uhrzeitAbfahrt = t),
-              required: false,
-              onPick: () => _pickUhrzeit((t) => _uhrzeitAbfahrt = t, initial: _uhrzeitAbfahrt),
-            ),
-            _uhrzeitField(
-              'Einsatz beendet',
-              _uhrzeitZuHause,
-              (t) => setState(() => _uhrzeitZuHause = t),
-              required: false,
-              onPick: () => _pickUhrzeit((t) => _uhrzeitZuHause = t, initial: _uhrzeitZuHause),
-            ),
             _field(_nameBetroffenerCtrl, 'Name des Betroffenen', required: true),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _buildStrasseAutocomplete()),
-                const SizedBox(width: 12),
-                SizedBox(width: 100, child: _field(_hausNrCtrl, 'Haus-Nr.', required: true)),
-              ],
-            ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 100, child: _field(_plzCtrl, 'PLZ', required: true)),
-                const SizedBox(width: 12),
-                Expanded(child: _field(_ortCtrl, 'Ort', required: true)),
-              ],
-            ),
+            if (narrow) ...[
+              _buildStrasseAutocomplete(),
+              const SizedBox(height: 12),
+              _field(_hausNrCtrl, 'Haus-Nr.', required: true),
+              const SizedBox(height: 12),
+              _field(_plzCtrl, 'PLZ', required: true),
+              const SizedBox(height: 12),
+              _field(_ortCtrl, 'Ort', required: true),
+            ] else ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildStrasseAutocomplete()),
+                  const SizedBox(width: 12),
+                  SizedBox(width: 100, child: _field(_hausNrCtrl, 'Haus-Nr.', required: true)),
+                ],
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 100, child: _field(_plzCtrl, 'PLZ', required: true)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _field(_ortCtrl, 'Ort', required: true)),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             DropdownButtonFormField<String?>(
               value: _einsatzindikation,
@@ -938,11 +950,15 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
                   .toList(),
               onChanged: (v) => setState(() => _einsatzindikation = v),
             ),
+            const SizedBox(height: 16),
+            _bemerkungenField(),
             const SizedBox(height: 20),
             _buildAlarmierteMitarbeiterSection(),
           ],
         ),
       ),
+    );
+      },
     );
   }
 
@@ -978,67 +994,131 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
             ),
           )
         else
-          ...zugeordnet.map((m) {
-            final id = m['id'] as String? ?? '';
-            final name = m['displayName'] as String? ?? '${m['vorname']} ${m['nachname']}';
-            final typName = (m['typName'] ?? '').toString().trim();
-            final typColor = m['typColor'] as int?;
-            final isVerfuegbar = _verfuegbareIds.contains(id);
-            final schichtColor = isVerfuegbar && typName.isNotEmpty
-                ? SchichtplanNfsBereitschaftstypUtils.colorForTypData(typColor: typColor, typName: typName)
-                : Colors.grey;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.person_outline, size: 20, color: Colors.grey.shade600),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(name)),
-                  if (typName.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: schichtColor.withOpacity(0.25),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: schichtColor.withOpacity(0.6)),
-                      ),
-                      child: Text(typName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: schichtColor)),
-                    ),
-                  const SizedBox(width: 8),
-                  IconButton(
+          LayoutBuilder(
+            builder: (context, listConstraints) {
+              final narrow = listConstraints.maxWidth < 400;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: zugeordnet.map((m) {
+                  final id = m['id'] as String? ?? '';
+                  final name = m['displayName'] as String? ?? '${m['vorname']} ${m['nachname']}';
+                  final typName = (m['typName'] ?? '').toString().trim();
+                  final typColor = m['typColor'] as int?;
+                  final isVerfuegbar = _verfuegbareIds.contains(id);
+                  final schichtColor = isVerfuegbar && typName.isNotEmpty
+                      ? SchichtplanNfsBereitschaftstypUtils.colorForTypData(typColor: typColor, typName: typName)
+                      : Colors.grey;
+                  final typBadge = typName.isNotEmpty
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: schichtColor.withOpacity(0.25),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: schichtColor.withOpacity(0.6)),
+                          ),
+                          child: Text(typName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: schichtColor)),
+                        )
+                      : const SizedBox.shrink();
+                  final removeBtn = IconButton(
                     icon: const Icon(Icons.remove_circle_outline, size: 22),
                     color: Colors.red.shade400,
                     onPressed: () => setState(() => _selectedMitarbeiterIds.remove(id)),
+                  );
+                  if (narrow) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.person_outline, size: 20, color: Colors.grey.shade600),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
+                              removeBtn,
+                            ],
+                          ),
+                          if (typName.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            typBadge,
+                          ],
+                        ],
+                      ),
+                    );
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.person_outline, size: 20, color: Colors.grey.shade600),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(name)),
+                        typBadge,
+                        const SizedBox(width: 8),
+                        removeBtn,
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final narrow = constraints.maxWidth < 400;
+            if (narrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _loadingMitarbeiter ? null : _showEmSuchenSheet,
+                    icon: const Icon(Icons.search, size: 20),
+                    label: const Text('weitere Mitarbeiter alarmieren'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      alignment: Alignment.centerLeft,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: _loadingMitarbeiter ? null : _showEmSuchenSheet,
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('Zuteilen'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
                   ),
                 ],
-              ),
-            );
-          }),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _loadingMitarbeiter ? null : _showEmSuchenSheet,
-                icon: const Icon(Icons.search, size: 20),
-                label: const Text('weitere Mitarbeiter alarmieren'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  alignment: Alignment.centerLeft,
+              );
+            }
+            return Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _loadingMitarbeiter ? null : _showEmSuchenSheet,
+                    icon: const Icon(Icons.search, size: 20),
+                    label: const Text('weitere Mitarbeiter alarmieren'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      alignment: Alignment.centerLeft,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: _loadingMitarbeiter ? null : _showEmSuchenSheet,
-              icon: const Icon(Icons.add, size: 20),
-              label: const Text('Zuteilen'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-            ),
-          ],
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: _loadingMitarbeiter ? null : _showEmSuchenSheet,
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text('Zuteilen'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -1215,6 +1295,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
         onBack: widget.onBack,
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
           tabs: const [
             Tab(text: 'Mitglieder-Status'),
             Tab(text: 'Neue Alarmierung'),
@@ -1237,6 +1318,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
           _OffeneEinsaetzeTab(
             companyId: widget.companyId,
             canEdit: _canEdit,
+            userRole: _userRole,
             service: _service,
             onRefresh: _loadMitarbeiter,
             onEinsatzAbgeschlossen: () => _tabController.animateTo(3),
@@ -1325,7 +1407,10 @@ class _EmSuchenDialogState extends State<_EmSuchenDialog> {
                     controller: _searchCtrl,
                     decoration: InputDecoration(
                       hintText: 'weitere Mitarbeiter alarmieren…',
-                      prefixIcon: const Icon(Icons.search),
+                      prefixIcon: Padding(
+                        padding: const EdgeInsets.only(left: 20),
+                        child: const Icon(Icons.search),
+                      ),
                       filled: true,
                       fillColor: Colors.grey.shade50,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -1430,6 +1515,7 @@ class _EmSuchenDialogState extends State<_EmSuchenDialog> {
 class _OffeneEinsaetzeTab extends StatelessWidget {
   final String companyId;
   final bool canEdit;
+  final String? userRole;
   final AlarmierungNfsService service;
   final VoidCallback onRefresh;
   final VoidCallback? onEinsatzAbgeschlossen;
@@ -1437,6 +1523,7 @@ class _OffeneEinsaetzeTab extends StatelessWidget {
   const _OffeneEinsaetzeTab({
     required this.companyId,
     required this.canEdit,
+    this.userRole,
     required this.service,
     required this.onRefresh,
     this.onEinsatzAbgeschlossen,
@@ -1493,6 +1580,7 @@ class _OffeneEinsaetzeTab extends StatelessWidget {
                           e,
                           service,
                           onRefresh,
+                          userRole: userRole,
                           onEinsatzAbgeschlossen: onEinsatzAbgeschlossen,
                         )
                     : null,
@@ -1781,6 +1869,7 @@ class _AbgeschlosseneEinsaetzeTabState extends State<_AbgeschlosseneEinsaetzeTab
                               e,
                               widget.service,
                               () => setState(() {}),
+                              userRole: widget.userRole,
                             ),
                             borderRadius: BorderRadius.circular(12),
                             child: Padding(
@@ -1879,6 +1968,7 @@ Future<void> _openBearbeiten(
   Map<String, dynamic> einsatz,
   AlarmierungNfsService service,
   VoidCallback onRefresh, {
+  String? userRole,
   VoidCallback? onEinsatzAbgeschlossen,
 }) async {
   await Navigator.of(context).push(
@@ -1888,6 +1978,7 @@ Future<void> _openBearbeiten(
         docId: docId,
         einsatz: einsatz,
         service: service,
+        userRole: userRole,
         onBack: () {
           Navigator.of(context).pop();
           onRefresh();
@@ -1904,6 +1995,7 @@ class _AlarmierungBearbeitenScreen extends StatefulWidget {
   final String docId;
   final Map<String, dynamic> einsatz;
   final AlarmierungNfsService service;
+  final String? userRole;
   final VoidCallback onBack;
   final VoidCallback? onEinsatzAbgeschlossen;
 
@@ -1912,6 +2004,7 @@ class _AlarmierungBearbeitenScreen extends StatefulWidget {
     required this.docId,
     required this.einsatz,
     required this.service,
+    this.userRole,
     required this.onBack,
     this.onEinsatzAbgeschlossen,
   });
@@ -1932,21 +2025,26 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
   bool _saving = false;
   String? _currentUserName;
 
+  /// Abgeschlossene Einsätze dürfen nur von Superadmin/Admin bearbeitet werden.
+  bool get _canEdit {
+    final r = (widget.userRole ?? '').toLowerCase().trim();
+    final abgeschlossen = (widget.einsatz['status'] ?? 'offen') == 'abgeschlossen';
+    if (abgeschlossen) return r == 'superadmin' || r == 'admin';
+    return r == 'admin' || r == 'koordinator' || r == 'superadmin';
+  }
+
   List<Map<String, dynamic>> _massnahmen = [];
   List<Map<String, dynamic>> _rueckmeldungen = [];
 
   final _einsatzNrCtrl = TextEditingController();
   DateTime? _einsatzDatum;
   TimeOfDay? _uhrzeitBeginn;
-  TimeOfDay? _uhrzeitEinsatzUebernommen;
-  TimeOfDay? _uhrzeitAnEinsatzort;
-  TimeOfDay? _uhrzeitAbfahrt;
-  TimeOfDay? _uhrzeitZuHause;
   final _nameBetroffenerCtrl = TextEditingController();
   final _strasseCtrl = TextEditingController();
   final _hausNrCtrl = TextEditingController();
   final _plzCtrl = TextEditingController();
   final _ortCtrl = TextEditingController();
+  final _bemerkungenCtrl = TextEditingController();
   String? _einsatzindikation;
 
   @override
@@ -1961,15 +2059,12 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     _einsatzNrCtrl.text = (e['einsatzNr'] as String? ?? '').trim();
     _einsatzDatum = _parseDate(e['einsatzDatum'] as String?) ?? DateTime.now();
     _uhrzeitBeginn = _parseTime(e['uhrzeitBeginn'] as String?) ?? TimeOfDay.now();
-    _uhrzeitEinsatzUebernommen = _parseTime(e['uhrzeitEinsatzUebernommen'] as String?);
-    _uhrzeitAnEinsatzort = _parseTime(e['uhrzeitAnEinsatzort'] as String?);
-    _uhrzeitAbfahrt = _parseTime(e['uhrzeitAbfahrt'] as String?);
-    _uhrzeitZuHause = _parseTime(e['uhrzeitZuHause'] as String?);
     _nameBetroffenerCtrl.text = (e['nameBetroffener'] as String? ?? '').trim();
     _strasseCtrl.text = (e['strasse'] as String? ?? '').trim();
     _hausNrCtrl.text = (e['hausNr'] as String? ?? '').trim();
     _plzCtrl.text = (e['plz'] as String? ?? '').trim();
     _ortCtrl.text = (e['ort'] as String? ?? '').trim();
+    _bemerkungenCtrl.text = (e['bemerkungen'] as String? ?? '').trim();
     _einsatzindikation = (e['einsatzindikation'] as String?)?.trim();
     if (_einsatzindikation != null && _einsatzindikation!.isEmpty) _einsatzindikation = null;
     _einsatzData = e;
@@ -2004,6 +2099,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     _hausNrCtrl.dispose();
     _plzCtrl.dispose();
     _ortCtrl.dispose();
+    _bemerkungenCtrl.dispose();
     super.dispose();
   }
 
@@ -2185,16 +2281,13 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
           'einsatzNr': _einsatzNrCtrl.text.trim(),
           'einsatzDatum': _formatDate(_einsatzDatum!),
           'uhrzeitBeginn': _formatTime(_uhrzeitBeginn!),
-          'uhrzeitEinsatzUebernommen': _uhrzeitEinsatzUebernommen != null ? _formatTime(_uhrzeitEinsatzUebernommen!) : null,
-          'uhrzeitAnEinsatzort': _uhrzeitAnEinsatzort != null ? _formatTime(_uhrzeitAnEinsatzort!) : null,
-          'uhrzeitAbfahrt': _uhrzeitAbfahrt != null ? _formatTime(_uhrzeitAbfahrt!) : null,
-          'uhrzeitZuHause': _uhrzeitZuHause != null ? _formatTime(_uhrzeitZuHause!) : null,
           'nameBetroffener': _nameBetroffenerCtrl.text.trim(),
           'strasse': _strasseCtrl.text.trim(),
           'hausNr': _hausNrCtrl.text.trim(),
           'plz': _plzCtrl.text.trim(),
           'ort': _ortCtrl.text.trim(),
           'einsatzindikation': _einsatzindikation,
+          'bemerkungen': _bemerkungenCtrl.text.trim().isEmpty ? null : _bemerkungenCtrl.text.trim(),
           'alarmierteMitarbeiterIds': _selectedIds.toList(),
           'alarmierteMitarbeiterStatus': Map<String, int>.from(_alarmierteMitarbeiterStatus),
         },
@@ -2254,12 +2347,13 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     }
   }
 
-  Widget _field(TextEditingController ctrl, String label, {bool required = false}) =>
+  Widget _field(TextEditingController ctrl, String label, {bool required = false, bool readOnly = false}) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(
           controller: ctrl,
-          onChanged: required ? (_) => setState(() {}) : null,
+          readOnly: readOnly,
+          onChanged: !readOnly && required ? (_) => setState(() {}) : null,
           decoration: _inputDecoration.copyWith(
             labelText: label,
             fillColor: required && ctrl.text.trim().isEmpty ? _pflichtfeldGelb : Colors.white,
@@ -2272,11 +2366,12 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     TimeOfDay? value,
     ValueChanged<TimeOfDay> onPicked, {
     bool required = false,
+    bool readOnly = false,
   }) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: InkWell(
-          onTap: () => _pickUhrzeit(onPicked, initial: value),
+          onTap: readOnly ? null : () => _pickUhrzeit(onPicked, initial: value),
           child: InputDecorator(
             decoration: _inputDecoration.copyWith(
               labelText: label,
@@ -2296,7 +2391,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
         titleWidget: Row(
           children: [
             Text(
-              'Einsatz $nr bearbeiten',
+              _canEdit ? 'Einsatz $nr bearbeiten' : 'Einsatz $nr',
               style: const TextStyle(
                 color: AppTheme.primary,
                 fontWeight: FontWeight.w600,
@@ -2304,32 +2399,6 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
               ),
             ),
             const Spacer(),
-            DefaultTextStyle(
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade600, height: 1.2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Text('Status 3 = Einsatz übernommen'),
-                      Text('Status 4 = Am Einsatzort'),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Text('Status 7 = Einsatzstelle verlassen'),
-                      Text('Status 2 = Einsatz beendet'),
-                    ],
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
         onBack: widget.onBack,
@@ -2338,7 +2407,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
           ? const Center(child: CircularProgressIndicator())
           : LayoutBuilder(
               builder: (context, constraints) {
-                final useTwoColumns = constraints.maxWidth > 900;
+                final useTwoColumns = constraints.maxWidth > 600;
                 final leftColumn = Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -2350,6 +2419,8 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                 final rightColumn = Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _buildBemerkungenCardBearbeiten(),
+                    const SizedBox(height: 16),
                     _buildZuordnungEinsatzmittelCard(),
                     const SizedBox(height: 16),
                     _buildMassnahmenCardBearbeiten(),
@@ -2381,32 +2452,64 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                           ],
                         ),
                       const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: FilledButton(
-                              onPressed: _saving ? null : _speichern,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppTheme.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                              child: _saving ? const Text('Wird gespeichert...') : const Text('Speichern'),
-                            ),
-                          ),
-                          if ((widget.einsatz['status'] ?? 'offen') != 'abgeschlossen') ...[
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: _saving ? null : _abschliessen,
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                      if (_canEdit)
+                      LayoutBuilder(
+                        builder: (context, btnConstraints) {
+                          final narrow = btnConstraints.maxWidth < 400;
+                          if (narrow) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                FilledButton(
+                                  onPressed: _saving ? null : _speichern,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppTheme.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                  ),
+                                  child: _saving ? const Text('Wird gespeichert...') : const Text('Speichern'),
                                 ),
-                                child: const Text('Einsatz abschließen'),
+                                if ((widget.einsatz['status'] ?? 'offen') != 'abgeschlossen') ...[
+                                  const SizedBox(height: 12),
+                                  OutlinedButton(
+                                    onPressed: _saving ? null : _abschliessen,
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                    ),
+                                    child: const Text('Einsatz abschließen'),
+                                  ),
+                                ],
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: _saving ? null : _speichern,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppTheme.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                  ),
+                                  child: _saving ? const Text('Wird gespeichert...') : const Text('Speichern'),
+                                ),
                               ),
-                            ),
-                          ],
-                        ],
+                              if ((widget.einsatz['status'] ?? 'offen') != 'abgeschlossen') ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: _saving ? null : _abschliessen,
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                    ),
+                                    child: const Text('Einsatz abschließen'),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -2417,6 +2520,101 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
   }
 
   Widget _buildEinsatzdatenCard() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 400;
+        return Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Einsatzdaten',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true, readOnly: !_canEdit),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: InkWell(
+                    onTap: _canEdit ? _pickDatum : null,
+                    child: InputDecorator(
+                      decoration: _inputDecoration.copyWith(
+                        labelText: 'Einsatzdatum',
+                        fillColor: _einsatzDatum == null ? _pflichtfeldGelb : Colors.white,
+                      ),
+                      child: Text(_einsatzDatum != null ? _formatDate(_einsatzDatum!) : 'Datum wählen'),
+                    ),
+                  ),
+                ),
+                _uhrzeitField(
+                  'Uhrzeit Beginn',
+                  _uhrzeitBeginn,
+                  (t) => setState(() => _uhrzeitBeginn = t),
+                  required: true,
+                  readOnly: !_canEdit,
+                ),
+                _field(_nameBetroffenerCtrl, 'Name des Betroffenen', required: true, readOnly: !_canEdit),
+                if (narrow) ...[
+                  _field(_strasseCtrl, 'Straße', required: true, readOnly: !_canEdit),
+                  _field(_hausNrCtrl, 'Haus-Nr.', required: true, readOnly: !_canEdit),
+                  _field(_plzCtrl, 'PLZ', required: true, readOnly: !_canEdit),
+                  _field(_ortCtrl, 'Ort', required: true, readOnly: !_canEdit),
+                ] else ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _field(_strasseCtrl, 'Straße', required: true, readOnly: !_canEdit)),
+                      const SizedBox(width: 12),
+                      SizedBox(width: 100, child: _field(_hausNrCtrl, 'Haus-Nr.', required: true, readOnly: !_canEdit)),
+                    ],
+                  ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(width: 100, child: _field(_plzCtrl, 'PLZ', required: true, readOnly: !_canEdit)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _field(_ortCtrl, 'Ort', required: true, readOnly: !_canEdit)),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String?>(
+                  value: _einsatzindikation,
+                  isExpanded: true,
+                  decoration: _inputDecoration.copyWith(
+                    labelText: 'Einsatzindikation',
+                    fillColor: (_einsatzindikation == null || (_einsatzindikation ?? '').trim().isEmpty)
+                        ? _pflichtfeldGelb
+                        : Colors.white,
+                  ),
+                  items: _einsatzindikationOptions
+                      .map((e) => DropdownMenuItem<String?>(
+                            value: e.$1,
+                            child: Text(e.$2, overflow: TextOverflow.ellipsis, maxLines: 1),
+                          ))
+                      .toList(),
+              onChanged: _canEdit ? (v) => setState(() => _einsatzindikation = v) : null,
+            ),
+          ],
+        ),
+      ),
+    );
+      },
+    );
+  }
+
+  Widget _buildBemerkungenCardBearbeiten() {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -2429,77 +2627,84 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Einsatzdaten',
+              'Bemerkungen',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Colors.grey.shade800,
               ),
             ),
-            const SizedBox(height: 16),
-            _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: InkWell(
-                onTap: _pickDatum,
-                child: InputDecorator(
-                  decoration: _inputDecoration.copyWith(
-                    labelText: 'Einsatzdatum',
-                    fillColor: _einsatzDatum == null ? _pflichtfeldGelb : Colors.white,
-                  ),
-                  child: Text(_einsatzDatum != null ? _formatDate(_einsatzDatum!) : 'Datum wählen'),
-                ),
-              ),
-            ),
-            _uhrzeitField(
-              'Uhrzeit Beginn',
-              _uhrzeitBeginn,
-              (t) => setState(() => _uhrzeitBeginn = t),
-              required: true,
-            ),
-            _uhrzeitField('Einsatz übernommen', _uhrzeitEinsatzUebernommen, (t) => setState(() => _uhrzeitEinsatzUebernommen = t)),
-            _uhrzeitField('Am Einsatzort', _uhrzeitAnEinsatzort, (t) => setState(() => _uhrzeitAnEinsatzort = t)),
-            _uhrzeitField('Einsatzstelle verlassen', _uhrzeitAbfahrt, (t) => setState(() => _uhrzeitAbfahrt = t)),
-            _uhrzeitField('Einsatz beendet', _uhrzeitZuHause, (t) => setState(() => _uhrzeitZuHause = t)),
-            _field(_nameBetroffenerCtrl, 'Name des Betroffenen', required: true),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: _field(_strasseCtrl, 'Straße', required: true)),
-                const SizedBox(width: 12),
-                SizedBox(width: 100, child: _field(_hausNrCtrl, 'Haus-Nr.', required: true)),
-              ],
-            ),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: 100, child: _field(_plzCtrl, 'PLZ', required: true)),
-                const SizedBox(width: 12),
-                Expanded(child: _field(_ortCtrl, 'Ort', required: true)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String?>(
-              value: _einsatzindikation,
-              isExpanded: true,
+            const SizedBox(height: 12),
+            TextField(
+              controller: _bemerkungenCtrl,
+              readOnly: !_canEdit,
+              maxLines: 5,
               decoration: _inputDecoration.copyWith(
-                labelText: 'Einsatzindikation',
-                fillColor: (_einsatzindikation == null || (_einsatzindikation ?? '').trim().isEmpty)
-                    ? _pflichtfeldGelb
-                    : Colors.white,
+                labelText: null,
+                alignLabelWithHint: true,
               ),
-              items: _einsatzindikationOptions
-                  .map((e) => DropdownMenuItem<String?>(
-                        value: e.$1,
-                        child: Text(e.$2, overflow: TextOverflow.ellipsis, maxLines: 1),
-                      ))
-                  .toList(),
-              onChanged: (v) => setState(() => _einsatzindikation = v),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _onStatusChanged(String mitarbeiterId, int? newStatus) async {
+    if (newStatus != null) {
+      try {
+        final autoAbgeschlossen = await widget.service.setAlarmierterStatus(
+          widget.companyId,
+          widget.docId,
+          mitarbeiterId,
+          newStatus,
+        );
+        if (!mounted) return;
+        setState(() => _alarmierteMitarbeiterStatus[mitarbeiterId] = newStatus);
+        widget.einsatz['alarmierteMitarbeiterStatus'] ??= {};
+        (widget.einsatz['alarmierteMitarbeiterStatus'] as Map)[mitarbeiterId] = newStatus;
+        final einsatzNeu = await widget.service.get(widget.companyId, widget.docId);
+        if (mounted && einsatzNeu != null) setState(() => _einsatzData = einsatzNeu);
+        if (autoAbgeschlossen) {
+          widget.onEinsatzAbgeschlossen?.call();
+          widget.onBack();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Status gespeichert und beim Mitarbeiter aktualisiert.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } else {
+      try {
+        await widget.service.update(
+          widget.companyId,
+          widget.docId,
+          {'alarmierteMitarbeiterStatus.$mitarbeiterId': FieldValue.delete()},
+        );
+        if (!mounted) return;
+        setState(() => _alarmierteMitarbeiterStatus.remove(mitarbeiterId));
+        (widget.einsatz['alarmierteMitarbeiterStatus'] as Map?)?.remove(mitarbeiterId);
+        final einsatzNeu = await widget.service.get(widget.companyId, widget.docId);
+        if (mounted && einsatzNeu != null) setState(() => _einsatzData = einsatzNeu);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Status entfernt.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _showEmSuchenSheetBearbeiten() async {
@@ -2560,29 +2765,22 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                 ),
               )
             else
-              ...zugeordnet.map((m) {
-                final id = m['id'] as String? ?? '';
-                final name = m['displayName'] as String? ?? '${m['vorname']} ${m['nachname']}';
-                final typName = (m['typName'] ?? '').toString().trim();
-                final typColor = m['typColor'] as int?;
-                final isVerfuegbar = verfuegbareIds.contains(id);
-                final schichtColor = isVerfuegbar && typName.isNotEmpty
-                    ? SchichtplanNfsBereitschaftstypUtils.colorForTypData(typColor: typColor, typName: typName)
-                    : Colors.grey;
-                final status = _alarmierteMitarbeiterStatus[id];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.person_outline, size: 20, color: Colors.grey.shade600),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(name, overflow: TextOverflow.ellipsis),
-                      ),
-                      const Spacer(),
-                      Text('Status', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-                      const SizedBox(width: 6),
-                      SizedBox(
+              LayoutBuilder(
+                builder: (context, listConstraints) {
+                  final narrow = listConstraints.maxWidth < 400;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: zugeordnet.map((m) {
+                      final id = m['id'] as String? ?? '';
+                      final name = m['displayName'] as String? ?? '${m['vorname']} ${m['nachname']}';
+                      final typName = (m['typName'] ?? '').toString().trim();
+                      final typColor = m['typColor'] as int?;
+                      final isVerfuegbar = verfuegbareIds.contains(id);
+                      final schichtColor = isVerfuegbar && typName.isNotEmpty
+                          ? SchichtplanNfsBereitschaftstypUtils.colorForTypData(typColor: typColor, typName: typName)
+                          : Colors.grey;
+                      final status = _alarmierteMitarbeiterStatus[id];
+                      final statusDropdown = SizedBox(
                         width: 52,
                         child: DropdownButtonFormField<int?>(
                           value: status,
@@ -2599,66 +2797,138 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                             DropdownMenuItem(value: 7, child: Text('7')),
                             DropdownMenuItem(value: 2, child: Text('2')),
                           ],
-                          onChanged: (v) => setState(() {
-                            if (v != null) {
-                              _alarmierteMitarbeiterStatus[id] = v;
-                            } else {
-                              _alarmierteMitarbeiterStatus.remove(id);
-                            }
-                          }),
+                          onChanged: _canEdit ? (v) => _onStatusChanged(id, v) : null,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (typName.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: schichtColor.withOpacity(0.25),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: schichtColor.withOpacity(0.6)),
-                            ),
-                            child: Text(typName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: schichtColor)),
+                      );
+                      final typBadge = typName.isNotEmpty
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: schichtColor.withOpacity(0.25),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: schichtColor.withOpacity(0.6)),
+                              ),
+                              child: Text(typName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: schichtColor)),
+                            )
+                          : const SizedBox.shrink();
+                      final removeBtn = IconButton(
+                        icon: const Icon(Icons.remove_circle_outline, size: 20),
+                        iconSize: 20,
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(36, 36),
+                          padding: EdgeInsets.zero,
                         ),
-                      const SizedBox(width: 6),
-                      IconButton(
-                          icon: const Icon(Icons.remove_circle_outline, size: 20),
-                          iconSize: 20,
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(36, 36),
-                            padding: EdgeInsets.zero,
+                        color: Colors.red.shade400,
+                        onPressed: _canEdit
+                            ? () {
+                                setState(() {
+                                  _selectedIds.remove(id);
+                                  _alarmierteMitarbeiterStatus.remove(id);
+                                });
+                              }
+                            : null,
+                      );
+                      if (narrow) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.person_outline, size: 20, color: Colors.grey.shade600),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
+                                  removeBtn,
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Text('Status', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                                  const SizedBox(width: 6),
+                                  statusDropdown,
+                                  if (typName.isNotEmpty) ...[
+                                    const SizedBox(width: 8),
+                                    typBadge,
+                                  ],
+                                ],
+                              ),
+                            ],
                           ),
-                          color: Colors.red.shade400,
-                          onPressed: () {
-                            setState(() {
-                              _selectedIds.remove(id);
-                              _alarmierteMitarbeiterStatus.remove(id);
-                            });
-                          },
+                        );
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.person_outline, size: 20, color: Colors.grey.shade600),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(name, overflow: TextOverflow.ellipsis),
+                            ),
+                            const Spacer(),
+                            Text('Status', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                            const SizedBox(width: 6),
+                            statusDropdown,
+                            const SizedBox(width: 8),
+                            typBadge,
+                            const SizedBox(width: 6),
+                            removeBtn,
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            if (_canEdit) ...[
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 400;
+                  if (narrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _showEmSuchenSheetBearbeiten,
+                          icon: const Icon(Icons.search, size: 20),
+                          label: const Text('weitere Mitarbeiter alarmieren'),
+                          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), alignment: Alignment.centerLeft),
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton.icon(
+                          onPressed: _showEmSuchenSheetBearbeiten,
+                          icon: const Icon(Icons.add, size: 20),
+                          label: const Text('Zuteilen'),
+                          style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
                         ),
                       ],
-                    ),
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _showEmSuchenSheetBearbeiten,
+                          icon: const Icon(Icons.search, size: 20),
+                          label: const Text('weitere Mitarbeiter alarmieren'),
+                          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), alignment: Alignment.centerLeft),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        onPressed: _showEmSuchenSheetBearbeiten,
+                        icon: const Icon(Icons.add, size: 20),
+                        label: const Text('Zuteilen'),
+                        style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                      ),
+                    ],
                   );
-              }),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _showEmSuchenSheetBearbeiten,
-                    icon: const Icon(Icons.search, size: 20),
-                    label: const Text('weitere Mitarbeiter alarmieren'),
-                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), alignment: Alignment.centerLeft),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                FilledButton.icon(
-                  onPressed: _showEmSuchenSheetBearbeiten,
-                  icon: const Icon(Icons.add, size: 20),
-                  label: const Text('Zuteilen'),
-                  style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                ),
-              ],
-            ),
+                },
+              ),
+            ],
           ],
         ),
       ),
@@ -2684,11 +2954,12 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
                 ),
                 const Spacer(),
-                IconButton.filled(
-                  onPressed: _showAddMassnahmeDialog,
-                  icon: const Icon(Icons.add, size: 20),
-                  style: IconButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white),
-                ),
+                if (_canEdit)
+                  IconButton.filled(
+                    onPressed: _showAddMassnahmeDialog,
+                    icon: const Icon(Icons.add, size: 20),
+                    style: IconButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -2864,11 +3135,12 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
                 ),
                 const Spacer(),
-                IconButton.filled(
-                  onPressed: _showAddRueckmeldungDialog,
-                  icon: const Icon(Icons.add, size: 20),
-                  style: IconButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white),
-                ),
+                if (_canEdit)
+                  IconButton.filled(
+                    onPressed: _showAddRueckmeldungDialog,
+                    icon: const Icon(Icons.add, size: 20),
+                    style: IconButton.styleFrom(backgroundColor: Colors.green.shade600, foregroundColor: Colors.white),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -3116,8 +3388,17 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     }
   }
 
+  static Color _statusColor(int status) {
+    switch (status) {
+      case 3: return Colors.amber.shade700;   // Einsatz übernommen - gelb
+      case 4: return Colors.red.shade700;    // Am Einsatzort - hellrot
+      case 7: return Colors.deepPurple.shade700; // Einsatzstelle verlassen - violett
+      case 2: return Colors.green.shade700;  // Einsatz beendet - grün
+      default: return Colors.grey.shade600;
+    }
+  }
+
   Widget _buildStatusCard() {
-    const statusColors = {2: Color(0xFF22C55E), 3: Color(0xFF3B82F6), 4: Color(0xFFF59E0B), 7: Color(0xFF8B5CF6)};
     final einsatz = _einsatzData ?? widget.einsatz;
     final zeitenMap = einsatz['alarmierteMitarbeiterZeiten'];
     final zeiten = zeitenMap is Map ? zeitenMap as Map : <String, dynamic>{};
@@ -3156,13 +3437,14 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
               }
               final status = _alarmierteMitarbeiterStatus[id];
               final label = status != null ? (AlarmierungNfsService.statusLabels[status] ?? 'Status $status') : '–';
-              final color = status != null ? (statusColors[status] ?? Colors.grey) : Colors.grey;
+              final color = status != null ? _statusColor(status) : Colors.grey;
               final z = zeiten[id];
               final zeitStr = z is Map
                   ? _zeitFromZeiten(z, status)
                   : '';
               final badge = zeitStr.isNotEmpty ? '$label ($zeitStr)' : label;
-              return _buildStatusRow(name, badge, color);
+              final zeitenMap = z is Map ? z as Map<String, dynamic> : <String, dynamic>{};
+              return _buildStatusRow(name, badge, color, zeitenMap);
             }),
           ],
         ),
@@ -3178,35 +3460,90 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     return '';
   }
 
-  Widget _buildStatusRow(String name, String badge, Color color) {
+  Widget _buildStatusRow(String name, String badge, Color color, Map<String, dynamic> zeitenMap) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.25),
-              shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.6), width: 1),
-            ),
+      child: InkWell(
+        onTap: () => _showStatusZeitenDialog(name, zeitenMap),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          child: Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.25),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color.withOpacity(0.6), width: 1),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(name)),
+              if (badge.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.25),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: color.withOpacity(0.6), width: 1),
+                  ),
+                  child: Text(
+                    badge,
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
+                  ),
+                ),
+              const SizedBox(width: 4),
+              Icon(Icons.info_outline, size: 18, color: Colors.grey.shade600),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(name)),
-          if (badge.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.25),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: color.withOpacity(0.6), width: 1),
-              ),
-              child: Text(
-                badge,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
-              ),
-            ),
+        ),
+      ),
+    );
+  }
+
+  void _showStatusZeitenDialog(String mitarbeiterName, Map<String, dynamic> zeiten) {
+    final rows = <Widget>[];
+    final labels = {
+      'uhrzeitEinsatzUebernommen': 'Einsatz übernommen',
+      'uhrzeitAnEinsatzort': 'Am Einsatzort',
+      'uhrzeitAbfahrt': 'Einsatzstelle verlassen',
+      'uhrzeitZuHause': 'Einsatz beendet',
+    };
+    for (final e in labels.entries) {
+      final val = zeiten[e.key];
+      if (val != null && val.toString().trim().isNotEmpty) {
+        rows.add(Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(e.value, style: TextStyle(color: Colors.grey.shade700)),
+              Text(val.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ));
+      }
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Statuszeiten: $mitarbeiterName'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: rows.isEmpty
+                ? [Text('Keine Statuszeiten gespeichert.', style: TextStyle(color: Colors.grey.shade600))]
+                : rows,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Schließen'),
+          ),
         ],
       ),
     );
