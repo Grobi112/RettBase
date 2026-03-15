@@ -27,6 +27,12 @@ class HomeScreen extends StatefulWidget {
   final String? companyId;
   final String? userRole;
   final VoidCallback? onInfoDeleted;
+  final ValueListenable<Map<String, dynamic>?>? activeEinsatzListenable;
+  final String? mitarbeiterId;
+  final VoidCallback? onEinsatzDetailsTap;
+  final VoidCallback? onProtokollErstellenTap;
+  /// true = es gibt abgeschlossene Einsätze, in denen der Nutzer alarmiert war (Button nur dann anzeigen)
+  final ValueListenable<bool>? hatAbgeschlosseneEinsaetzeListenable;
 
   const HomeScreen({
     super.key,
@@ -42,6 +48,11 @@ class HomeScreen extends StatefulWidget {
     this.companyId,
     this.userRole,
     this.onInfoDeleted,
+    this.activeEinsatzListenable,
+    this.mitarbeiterId,
+    this.onEinsatzDetailsTap,
+    this.onProtokollErstellenTap,
+    this.hatAbgeschlosseneEinsaetzeListenable,
   });
 
   @override
@@ -50,17 +61,96 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Timer? _timeTimer;
+  bool _einsatzPopupShown = false;
 
   @override
   void initState() {
     super.initState();
     _timeTimer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+    widget.activeEinsatzListenable?.addListener(_onActiveEinsatzChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onActiveEinsatzChanged());
   }
 
   @override
   void dispose() {
+    widget.activeEinsatzListenable?.removeListener(_onActiveEinsatzChanged);
     _timeTimer?.cancel();
     super.dispose();
+  }
+
+  void _onActiveEinsatzChanged() {
+    if (!mounted) return;
+    final e = widget.activeEinsatzListenable?.value;
+    if (e != null && !_einsatzPopupShown) {
+      _einsatzPopupShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showEinsatzPopup(e));
+    }
+    setState(() {});
+  }
+
+  void _showEinsatzPopup(Map<String, dynamic> einsatz) {
+    if (!mounted) return;
+    final nr = einsatz['einsatzNr'] as String? ?? '-';
+    final datum = einsatz['einsatzDatum'] as String? ?? '';
+    final name = einsatz['nameBetroffener'] as String? ?? '';
+    final indikation = (einsatz['einsatzindikation'] as String?) ?? '';
+    final indikationLabel = _einsatzindikationLabel(indikation);
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        title: Text('Aktiver Einsatz $nr'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (datum.isNotEmpty) Text('Datum: $datum'),
+              if (name.isNotEmpty) Text('Betroffener: $name'),
+              if (indikationLabel.isNotEmpty) Text('Indikation: $indikationLabel'),
+              const SizedBox(height: 16),
+              Text(
+                'Sie wurden zu diesem Einsatz alarmiert.',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Schließen'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              widget.onEinsatzDetailsTap?.call();
+            },
+            child: const Text('Einsatzdetails'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _einsatzindikationLabel(String key) {
+    const opts = [
+      ('utn', 'ÜTN - Überbringen Todesnachricht'),
+      ('haeuslicher_todesfall', 'häuslicher Todesfall / akute Erkrankung'),
+      ('frustrane_reanimation', 'frustrane Reanimation'),
+      ('suizid', 'Suizid'),
+      ('verkehrsunfall', 'Verkehrsunfall'),
+      ('arbeitsunfall', 'Arbeitsunfall'),
+      ('schuleinsatz', 'Schuleinsatz'),
+      ('brand_explosion_unwetter', 'Brand / Explosion / Unwetter'),
+      ('gewalt_verbrechen', 'Gewalttat / Verbrechen'),
+      ('grosse_einsatzlage', 'Große Einsatzlage'),
+      ('ploetzlicher_kindstod', 'plötzlicher Kindstod'),
+      ('sonstiges', 'sonstiges'),
+    ];
+    if (key.isEmpty) return '';
+    final found = opts.where((e) => e.$1 == key).firstOrNull;
+    return found?.$2 ?? key;
   }
 
   /// Liefert immer nur den Vornamen für die Begrüßung (für alle Firmen).
@@ -233,6 +323,48 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           }).toList(),
                         ),
+                      if (widget.activeEinsatzListenable?.value != null) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: widget.onEinsatzDetailsTap,
+                            icon: const Icon(Icons.emergency, size: 22),
+                            label: const Text('Einsatzdetails'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.red.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                          ),
+                        ),
+                      ] else if (widget.onProtokollErstellenTap != null) ...[
+                        ValueListenableBuilder<bool>(
+                          valueListenable: widget.hatAbgeschlosseneEinsaetzeListenable ?? ValueNotifier<bool>(false),
+                          builder: (_, hatAbgeschlossene, __) {
+                            if (!hatAbgeschlossene) return const SizedBox.shrink();
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed: widget.onProtokollErstellenTap,
+                                    icon: const Icon(Icons.description, size: 22),
+                                    label: const Text('Protokoll erstellen'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: Colors.amber.shade700,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
                       if (showContainers) ...[
                         const SizedBox(height: 24),
                         LayoutBuilder(
@@ -398,7 +530,7 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
         colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
       );
     }
-    if (id == 'ssd' || id == 'einsatzprotokollnfs') {
+    if (id == 'ssd' || id == 'einsatzprotokollnfs' || id == 'alarmierungnfs') {
       return SvgPicture.asset(
         'img/icon_einsatzprotokoll_nfs.svg',
         width: size,

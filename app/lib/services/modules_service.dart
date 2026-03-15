@@ -47,6 +47,7 @@ class ModulesService {
     AppModule(id: 'schichtplannfs', label: 'Schichtplan NFS', url: '', order: 32, roles: _defaultRoles),
     AppModule(id: 'telefonlistenfs', label: 'TelefonlisteNFS', url: '', order: 33, roles: ['superadmin', 'admin', 'koordinator', 'user']),
     AppModule(id: 'einsatzprotokollnfs', label: 'Einsatzprotokoll Notfallseelsorge', url: '', order: 34, roles: _defaultRoles),
+    AppModule(id: 'alarmierungnfs', label: 'Einsatzverwaltung', url: '', order: 36, roles: ['superadmin', 'admin', 'koordinator']),
     AppModule(id: 'fahrzeugstatus', label: 'Fahrzeugstatus', url: '', order: 35, roles: _defaultRoles),
   ];
 
@@ -206,14 +207,21 @@ class ModulesService {
             bereichResolved != KundenBereich.notfallseelsorge &&
             !isAdminCompany &&
             !isGlobalSuperadmin) continue;
+        // Alarmierung NFS: nur bei Notfallseelsorge
+        if (m.id == 'alarmierungnfs' &&
+            bereichResolved != KundenBereich.notfallseelsorge &&
+            !isAdminCompany &&
+            !isGlobalSuperadmin) continue;
         // SSD bei Schulsanitätsdienst: immer enabled (ohne explizite Freischaltung in kunden/modules)
         final ssdAutoEnabled = m.id == 'ssd' && bereichResolved == KundenBereich.schulsanitaetsdienst;
         // Schichtplan NFS bei Notfallseelsorge: immer enabled
         final schichtplannfsAutoEnabled = m.id == 'schichtplannfs' && bereichResolved == KundenBereich.notfallseelsorge;
         // TelefonlisteNFS bei Notfallseelsorge: immer enabled
         final telefonlistenfsAutoEnabled = m.id == 'telefonlistenfs' && bereichResolved == KundenBereich.notfallseelsorge;
+        // Alarmierung NFS bei Notfallseelsorge: immer enabled
+        final alarmierungnfsAutoEnabled = m.id == 'alarmierungnfs' && bereichResolved == KundenBereich.notfallseelsorge;
         // Einsatzprotokoll NFS: nur wenn Firma admin es freischaltet (kein Auto-Enable wie Schichtplan/Telefonliste)
-        final enabled = ssdAutoEnabled || schichtplannfsAutoEnabled || telefonlistenfsAutoEnabled || isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
+        final enabled = ssdAutoEnabled || schichtplannfsAutoEnabled || telefonlistenfsAutoEnabled || alarmierungnfsAutoEnabled || isAdminCompany || isGlobalSuperadmin || (companyMods[m.id] == true);
         if (!enabled) continue;
         final def = allMods[m.id];
         final roles = def?['roles'] as List? ?? m.roles;

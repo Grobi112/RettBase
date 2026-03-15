@@ -51,7 +51,11 @@ import 'einsatzprotokoll_ssd_screen.dart';
 import 'einsatzprotokoll_nfs_screen.dart';
 import 'schichtplan_nfs_screen.dart';
 import '../services/schichtplan_nfs_service.dart';
+import '../services/alarmierung_nfs_service.dart';
+import '../services/mitarbeiter_service.dart';
 import 'telefonliste_nfs_screen.dart';
+import 'alarmierung_nfs_screen.dart';
+import 'einsatzdetails_nfs_screen.dart';
 import 'fahrzeugstatus_screen.dart';
 import 'placeholder_module_screen.dart';
 import 'module_webview_screen.dart';
@@ -91,7 +95,15 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   final _chatService = ChatService();
   final _emailService = EmailService();
   final _schichtplanNfsService = SchichtplanNfsService();
+  final _alarmierungNfsService = AlarmierungNfsService();
+  final _mitarbeiterService = MitarbeiterService();
   final _bodyNavigatorKey = GlobalKey<NavigatorState>();
+
+  final _activeEinsatzNotifier = ValueNotifier<Map<String, dynamic>?>(null);
+  StreamSubscription<Map<String, dynamic>?>? _activeEinsatzSub;
+  final _hatAbgeschlosseneEinsaetzeNotifier = ValueNotifier<bool>(false);
+  StreamSubscription<List<Map<String, dynamic>>>? _abgeschlosseneEinsaetzeSub;
+  String? _mitarbeiterId;
 
   final _chatUnreadNotifier = ValueNotifier<int>(0);
   StreamSubscription<int>? _chatUnreadSub;
@@ -213,6 +225,50 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     _schichtplanNfsMeldungenSub = null;
   }
 
+  void _startActiveEinsatzStream(String companyId, String uid) async {
+    _activeEinsatzSub?.cancel();
+    _activeEinsatzSub = null;
+    _activeEinsatzNotifier.value = null;
+    _mitarbeiterId = null;
+    try {
+      _mitarbeiterId = await _mitarbeiterService.getMitarbeiterIdForUid(companyId, uid);
+      if (_mitarbeiterId == null || _mitarbeiterId!.isEmpty) return;
+      _activeEinsatzSub = _alarmierungNfsService
+          .streamActiveEinsatzForMitarbeiter(companyId, _mitarbeiterId!)
+          .listen((e) {
+        if (mounted) _activeEinsatzNotifier.value = e;
+      });
+    } catch (_) {}
+  }
+
+  void _stopActiveEinsatzStream() {
+    _activeEinsatzSub?.cancel();
+    _activeEinsatzSub = null;
+    _activeEinsatzNotifier.value = null;
+    _mitarbeiterId = null;
+  }
+
+  void _startAbgeschlosseneEinsaetzeStream(String companyId, String uid) async {
+    _abgeschlosseneEinsaetzeSub?.cancel();
+    _abgeschlosseneEinsaetzeSub = null;
+    _hatAbgeschlosseneEinsaetzeNotifier.value = false;
+    try {
+      final mid = await _mitarbeiterService.getMitarbeiterIdForUid(companyId, uid);
+      if (mid == null || mid.isEmpty) return;
+      _abgeschlosseneEinsaetzeSub = _alarmierungNfsService
+          .streamAbgeschlosseneEinsaetzeForMitarbeiter(companyId, mid)
+          .listen((list) {
+        if (mounted) _hatAbgeschlosseneEinsaetzeNotifier.value = list.isNotEmpty;
+      });
+    } catch (_) {}
+  }
+
+  void _stopAbgeschlosseneEinsaetzeStream() {
+    _abgeschlosseneEinsaetzeSub?.cancel();
+    _abgeschlosseneEinsaetzeSub = null;
+    _hatAbgeschlosseneEinsaetzeNotifier.value = false;
+  }
+
   void _maybeOpenChatFromNotification(String companyId) {
     final chat = PushNotificationService.initialChatFromNotification;
     if (chat == null) return;
@@ -268,7 +324,11 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     _emailUnreadSub?.cancel();
     _badgePollTimer?.cancel();
     _stopSchichtplanNfsMeldungenStream();
+    _stopActiveEinsatzStream();
+    _stopAbgeschlosseneEinsaetzeStream();
     _schichtplanNfsMeldungenNotifier.dispose();
+    _activeEinsatzNotifier.dispose();
+    _hatAbgeschlosseneEinsaetzeNotifier.dispose();
     _containerSlotsNotifier.dispose();
     _infoItemsNotifier.dispose();
     super.dispose();
@@ -403,6 +463,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       _startChatUnreadListener();
       _startEmailUnreadListener();
       _startSchichtplanNfsMeldungenStream();
+      _startActiveEinsatzStream(effectiveCompanyId, user.uid);
+      _startAbgeschlosseneEinsaetzeStream(effectiveCompanyId, user.uid);
       if (kIsWeb) {
         final h = url_hash.getInitialHash();
         PushNotificationService.setInitialChatFromHash(h);
@@ -532,11 +594,54 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       informationenItemsListenable: _infoItemsNotifier,
       companyId: _companyId,
       userRole: _userRole,
+      activeEinsatzListenable: _activeEinsatzNotifier,
+      mitarbeiterId: _mitarbeiterId,
+      onEinsatzDetailsTap: _openEinsatzDetails,
+      onProtokollErstellenTap: _openProtokollErstellen,
+      hatAbgeschlosseneEinsaetzeListenable: _hatAbgeschlosseneEinsaetzeNotifier,
       onInfoDeleted: () async {
         final infos = await _infoService.loadInformationen(_companyId);
         if (mounted) _infoItemsNotifier.value = infos;
       },
     );
+  }
+
+  void _openProtokollErstellen() {
+    _bodyNavigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => EinsatzprotokollNfsScreen(
+          companyId: _companyId,
+          mitarbeiterId: _mitarbeiterId,
+          onBack: () => _bodyNavigatorKey.currentState?.pop(),
+        ),
+      ),
+    );
+  }
+
+  void _openEinsatzDetails() {
+    final einsatz = _activeEinsatzNotifier.value;
+    final mid = _mitarbeiterId;
+    if (einsatz == null || mid == null) return;
+    _bodyNavigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => EinsatzdetailsNfsScreen(
+          companyId: _companyId,
+          mitarbeiterId: mid,
+          einsatz: Map<String, dynamic>.from(einsatz),
+          onBack: () => _bodyNavigatorKey.currentState?.pop(),
+        ),
+      ),
+    ).then((result) {
+      if (result == 'abgeschlossen' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Einsatz beendet und abgeschlossen. Er erscheint unter „Abgeschlossene Einsätze“.',
+            ),
+          ),
+        );
+      }
+    });
   }
 
   /// Öffnet Modul im Body-Bereich (Header bleibt sichtbar)
@@ -748,6 +853,14 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           onBack: onBack,
         );
         break;
+      case 'alarmierungnfs':
+        screen = AlarmierungNfsScreen(
+          companyId: _companyId,
+          userRole: _userRole,
+          title: mod.label ?? 'Einsatzverwaltung',
+          onBack: onBack,
+        );
+        break;
       case 'fahrzeugstatus':
         screen = FahrzeugstatusScreen(
           companyId: _companyId,
@@ -910,7 +1023,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   /// SVG-Icon für alle Einsatzprotokolle (Punkt 2: Dokument mit Stift)
   Widget _drawerLeadingForModule(String id, {double size = 22}) {
     const iconColor = Colors.black;
-    if (id == 'ssd' || id == 'einsatzprotokollnfs') {
+    if (id == 'ssd' || id == 'einsatzprotokollnfs' || id == 'alarmierungnfs') {
       return SvgPicture.asset(
         'img/icon_einsatzprotokoll_nfs.svg',
         width: size,

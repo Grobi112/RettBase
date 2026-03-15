@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/auth_data_service.dart';
 import '../services/einsatzprotokoll_nfs_service.dart';
+import '../services/alarmierung_nfs_service.dart';
 import 'einsatzprotokoll_nfs_einstellungen_screen.dart';
 
 String _formatDate(DateTime d) =>
@@ -11,6 +13,34 @@ String _formatDate(DateTime d) =>
 
 String _formatTime(TimeOfDay t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+/// Parst "HH:mm" oder "HH:mm:ss" zu TimeOfDay.
+TimeOfDay? _parseTime(String? s) {
+  if (s == null || s.trim().isEmpty) return null;
+  final parts = s.trim().split(RegExp(r'[:\s]'));
+  if (parts.isEmpty) return null;
+  final h = int.tryParse(parts[0]);
+  final m = parts.length >= 2 ? int.tryParse(parts[1]) : 0;
+  if (h == null || h < 0 || h > 23) return null;
+  return TimeOfDay(hour: h, minute: (m ?? 0).clamp(0, 59));
+}
+
+/// Parst "DD.MM.YYYY" zu DateTime.
+DateTime? _parseDate(String? s) {
+  if (s == null || s.trim().isEmpty) return null;
+  final parts = s.trim().split('.');
+  if (parts.length != 3) return null;
+  final d = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  final y = int.tryParse(parts[2]);
+  if (d == null || m == null || y == null) return null;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  try {
+    return DateTime(y, m, d);
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Einsatzdauer aus Alarmierungszeit und Einsatzende (HH.MM)
 String _formatEinsatzdauer(TimeOfDay? alarm, TimeOfDay? ende) {
@@ -72,12 +102,14 @@ class EinsatzprotokollNfsScreen extends StatefulWidget {
   final String companyId;
   final String? title;
   final VoidCallback onBack;
+  final String? mitarbeiterId;
 
   const EinsatzprotokollNfsScreen({
     super.key,
     required this.companyId,
     this.title,
     required this.onBack,
+    this.mitarbeiterId,
   });
 
   @override
@@ -88,8 +120,12 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
   final _authService = AuthService();
   final _authDataService = AuthDataService();
   final _nfsService = EinsatzprotokollNfsService();
+  final _alarmierungNfsService = AlarmierungNfsService();
   bool _saving = false;
   String? _userRole;
+  List<Map<String, dynamic>> _abgeschlosseneEinsaetze = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _abgeschlosseneEinsaetzeSub;
+  String? _selectedEinsatzId; // null = nicht gewählt, "manual" = manuell, sonst doc id
 
   String? get _einsatzdauerForSave {
     final d = _formatEinsatzdauer(_alarmierungszeit, _einsatzendeTime);
@@ -145,10 +181,24 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
     super.initState();
     _loadAuth();
     _loadLaufendeNrPreview();
+    if (widget.mitarbeiterId != null && widget.mitarbeiterId!.isNotEmpty) {
+      _abgeschlosseneEinsaetzeSub = _alarmierungNfsService
+          .streamAbgeschlosseneEinsaetzeForMitarbeiter(widget.companyId, widget.mitarbeiterId!)
+          .listen((list) {
+        if (mounted) setState(() {
+          _abgeschlosseneEinsaetze = list;
+          if (_selectedEinsatzId != null && _selectedEinsatzId != 'manual') {
+            final found = list.any((e) => (e['id'] ?? '').toString() == _selectedEinsatzId);
+            if (!found) _selectedEinsatzId = null;
+          }
+        });
+      });
+    }
   }
 
   @override
   void dispose() {
+    _abgeschlosseneEinsaetzeSub?.cancel();
     _laufendeNrCtrl.dispose();
     _nameCtrl.dispose();
     _einsatzNrCtrl.dispose();
@@ -177,9 +227,36 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
     }
   }
 
+  /// Laufende-Interne-Nr: Wird beim Erstellen des Protokolls vergeben.
+  /// Bei Einsatz-Auswahl: aus laufendeNr des Einsatzes (nicht einsatzNr!).
+  /// Einzelperson: laufendeNr; mehrere: laufendeNr-1, laufendeNr-2, …
   Future<void> _loadLaufendeNrPreview() async {
+    if (!mounted) return;
     try {
-      final nr = await _nfsService.getNextLaufendeInterneNrPreview(widget.companyId);
+      String nr;
+      if (_selectedEinsatzId != null && _selectedEinsatzId != 'manual') {
+        final e = _abgeschlosseneEinsaetze.firstWhere(
+          (x) => (x['id'] ?? '').toString() == _selectedEinsatzId,
+          orElse: () => <String, dynamic>{},
+        );
+        if (e.isNotEmpty) {
+          final base = (e['laufendeNr'] ?? '').toString().trim();
+          final ids = (e['alarmierteMitarbeiterIds'] as List?)?.map((x) => x.toString()).toList() ?? [];
+          final mid = widget.mitarbeiterId;
+          if (base.isNotEmpty && mid != null && ids.length > 1) {
+            final idx = ids.indexOf(mid);
+            nr = idx >= 0 ? '$base-${idx + 1}' : base;
+          } else if (base.isNotEmpty) {
+            nr = base;
+          } else {
+            nr = await _nfsService.getNextLaufendeInterneNrPreview(widget.companyId);
+          }
+        } else {
+          nr = await _nfsService.getNextLaufendeInterneNrPreview(widget.companyId);
+        }
+      } else {
+        nr = await _nfsService.getNextLaufendeInterneNrPreview(widget.companyId);
+      }
       if (mounted) setState(() => _laufendeNrCtrl.text = nr);
     } catch (_) {
       if (mounted) setState(() => _laufendeNrCtrl.text = '–');
@@ -295,11 +372,35 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
         'einsatznachbesprechungSonstiges': _einsatznachbesprechungGewuenscht == 'sonstiges' ? _einsatznachbesprechungSonstigesCtrl.text.trim() : null,
       };
 
+      // Laufende-Interne-Nr: aus laufendeNr des Einsatzes (nicht einsatzNr!)
+      String? laufendeNrOverride;
+      if (_selectedEinsatzId != null && _selectedEinsatzId != 'manual') {
+        Map<String, dynamic>? e;
+        for (final x in _abgeschlosseneEinsaetze) {
+          if ((x['id'] ?? '').toString() == _selectedEinsatzId) {
+            e = x;
+            break;
+          }
+        }
+        if (e != null) {
+          final base = (e['laufendeNr'] ?? '').toString().trim();
+          final ids = (e['alarmierteMitarbeiterIds'] as List?)?.map((x) => x.toString()).toList() ?? [];
+          final mid = widget.mitarbeiterId;
+          if (base.isNotEmpty && mid != null && ids.length > 1) {
+            final idx = ids.indexOf(mid);
+            laufendeNrOverride = idx >= 0 ? '$base-${idx + 1}' : base;
+          } else if (base.isNotEmpty) {
+            laufendeNrOverride = base;
+          }
+        }
+      }
+
       final result = await _nfsService.create(
         widget.companyId,
         data,
         creatorUid: user?.uid,
         creatorName: creatorName,
+        laufendeNrOverride: laufendeNrOverride,
       );
 
       if (mounted) {
@@ -320,6 +421,7 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
 
   void _resetForm() {
     setState(() {
+      _selectedEinsatzId = null;
       _einsatzDatum = null;
       _einsatzNrCtrl.clear();
       _alarmierungszeit = null;
@@ -586,6 +688,130 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
     );
   }
 
+  void _applyEinsatzSelection(Map<String, dynamic> e) {
+    // Einsatz-Nr = vom Koordinator bei „Neuer Einsatz“ manuell hinterlegt (nicht laufendeNr!)
+    final einsatzNr = (e['einsatzNr'] ?? '').toString().trim();
+    _einsatzNrCtrl.text = einsatzNr;
+
+    // Datum aus Einsatz übernehmen
+    final datumStr = (e['einsatzDatum'] ?? '').toString();
+    _einsatzDatum = _parseDate(datumStr);
+
+    // Statuszeiten: aus alarmierteMitarbeiterZeiten (Status 3→Alarmierung, 4→Eintreffen, 7→Abfahrt, 2→Einsatzende)
+    // Fallback: Top-Level-Zeiten vom Koordinator (BearbeitenScreen)
+    Map<String, dynamic>? z;
+    final zeiten = e['alarmierteMitarbeiterZeiten'];
+    final mid = widget.mitarbeiterId;
+    if (zeiten is Map && mid != null) {
+      z = zeiten[mid] as Map<String, dynamic>?;
+      if (z == null) {
+        for (final entry in zeiten.entries) {
+          if (entry.key.toString() == mid && entry.value is Map) {
+            z = Map<String, dynamic>.from(entry.value as Map);
+            break;
+          }
+        }
+      }
+    }
+    if (z != null && z.isNotEmpty) {
+      _alarmierungszeit = _parseTime((z['uhrzeitEinsatzUebernommen'] ?? '').toString());
+      _eintreffenTime = _parseTime((z['uhrzeitAnEinsatzort'] ?? '').toString());
+      _abfahrtTime = _parseTime((z['uhrzeitAbfahrt'] ?? '').toString());
+      _einsatzendeTime = _parseTime((z['uhrzeitZuHause'] ?? '').toString());
+    } else {
+      // Fallback: Zeiten auf Einsatz-Ebene (vom Koordinator gesetzt)
+      _alarmierungszeit = _parseTime((e['uhrzeitEinsatzUebernommen'] ?? '').toString());
+      _eintreffenTime = _parseTime((e['uhrzeitAnEinsatzort'] ?? '').toString());
+      _abfahrtTime = _parseTime((e['uhrzeitAbfahrt'] ?? '').toString());
+      _einsatzendeTime = _parseTime((e['uhrzeitZuHause'] ?? '').toString());
+    }
+  }
+
+  void _applyFromList(String? v) {
+    if (v == null || !mounted) return;
+    for (final x in _abgeschlosseneEinsaetze) {
+      if ((x['id'] ?? '').toString() == v) {
+        setState(() => _applyEinsatzSelection(x));
+        return;
+      }
+    }
+  }
+
+  void _clearEinsatzSelection() {
+    _einsatzNrCtrl.clear();
+    _einsatzDatum = null;
+    _alarmierungszeit = null;
+    _eintreffenTime = null;
+    _abfahrtTime = null;
+    _einsatzendeTime = null;
+  }
+
+  Widget _buildEinsatzNrField({bool required = true}) {
+    final hasDropdown = widget.mitarbeiterId != null && _abgeschlosseneEinsaetze.isNotEmpty;
+    if (!hasDropdown) {
+      return _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: required);
+    }
+    final dropdownValue = _selectedEinsatzId ?? '';
+    final items = <DropdownMenuItem<String>>[
+      const DropdownMenuItem(value: '', child: Text('bitte auswählen ...')),
+      ..._abgeschlosseneEinsaetze.map((e) {
+        final id = (e['id'] ?? '').toString();
+        // Einsatz-Nr = Koordinator-Eingabe; laufendeNr NICHT hier anzeigen
+        final einsatzNr = (e['einsatzNr'] ?? '').toString();
+        final datum = (e['einsatzDatum'] ?? '').toString();
+        final label = einsatzNr.isNotEmpty ? '$einsatzNr${datum.isNotEmpty ? ' ($datum)' : ''}' : (datum.isNotEmpty ? 'Einsatz $datum' : id);
+        return DropdownMenuItem<String>(
+          value: id,
+          child: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
+        );
+      }),
+      const DropdownMenuItem(value: 'manual', child: Text('Manuell eingeben')),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<String>(
+            value: dropdownValue,
+            isExpanded: true,
+            decoration: _inputDecoration.copyWith(
+              labelText: 'Einsatz-Nr.',
+              fillColor: required && _einsatzNrCtrl.text.trim().isEmpty ? _pflichtfeldGelb : Colors.white,
+            ),
+            items: items,
+            onChanged: (v) async {
+              setState(() => _selectedEinsatzId = v);
+              if (v == null || v.isEmpty) {
+                setState(() => _clearEinsatzSelection());
+              } else if (v == 'manual') {
+                setState(() => _clearEinsatzSelection());
+              } else {
+                // Frische Daten vom Server laden (inkl. alarmierteMitarbeiterZeiten)
+                final docId = v.toString();
+                try {
+                  final e = await _alarmierungNfsService.get(widget.companyId, docId);
+                  if (mounted && e != null) {
+                    setState(() => _applyEinsatzSelection(e));
+                  } else {
+                    _applyFromList(v);
+                  }
+                } catch (_) {
+                  _applyFromList(v);
+                }
+              }
+              if (mounted) _loadLaufendeNrPreview();
+            },
+          ),
+          if (_selectedEinsatzId == 'manual') ...[
+            const SizedBox(height: 8),
+            _field(_einsatzNrCtrl, 'Einsatz-Nr. (manuell)', required: required),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _field(TextEditingController ctrl, String label, {List<TextInputFormatter>? inputFormatters, String? hintText, bool required = false, int maxLines = 1}) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(
@@ -693,7 +919,7 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
                     ),
                   ),
                 ),
-                _field(_einsatzNrCtrl, 'Einsatz-Nr.', inputFormatters: [FilteringTextInputFormatter.digitsOnly], required: true),
+                _buildEinsatzNrField(required: true),
                 _uhrzeitField('Alarmierungszeit (HH:MM)', _alarmierungszeit, (t) => _alarmierungszeit = t, required: true, onPick: () => _pickUhrzeit((t) => _alarmierungszeit = t, initial: _alarmierungszeit)),
                 _uhrzeitField('Eintreffen vor Ort (HH:MM)', _eintreffenTime, (t) => _eintreffenTime = t, required: true, onPick: () => _pickUhrzeit((t) => _eintreffenTime = t, initial: _eintreffenTime)),
                 _uhrzeitField('Abfahrt vom Einsatzort (HH:MM)', _abfahrtTime, (t) => _abfahrtTime = t, required: true, onPick: () => _pickUhrzeit((t) => _abfahrtTime = t, initial: _abfahrtTime)),
@@ -833,7 +1059,7 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
                               ),
                             ),
                           ),
-                          _field(_einsatzNrCtrl, 'Einsatz-Nr.', inputFormatters: [FilteringTextInputFormatter.digitsOnly], required: true),
+                          _buildEinsatzNrField(required: true),
                           _uhrzeitField('Alarmierungszeit (HH:MM)', _alarmierungszeit, (t) => _alarmierungszeit = t, required: true, onPick: () => _pickUhrzeit((t) => _alarmierungszeit = t, initial: _alarmierungszeit)),
                           _uhrzeitField('Eintreffen vor Ort (HH:MM)', _eintreffenTime, (t) => _eintreffenTime = t, required: true, onPick: () => _pickUhrzeit((t) => _eintreffenTime = t, initial: _eintreffenTime)),
                           _uhrzeitField('Abfahrt vom Einsatzort (HH:MM)', _abfahrtTime, (t) => _abfahrtTime = t, required: true, onPick: () => _pickUhrzeit((t) => _abfahrtTime = t, initial: _abfahrtTime)),

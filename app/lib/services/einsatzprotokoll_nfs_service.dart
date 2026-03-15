@@ -33,14 +33,18 @@ class EinsatzprotokollNfsService {
   }
 
   /// Protokoll erstellen. Gibt (docId, laufendeInterneNr) zurück.
-  /// Nummer wird erst beim Speichern vergeben.
+  /// [laufendeNrOverride]: Wenn gesetzt (z.B. "20260001-1" bei mehreren Kräften), wird diese Nr. verwendet
+  /// und der Zähler nicht erhöht. Sonst wird die nächste fortlaufende Nr. vergeben.
   Future<({String id, String laufendeInterneNr})> create(
     String companyId,
     Map<String, dynamic> data, {
     String? creatorUid,
     String? creatorName,
+    String? laufendeNrOverride,
   }) async {
-    final laufendeNr = await getNextLaufendeInterneNr(companyId);
+    final laufendeNr = laufendeNrOverride?.trim().isNotEmpty == true
+        ? laufendeNrOverride!.trim()
+        : await getNextLaufendeInterneNr(companyId);
     final clean = Map<String, dynamic>.from(data);
     clean['laufendeInterneNr'] = laufendeNr;
     clean['createdAt'] = FieldValue.serverTimestamp();
@@ -51,9 +55,10 @@ class EinsatzprotokollNfsService {
   }
 
   /// Protokoll löschen. Wenn laufendeInterneNr die letzte vergebene Nr. ist, wird sie wieder freigegeben.
+  /// Bei Format mit Suffix (z.B. 20260001-1) wird der Zähler nicht angepasst.
   Future<void> delete(String companyId, String docId, {String? laufendeInterneNr}) async {
     await _col(companyId).doc(docId).delete();
-    if (laufendeInterneNr != null && laufendeInterneNr.length >= 8) {
+    if (laufendeInterneNr != null && laufendeInterneNr.length >= 8 && !laufendeInterneNr.contains('-')) {
       await _releaseLaufendeNrIfLast(companyId, laufendeInterneNr);
     }
   }
