@@ -11,7 +11,7 @@ executables:
   migrate_reset_nfs_laufende_nr: bin/migrate_reset_nfs_laufende_nr
   seed_module_ssd: bin/seed_module_ssd
 
-version: 1.0.34+35
+version: 1.0.37+38
 
 environment:
   sdk: ^3.8.1
@@ -63,6 +63,7 @@ dev_dependencies:
   flutter_lints: ^5.0.0
 
 dependency_overrides:
+  path_provider_foundation: 2.5.1  # Fix: TestFlight "Simulator platforms aren't permitted"
   flutter_app_badger:
     git:
       url: https://github.com/sarj33t-prakash/flutter_app_badger.git
@@ -74,3 +75,4 @@ flutter:
   assets:
     - img/
     - fonts/
+    - gebaeudeadresse.csv

@@ -44,7 +44,10 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
     final map = widget.einsatz['alarmierteMitarbeiterStatus'];
     if (map is! Map) return 0;
     final v = map[widget.mitarbeiterId];
-    return (v is int) ? v : 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    final parsed = int.tryParse(v.toString());
+    return parsed ?? 0;
   }
 
   String _indikationLabel(String? key) {
@@ -101,6 +104,7 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
     final plz = e['plz'] as String? ?? '';
     final ort = e['ort'] as String? ?? '';
     final indikation = _indikationLabel(e['einsatzindikation'] as String?);
+    final bemerkungen = (e['bemerkungen'] as String? ?? '').trim();
 
     return Scaffold(
       backgroundColor: AppTheme.surfaceBg,
@@ -137,6 +141,7 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
                     _readOnlyRow('Straße, Haus-Nr.', '$strasse ${hausNr.isNotEmpty ? hausNr : ''}'.trim()),
                     _readOnlyRow('PLZ, Ort', '$plz $ort'.trim()),
                     _readOnlyRow('Einsatzindikation', indikation),
+                    _readOnlyRow('Bemerkungen', bemerkungen),
                   ],
                 ),
               ),
@@ -246,10 +251,32 @@ class _StatusButton extends StatelessWidget {
     required this.onTap,
   });
 
+  static Color _colorForStatus(int status) {
+    switch (status) {
+      case 3: return Colors.amber.shade100;  // Einsatz übernommen - gelb
+      case 4: return Colors.red.shade100; // Am Einsatzort - hellrot
+      case 7: return Colors.deepPurple.shade100; // Einsatzstelle verlassen - violett
+      case 2: return Colors.green.shade100;  // Einsatz beendet - grün
+      default: return Colors.grey.shade100;
+    }
+  }
+
+  static Color _borderColorForStatus(int status) {
+    switch (status) {
+      case 3: return Colors.amber.shade700;
+      case 4: return Colors.red.shade700;
+      case 7: return Colors.deepPurple.shade700;
+      case 2: return Colors.green.shade700;
+      default: return Colors.grey.shade600;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bgColor = _colorForStatus(status);
+    final borderColor = isActive ? _borderColorForStatus(status) : Colors.grey.shade400;
     return Material(
-      color: isActive ? Colors.red.shade50 : Colors.grey.shade50,
+      color: bgColor,
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         onTap: disabled ? null : onTap,
@@ -259,25 +286,19 @@ class _StatusButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isActive ? Colors.red.shade400 : Colors.grey.shade300,
+              color: borderColor,
               width: isActive ? 2 : 1,
             ),
           ),
           child: Row(
             children: [
-              Icon(
-                isActive ? Icons.radio_button_checked : Icons.radio_button_off,
-                color: isActive ? Colors.red.shade700 : Colors.grey.shade600,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   label,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                    color: isActive ? Colors.red.shade900 : Colors.grey.shade800,
+                    color: isActive ? Colors.grey.shade900 : Colors.grey.shade800,
                   ),
                 ),
               ),

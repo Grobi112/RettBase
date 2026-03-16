@@ -2080,7 +2080,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
         final k = entry.key?.toString();
         final v = entry.value;
         if (k != null && k.isNotEmpty) {
-          final status = v is int ? v : int.tryParse(v.toString());
+          final status = (v is num) ? v.toInt() : int.tryParse(v.toString());
           if (status != null && [2, 3, 4, 7].contains(status)) {
             _alarmierteMitarbeiterStatus[k] = status;
           }
@@ -2149,7 +2149,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
               final k = entry.key?.toString();
               final v = entry.value;
               if (k != null && k.isNotEmpty) {
-                final status = v is int ? v : int.tryParse(v.toString());
+                final status = (v is num) ? v.toInt() : int.tryParse(v.toString());
                 if (status != null && [2, 3, 4, 7].contains(status)) {
                   _alarmierteMitarbeiterStatus[k] = status;
                 }
