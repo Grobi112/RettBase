@@ -51,6 +51,7 @@ import 'einsatzprotokoll_ssd_screen.dart';
 import 'einsatzprotokoll_nfs_screen.dart';
 import 'schichtplan_nfs_screen.dart';
 import '../services/schichtplan_nfs_service.dart';
+import '../services/alarm_quittierung_service.dart';
 import '../services/alarmierung_nfs_service.dart';
 import '../services/mitarbeiter_service.dart';
 import 'telefonliste_nfs_screen.dart';
@@ -296,6 +297,45 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     });
   }
 
+  void _maybeOpenAlarmFromNotification(String companyId, String? mitarbeiterId) {
+    final alarm = PushNotificationService.initialAlarmFromNotification;
+    if (alarm == null) return;
+    if (alarm.$1 != companyId) return;
+    if (mitarbeiterId == null || mitarbeiterId.isEmpty) return;
+    if (!mounted) return;
+    final einsatzId = alarm.$2;
+    unawaited(
+      FirebaseFirestore.instance
+          .collection('kunden')
+          .doc(companyId)
+          .collection('alarmierung-nfs')
+          .doc(einsatzId)
+          .get()
+          .then((snap) {
+        if (!snap.exists || !mounted) return;
+        final einsatz = Map<String, dynamic>.from(snap.data()!);
+        einsatz['id'] = einsatzId;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _bodyNavigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (_) => EinsatzdetailsNfsScreen(
+                companyId: companyId,
+                mitarbeiterId: mitarbeiterId,
+                einsatz: einsatz,
+                onBack: () => _bodyNavigatorKey.currentState?.pop(),
+              ),
+            ),
+          ).then((result) {
+            if (result == 'abgeschlossen' && mounted) {
+              _hatAbgeschlosseneEinsaetzeNotifier.value = true;
+            }
+          });
+        });
+      }),
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -468,9 +508,13 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       if (kIsWeb) {
         final h = url_hash.getInitialHash();
         PushNotificationService.setInitialChatFromHash(h);
-        if (h != null && h.startsWith('#chat/')) url_hash.clearHash();
+        PushNotificationService.setInitialAlarmFromHash(h);
+        if (h != null && (h.startsWith('#chat/') || h.startsWith('#einsatz/'))) {
+          url_hash.clearHash();
+        }
       }
       _maybeOpenChatFromNotification(effectiveCompanyId);
+      _maybeOpenAlarmFromNotification(effectiveCompanyId, _mitarbeiterId);
     } catch (e, st) {
       debugPrint('RettBase Dashboard _load FEHLER: $e');
       debugPrint('RettBase Dashboard _load StackTrace: $st');
@@ -622,6 +666,11 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     final einsatz = _activeEinsatzNotifier.value;
     final mid = _mitarbeiterId;
     if (einsatz == null || mid == null) return;
+    final einsatzId = einsatz['id'] as String?;
+    if (einsatzId != null) {
+      unawaited(AlarmQuittierungService().markQuittiert(_companyId, einsatzId));
+      unawaited(PushNotificationService.stopAlarmTone());
+    }
     _bodyNavigatorKey.currentState?.push(
       MaterialPageRoute(
         builder: (_) => EinsatzdetailsNfsScreen(
@@ -633,6 +682,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       ),
     ).then((result) {
       if (result == 'abgeschlossen' && mounted) {
+        _activeEinsatzNotifier.value = null;
+        _hatAbgeschlosseneEinsaetzeNotifier.value = true;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -834,6 +885,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         screen = EinsatzprotokollNfsScreen(
           companyId: _companyId,
           title: 'Einsatzprotokoll Notfallseelsorge',
+          mitarbeiterId: _mitarbeiterId,
           onBack: onBack,
         );
         break;
@@ -1385,16 +1437,11 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 _logout();
               }
             },
-            itemBuilder: (_) {
-              final items = <PopupMenuItem<String>>[
-                const PopupMenuItem(value: 'profil', child: ListTile(leading: Icon(Icons.person_outline), title: Text('Profil'), contentPadding: EdgeInsets.zero)),
-                const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Abmelden'), contentPadding: EdgeInsets.zero)),
-              ];
-              if (_userHasModuleAccess('einstellungen')) {
-                items.insert(1, const PopupMenuItem(value: 'einstellungen', child: ListTile(leading: Icon(Icons.settings), title: Text('Einstellungen'), contentPadding: EdgeInsets.zero)));
-              }
-              return items;
-            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'profil', child: ListTile(leading: Icon(Icons.person_outline), title: Text('Profil'), contentPadding: EdgeInsets.zero)),
+              const PopupMenuItem(value: 'einstellungen', child: ListTile(leading: Icon(Icons.settings), title: Text('Einstellungen'), contentPadding: EdgeInsets.zero)),
+              const PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout), title: Text('Abmelden'), contentPadding: EdgeInsets.zero)),
+            ],
           ),
           ),
         ],

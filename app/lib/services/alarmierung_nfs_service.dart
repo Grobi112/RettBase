@@ -175,10 +175,33 @@ class AlarmierungNfsService {
     return {'id': snap.id, ...?snap.data()};
   }
 
+  /// Einsatz live streamen (für Status-Updates der eingesetzten Kräfte).
+  Stream<Map<String, dynamic>?> streamEinsatz(String companyId, String docId) {
+    return _col(companyId)
+        .doc(docId)
+        .snapshots()
+        .map((s) {
+          if (!s.exists || s.data() == null) return null;
+          return {'id': s.id, ...?s.data()};
+        });
+  }
+
   /// Alle Einsätze streamen (neueste zuerst)
   Stream<List<Map<String, dynamic>>> streamEinsaetze(String companyId) {
     return _col(companyId)
         .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+  }
+
+  /// Alle abgeschlossenen Einsätze (für Protokoll-Dropdown, wenn kein mitarbeiterId).
+  Stream<List<Map<String, dynamic>>> streamAbgeschlosseneEinsaetze(
+    String companyId,
+  ) {
+    return _col(companyId)
+        .where('status', isEqualTo: 'abgeschlossen')
+        .orderBy('einsatzDatum', descending: true)
+        .limit(100)
         .snapshots()
         .map((s) => s.docs.map((d) => {'id': d.id, ...d.data()}).toList());
   }

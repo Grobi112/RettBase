@@ -750,7 +750,7 @@ class _EditKundeScreenState extends State<_EditKundeScreen> {
     ('Kommunikation', ['telefonliste', 'chat', 'email']),
     ('Einstellungen', ['einstellungen']),
     ('Schulsanitätsdienst', ['ssd']),
-    ('Notfallseelsorge', ['telefonlistenfs', 'einsatzprotokollnfs']),
+    ('Notfallseelsorge', ['telefonlistenfs', 'einsatzprotokollnfs', 'alarmierungnfs']),
   ];
 
   @override

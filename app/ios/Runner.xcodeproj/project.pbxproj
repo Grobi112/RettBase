@@ -17,6 +17,11 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		EC204EC72485903C83EB1D55 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 4AF33A209D8CF72A7F71836D /* GoogleService-Info.plist */; };
 		FDE31A8ADBF4CA95A6DDC167 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DBFFE3D2F8AEC181F9DA2972 /* Pods_Runner.framework */; };
+		A1B2C3D4E5F6012345678901 /* EFDN-Gong.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678902 /* EFDN-Gong.mp3 */; };
+		A1B2C3D4E5F6012345678903 /* gong-brand.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678904 /* gong-brand.wav */; };
+		A1B2C3D4E5F6012345678905 /* Kleinalarm.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678906 /* Kleinalarm.wav */; };
+		A1B2C3D4E5F6012345678907 /* Melder1.wav in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6012345678908 /* Melder1.wav */; };
+		A1B2C3D4E5F6012345678909 /* Melder2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F601234567890A /* Melder2.mp3 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +74,11 @@
 		BE53311D06F0462147B15EF9 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		CE657F9F1C300EC18A087B18 /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		DBFFE3D2F8AEC181F9DA2972 /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6012345678902 /* EFDN-Gong.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "EFDN-Gong.mp3"; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678904 /* gong-brand.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "gong-brand.wav"; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678906 /* Kleinalarm.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Kleinalarm.wav"; sourceTree = "<group>"; };
+		A1B2C3D4E5F6012345678908 /* Melder1.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "Melder1.wav"; sourceTree = "<group>"; };
+		A1B2C3D4E5F601234567890A /* Melder2.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Melder2.mp3"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -145,6 +155,11 @@
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
 				E1A2B3C4D5E6F7A8B9C0D1E2 /* Runner.entitlements */,
 				F2A3B4C5D6E7F8A9B0C1D2E3 /* Runner-Debug.entitlements */,
+				A1B2C3D4E5F6012345678902 /* EFDN-Gong.mp3 */,
+				A1B2C3D4E5F6012345678904 /* gong-brand.wav */,
+				A1B2C3D4E5F6012345678906 /* Kleinalarm.wav */,
+				A1B2C3D4E5F6012345678908 /* Melder1.wav */,
+				A1B2C3D4E5F601234567890A /* Melder2.mp3 */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -272,6 +287,11 @@
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 				EC204EC72485903C83EB1D55 /* GoogleService-Info.plist in Resources */,
+				A1B2C3D4E5F6012345678901 /* EFDN-Gong.mp3 in Resources */,
+				A1B2C3D4E5F6012345678903 /* gong-brand.wav in Resources */,
+				A1B2C3D4E5F6012345678905 /* Kleinalarm.wav in Resources */,
+				A1B2C3D4E5F6012345678907 /* Melder1.wav in Resources */,
+				A1B2C3D4E5F6012345678909 /* Melder2.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

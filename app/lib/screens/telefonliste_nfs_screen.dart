@@ -202,7 +202,7 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
                     MediaQuery.paddingOf(context).bottom + 16,
                   ),
                   children: [
-                    if (!useStackedLayout) _buildHeader(!isPhone),
+                    if (!useStackedLayout) _buildHeader(),
                     ...list.map((m) => _buildRow(m, useStackedLayout: useStackedLayout, useSingleLinePhone: useSingleLinePhone, isCompact: isPhone)),
                   ],
                 );
@@ -214,27 +214,18 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
     );
   }
 
-  Widget _buildHeader(bool compact) {
+  Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
       child: DefaultTextStyle(
         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
-        child: compact
-            ? const Row(
-                children: [
-                  Expanded(flex: 3, child: Text('Nachname, Vorname')),
-                  Expanded(flex: 2, child: Center(child: Text('Wohnort'))),
-                  Expanded(flex: 3, child: Center(child: Text('Tel.Nr.'))),
-                ],
-              )
-            : const Row(
-                children: [
-                  Expanded(flex: 3, child: Text('Nachname')),
-                  Expanded(flex: 3, child: Center(child: Text('Vorname'))),
-                  Expanded(flex: 3, child: Center(child: Text('Wohnort'))),
-                  Expanded(flex: 3, child: Center(child: Text('Tel.Nr.'))),
-                ],
-              ),
+        child: const Row(
+          children: [
+            Expanded(flex: 3, child: Text('Nachname, Vorname')),
+            Expanded(flex: 2, child: Text('Wohnort')),
+            Expanded(flex: 2, child: Text('Tel.Nr.')),
+          ],
+        ),
       ),
     );
   }
@@ -267,13 +258,13 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
           ),
           overflow: TextOverflow.ellipsis,
           maxLines: useSingleLinePhone ? 1 : 2,
-          textAlign: useStackedLayout ? TextAlign.left : TextAlign.center,
+          textAlign: TextAlign.left,
         ),
       );
       return InkWell(
         onTap: hasNumber ? () => _launchTel(text) : null,
         borderRadius: BorderRadius.circular(8),
-        child: useStackedLayout ? Align(alignment: Alignment.centerLeft, child: content) : Center(child: content),
+        child: Align(alignment: Alignment.centerLeft, child: content),
       );
     }
 
@@ -297,7 +288,7 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  m.displayName,
+                  _nameNachnameVorname(m),
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -362,111 +353,61 @@ class _TelefonlisteNfsScreenState extends State<TelefonlisteNfsScreen> {
       );
     }
 
+    final nameDisplay = _nameNachnameVorname(m);
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: isCompact
-            ? Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: InkWell(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          m.displayName,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                        ),
-                      ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              flex: 3,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      nameDisplay,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 2,
                     ),
                   ),
-                  Expanded(
-                    flex: 2,
-                    child: InkWell(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            wohnort,
-                            style: textStyleMuted,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(flex: 3, child: _phoneLink(tel)),
-                ],
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: InkWell(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          nachname,
-                          style: textStyle,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: InkWell(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            vorname,
-                            style: textStyleMuted,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    flex: 3,
-                    child: InkWell(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            wohnort,
-                            style: textStyleMuted,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(flex: 3, child: _phoneLink(tel)),
-                ],
+                ),
               ),
+            ),
+            Expanded(
+              flex: 2,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      wohnort.isEmpty ? '-' : wohnort,
+                      style: textStyleMuted,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(flex: 2, child: _phoneLink(tel)),
+          ],
+        ),
       ),
     );
+  }
+
+  String _nameNachnameVorname(Mitarbeiter m) {
+    return m.displayName;
   }
 
   String _wohnort(Mitarbeiter m) {

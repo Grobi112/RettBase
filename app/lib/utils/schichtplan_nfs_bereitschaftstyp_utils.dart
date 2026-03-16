@@ -53,4 +53,11 @@ class SchichtplanNfsBereitschaftstypUtils {
     if (t == null) return AppTheme.textMuted;
     return colorForTyp(t);
   }
+
+  /// Farbe aus Rohdaten (typColor aus Firestore, typName für Fallback S1/S2/B)
+  static Color colorForTypData({int? typColor, String? typName}) {
+    if (typColor != null) return Color(typColor);
+    final n = (typName ?? '').trim().toLowerCase();
+    return _farben[n] ?? AppTheme.textMuted;
+  }
 }

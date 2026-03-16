@@ -181,19 +181,21 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
     super.initState();
     _loadAuth();
     _loadLaufendeNrPreview();
-    if (widget.mitarbeiterId != null && widget.mitarbeiterId!.isNotEmpty) {
-      _abgeschlosseneEinsaetzeSub = _alarmierungNfsService
-          .streamAbgeschlosseneEinsaetzeForMitarbeiter(widget.companyId, widget.mitarbeiterId!)
-          .listen((list) {
-        if (mounted) setState(() {
-          _abgeschlosseneEinsaetze = list;
-          if (_selectedEinsatzId != null && _selectedEinsatzId != 'manual') {
-            final found = list.any((e) => (e['id'] ?? '').toString() == _selectedEinsatzId);
-            if (!found) _selectedEinsatzId = null;
-          }
-        });
+    _abgeschlosseneEinsaetzeSub = (widget.mitarbeiterId != null && widget.mitarbeiterId!.isNotEmpty
+            ? _alarmierungNfsService.streamAbgeschlosseneEinsaetzeForMitarbeiter(
+                widget.companyId,
+                widget.mitarbeiterId!,
+              )
+            : _alarmierungNfsService.streamAbgeschlosseneEinsaetze(widget.companyId))
+        .listen((list) {
+      if (mounted) setState(() {
+        _abgeschlosseneEinsaetze = list;
+        if (_selectedEinsatzId != null && _selectedEinsatzId != 'manual') {
+          final found = list.any((e) => (e['id'] ?? '').toString() == _selectedEinsatzId);
+          if (!found) _selectedEinsatzId = null;
+        }
       });
-    }
+    });
   }
 
   @override
@@ -693,22 +695,40 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
     final einsatzNr = (e['einsatzNr'] ?? '').toString().trim();
     _einsatzNrCtrl.text = einsatzNr;
 
+    // Einsatzindikation aus Alarmierung übernehmen
+    final indikation = (e['einsatzindikation'] as String?)?.trim();
+    _einsatzindikation = (indikation != null && indikation.isNotEmpty) ? indikation : null;
+
     // Datum aus Einsatz übernehmen
     final datumStr = (e['einsatzDatum'] ?? '').toString();
     _einsatzDatum = _parseDate(datumStr);
 
     // Statuszeiten: aus alarmierteMitarbeiterZeiten (Status 3→Alarmierung, 4→Eintreffen, 7→Abfahrt, 2→Einsatzende)
-    // Fallback: Top-Level-Zeiten vom Koordinator (BearbeitenScreen)
     Map<String, dynamic>? z;
     final zeiten = e['alarmierteMitarbeiterZeiten'];
     final mid = widget.mitarbeiterId;
-    if (zeiten is Map && mid != null) {
-      z = zeiten[mid] as Map<String, dynamic>?;
+    if (zeiten is Map) {
+      if (mid != null) {
+        z = zeiten[mid] as Map<String, dynamic>?;
+        if (z == null) {
+          for (final entry in zeiten.entries) {
+            if (entry.key.toString() == mid && entry.value is Map) {
+              z = Map<String, dynamic>.from(entry.value as Map);
+              break;
+            }
+          }
+        }
+      }
       if (z == null) {
-        for (final entry in zeiten.entries) {
-          if (entry.key.toString() == mid && entry.value is Map) {
-            z = Map<String, dynamic>.from(entry.value as Map);
-            break;
+        // Kein mitarbeiterId: erste alarmierte Kraft verwenden
+        final ids = (e['alarmierteMitarbeiterIds'] as List?)?.map((x) => x.toString()).toList() ?? [];
+        for (final id in ids) {
+          if (id.isNotEmpty) {
+            final zeitenMap = zeiten[id];
+            if (zeitenMap is Map && zeitenMap.isNotEmpty) {
+              z = Map<String, dynamic>.from(zeitenMap);
+              break;
+            }
           }
         }
       }
@@ -744,10 +764,11 @@ class _EinsatzprotokollNfsScreenState extends State<EinsatzprotokollNfsScreen> {
     _eintreffenTime = null;
     _abfahrtTime = null;
     _einsatzendeTime = null;
+    _einsatzindikation = null;
   }
 
   Widget _buildEinsatzNrField({bool required = true}) {
-    final hasDropdown = widget.mitarbeiterId != null && _abgeschlosseneEinsaetze.isNotEmpty;
+    final hasDropdown = _abgeschlosseneEinsaetze.isNotEmpty;
     if (!hasDropdown) {
       return _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: required);
     }

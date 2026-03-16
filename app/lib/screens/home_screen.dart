@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../services/alarm_quittierung_service.dart';
+import '../services/push_notification_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../theme/app_theme.dart';
 import '../models/app_module.dart';
@@ -62,6 +64,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Timer? _timeTimer;
   bool _einsatzPopupShown = false;
+  String? _lastEinsatzPopupId;
 
   @override
   void initState() {
@@ -81,11 +84,33 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onActiveEinsatzChanged() {
     if (!mounted) return;
     final e = widget.activeEinsatzListenable?.value;
-    if (e != null && !_einsatzPopupShown) {
+    if (e == null) {
+      _lastEinsatzPopupId = null;
+      setState(() {});
+      return;
+    }
+    final eid = e['id'] as String?;
+    if (eid == null) return;
+    if (eid != _lastEinsatzPopupId) {
+      _lastEinsatzPopupId = eid;
+      _einsatzPopupShown = false;
+    }
+    if (!_einsatzPopupShown) {
       _einsatzPopupShown = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showEinsatzPopup(e));
+      unawaited(_checkAndShowEinsatzPopup(e, widget.companyId ?? '', eid));
     }
     setState(() {});
+  }
+
+  Future<void> _checkAndShowEinsatzPopup(Map<String, dynamic> e, String companyId, String eid) async {
+    final quittiert = await AlarmQuittierungService().isQuittiert(companyId, eid);
+    if (!mounted) return;
+    if (quittiert) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_lastEinsatzPopupId != eid) return;
+      _showEinsatzPopup(e);
+    });
   }
 
   void _showEinsatzPopup(Map<String, dynamic> einsatz) {
@@ -130,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    );
+    ).then((_) => PushNotificationService.stopAlarmTone());
   }
 
   static String _einsatzindikationLabel(String key) {

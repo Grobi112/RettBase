@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/alarmierung_nfs_service.dart';
@@ -39,9 +40,56 @@ class EinsatzdetailsNfsScreen extends StatefulWidget {
 class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
   final _service = AlarmierungNfsService();
   bool _saving = false;
+  Map<String, dynamic>? _einsatzData;
+  StreamSubscription<Map<String, dynamic>?>? _einsatzStreamSubscription;
+  Timer? _refreshTimer;
+
+  Map<String, dynamic> get _einsatz => _einsatzData ?? widget.einsatz;
+
+  String? get _docId => widget.einsatz['id'] as String?;
+
+  void _applyEinsatzUpdate(Map<String, dynamic> data) {
+    if (!mounted) return;
+    setState(() => _einsatzData = Map<String, dynamic>.from(data));
+  }
+
+  Future<void> _refreshFromServer() async {
+    final docId = _docId;
+    if (docId == null || docId.isEmpty) return;
+    final e = await _service.get(widget.companyId, docId);
+    if (e != null && mounted) _applyEinsatzUpdate(e);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _einsatzData = Map<String, dynamic>.from(widget.einsatz);
+    final docId = _docId;
+    if (docId != null && docId.isNotEmpty) {
+      _einsatzStreamSubscription = _service
+          .streamEinsatz(widget.companyId, docId)
+          .listen(
+        (e) {
+          if (!mounted || e == null) return;
+          final data = Map<String, dynamic>.from(e);
+          WidgetsBinding.instance.addPostFrameCallback((_) => _applyEinsatzUpdate(data));
+        },
+        onError: (err, st) => debugPrint('Einsatzdetails stream error: $err'),
+        cancelOnError: false,
+      );
+      _refreshTimer = Timer.periodic(const Duration(seconds: 3), (_) => _refreshFromServer());
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _einsatzStreamSubscription?.cancel();
+    super.dispose();
+  }
 
   int get _currentStatus {
-    final map = widget.einsatz['alarmierteMitarbeiterStatus'];
+    final map = _einsatz['alarmierteMitarbeiterStatus'];
     if (map is! Map) return 0;
     final v = map[widget.mitarbeiterId];
     if (v is int) return v;
@@ -62,7 +110,7 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
     try {
       final autoAbgeschlossen = await _service.setAlarmierterStatus(
         widget.companyId,
-        widget.einsatz['id'] as String,
+        _einsatz['id'] as String,
         widget.mitarbeiterId,
         status,
       );
@@ -71,8 +119,9 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
           Navigator.of(context).pop('abgeschlossen');
         } else {
           setState(() {
-            widget.einsatz['alarmierteMitarbeiterStatus'] ??= {};
-            (widget.einsatz['alarmierteMitarbeiterStatus'] as Map)[widget.mitarbeiterId] = status;
+            _einsatzData ??= Map<String, dynamic>.from(widget.einsatz);
+            _einsatzData!['alarmierteMitarbeiterStatus'] ??= {};
+            (_einsatzData!['alarmierteMitarbeiterStatus'] as Map)[widget.mitarbeiterId] = status;
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Status aktualisiert.')),
@@ -92,7 +141,7 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final e = widget.einsatz;
+    final e = _einsatz;
     final docId = e['id'] as String? ?? '';
     final nr = e['einsatzNr'] as String? ?? '-';
     final laufendeNr = e['laufendeNr'] as String? ?? docId;
@@ -114,7 +163,7 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onBack,
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: SingleChildScrollView(

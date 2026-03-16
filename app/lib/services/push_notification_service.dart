@@ -4,7 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_app_badger/flutter_app_badger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:app/app_config.dart';
+import 'package:app/services/alarm_quittierung_service.dart';
+import 'package:app/services/tone_settings_service.dart';
 import 'package:app/services/push_badge_stub.dart'
     if (dart.library.html) 'package:app/services/push_badge_web.dart' as badge_impl;
 import 'package:app/services/push_permission_stub.dart'
@@ -18,6 +21,8 @@ class PushNotificationService {
 
   static String? _initialMessageChatId;
   static String? _initialMessageCompanyId;
+  static String? _initialAlarmCompanyId;
+  static String? _initialAlarmEinsatzId;
   static String? _lastCompanyId;
   static String? _lastUid;
   static bool _tokenRefreshListenerActive = false;
@@ -33,6 +38,17 @@ class PushNotificationService {
     }
   }
 
+  /// Setzt Alarm-Kontext aus URL-Hash (Web: nach Klick auf Alarm-Push).
+  /// Format: #einsatz/companyId/einsatzId
+  static void setInitialAlarmFromHash(String? hash) {
+    if (hash == null || !hash.startsWith('#einsatz/')) return;
+    final rest = hash.substring(9).split('/');
+    if (rest.length >= 2) {
+      _initialAlarmCompanyId = rest[0].trim().isEmpty ? null : rest[0].trim();
+      _initialAlarmEinsatzId = rest[1].trim().isEmpty ? null : rest[1].trim();
+    }
+  }
+
   /// Chat-Kontext aus Push (wenn App durch Benachrichtigung geöffnet wurde).
   static (String companyId, String chatId)? get initialChatFromNotification {
     if (_initialMessageCompanyId != null && _initialMessageChatId != null) {
@@ -41,6 +57,18 @@ class PushNotificationService {
       _initialMessageCompanyId = null;
       _initialMessageChatId = null;
       return (c, ch);
+    }
+    return null;
+  }
+
+  /// Alarm-Kontext aus Push (wenn App durch Alarm-Benachrichtigung geöffnet wurde).
+  static (String companyId, String einsatzId)? get initialAlarmFromNotification {
+    if (_initialAlarmCompanyId != null && _initialAlarmEinsatzId != null) {
+      final c = _initialAlarmCompanyId!;
+      final e = _initialAlarmEinsatzId!;
+      _initialAlarmCompanyId = null;
+      _initialAlarmEinsatzId = null;
+      return (c, e);
     }
     return null;
   }
@@ -93,14 +121,62 @@ class PushNotificationService {
 
   void _onForegroundMessage(RemoteMessage message) {
     debugPrint('RettBase Push: foreground ${message.data}');
-    if (message.data != null && message.data!['type'] == 'chat') {
-      final badgeStr = message.data!['totalUnread'] ?? message.data!['badge'];
+    final data = message.data ?? const {};
+    final type = data['type'] as String?;
+    if (type == 'chat') {
+      final badgeStr = data['totalUnread'] ?? data['badge'];
       if (badgeStr != null && badgeStr.toString().isNotEmpty) {
         final badge = int.tryParse(badgeStr.toString());
         if (badge != null && badge >= 0) {
           updateBadge(badge);
         }
       }
+    } else if (type == 'alarm' && !kIsWeb) {
+      unawaited(_maybePlayAlarmTone(data));
+    }
+  }
+
+  /// Spielt den Alarm-Ton nur, wenn der Einsatz noch nicht quittiert wurde.
+  Future<void> _maybePlayAlarmTone(Map<String, dynamic> data) async {
+    final companyId = data['companyId'] as String? ?? '';
+    final einsatzId = data['einsatzId'] as String? ?? '';
+    final quittiert = await AlarmQuittierungService().isQuittiert(companyId, einsatzId);
+    if (quittiert) return;
+    await _playAlarmTone();
+  }
+
+  static AudioPlayer? _alarmPlayer;
+
+  /// Stoppt den laufenden Alarm-Ton (z.B. nach Quittierung oder Schließen des Popups).
+  static Future<void> stopAlarmTone() async {
+    final p = _alarmPlayer;
+    if (p != null) {
+      _alarmPlayer = null;
+      try {
+        await p.stop();
+      } catch (_) {}
+      await p.dispose();
+    }
+  }
+
+  /// Spielt den in den Toneinstellungen gewählten Alarm-Ton (Foreground).
+  /// Läuft in Endlosschleife bei maximaler Lautstärke bis stopAlarmTone() aufgerufen wird.
+  /// Bei "Systemton" wird nichts abgespielt – die OS-Benachrichtigung nutzt den Gerätestandard.
+  Future<void> _playAlarmTone() async {
+    final assetPath = await ToneSettingsService().getAlarmToneAssetPath();
+    if (assetPath.isEmpty) return; // Systemton – kein Custom-Asset
+    await stopAlarmTone();
+    final player = AudioPlayer();
+    _alarmPlayer = player;
+    try {
+      await player.setAsset(assetPath);
+      await player.setVolume(1.0);
+      await player.setLoopMode(LoopMode.one);
+      await player.play();
+    } catch (e) {
+      debugPrint('RettBase Push: Alarm-Ton abspielen fehlgeschlagen: $e');
+      _alarmPlayer = null;
+      await player.dispose();
     }
   }
 
@@ -115,6 +191,9 @@ class PushNotificationService {
     if (type == 'chat') {
       _initialMessageCompanyId = data['companyId'] as String?;
       _initialMessageChatId = data['chatId'] as String?;
+    } else if (type == 'alarm') {
+      _initialAlarmCompanyId = data['companyId'] as String?;
+      _initialAlarmEinsatzId = data['einsatzId'] as String?;
     }
   }
 
@@ -202,6 +281,7 @@ class PushNotificationService {
       };
       await _db.collection('kunden').doc(companyId).collection('users').doc(uid).set(data, SetOptions(merge: true));
       await _db.collection('fcmTokens').doc(uid).set(data, SetOptions(merge: true));
+      unawaited(ToneSettingsService().syncAlarmToneToFirestore(companyId, uid));
       debugPrint('RettBase Push: Firestore-Schreiben erfolgreich');
     } catch (e) {
       debugPrint('RettBase Push: Firestore-Schreiben fehlgeschlagen: $e');

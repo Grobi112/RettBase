@@ -77,6 +77,7 @@ class _ModulverwaltungScreenState extends State<ModulverwaltungScreen> {
       // Einsatzprotokoll SSD und NFS immer anzeigen (Fallback falls Merge übersprungen)
       mods['ssd'] ??= {'id': 'ssd', 'label': 'Einsatzprotokoll SSD', 'url': '', 'order': 29, 'active': true, 'roles': _allRoles};
       mods['einsatzprotokollnfs'] ??= {'id': 'einsatzprotokollnfs', 'label': 'Einsatzprotokoll Notfallseelsorge', 'url': '', 'order': 34, 'active': true, 'roles': _allRoles};
+      mods['alarmierungnfs'] ??= {'id': 'alarmierungnfs', 'label': 'Einsatzverwaltung', 'url': '', 'order': 36, 'active': true, 'roles': _allRoles};
       if (mounted) {
         setState(() {
           _modules = mods;

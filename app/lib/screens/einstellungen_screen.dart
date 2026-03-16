@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 import '../models/kunde_model.dart';
 import 'einstellungen_schichtarten_screen.dart';
 import 'einstellungen_modulvarianten_screen.dart';
+import 'einstellungen_tone_screen.dart';
 
 bool _isAdminCompany(String companyId) =>
     companyId.trim().toLowerCase() == 'admin';
@@ -43,6 +44,20 @@ class EinstellungenScreen extends StatelessWidget {
                   color: AppTheme.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
+          ),
+          const SizedBox(height: 12),
+          _SettingsCard(
+            icon: Icons.volume_up,
+            title: 'Toneinstellungen',
+            subtitle: 'Ton für Chat (System) und Alarmierungen (Auswahl)',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => EinstellungenToneScreen(
+                  companyId: companyId,
+                  onBack: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           if (!isSchulsanitaetsdienst) ...[

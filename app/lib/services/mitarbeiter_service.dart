@@ -20,6 +20,16 @@ class MitarbeiterService {
     });
   }
 
+  /// Mitarbeiter-ID für einen Nutzer (uid) ermitteln.
+  /// Prüft: doc mit id=uid, dann mitarbeiter wo uid-Feld = uid.
+  Future<String?> getMitarbeiterIdForUid(String companyId, String uid) async {
+    final byId = await _mitarbeiter(companyId).doc(uid).get();
+    if (byId.exists) return uid;
+    final byUid = await _mitarbeiter(companyId).where('uid', isEqualTo: uid).limit(1).get();
+    if (byUid.docs.isNotEmpty) return byUid.docs.first.id;
+    return null;
+  }
+
   /// Mitarbeiter einmalig laden.
   /// Bei companyId='admin': auch kunden/admin/users laden (Admin-Superadmins ohne Mitarb.-Eintrag).
   Future<List<Mitarbeiter>> loadMitarbeiter(String companyId) async {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -407,7 +408,6 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
     valid = valid && _nameBetroffenerCtrl.text.trim().isNotEmpty;
     valid = valid && _strasseCtrl.text.trim().isNotEmpty;
     valid = valid && _hausNrCtrl.text.trim().isNotEmpty;
-    valid = valid && _plzCtrl.text.trim().isNotEmpty;
     valid = valid && _ortCtrl.text.trim().isNotEmpty;
     valid = valid && _einsatzindikation != null && _einsatzindikation!.trim().isNotEmpty;
     valid = valid && _selectedMitarbeiterIds.isNotEmpty;
@@ -420,7 +420,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
             title: Text('Hinweis', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade700)),
             content: const Text(
               'Es wurden nicht alle Pflichtfelder ausgefüllt. '
-              'Bitte füllen Sie alle Felder aus (inkl. Straße, Haus-Nr., PLZ, Ort) und wählen Sie mindestens einen Mitarbeiter zur Alarmierung.',
+              'Bitte füllen Sie alle Felder aus (inkl. Straße, Haus-Nr., Ort) und wählen Sie mindestens einen Mitarbeiter zur Alarmierung.',
             ),
             actions: [
               TextButton(
@@ -805,7 +805,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
               children: [
                 SizedBox(
                   width: 100,
-                  child: _field(_plzCtrl, 'PLZ', required: true),
+                  child: _field(_plzCtrl, 'PLZ', required: false),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -911,7 +911,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
               const SizedBox(height: 12),
               _field(_hausNrCtrl, 'Haus-Nr.', required: true),
               const SizedBox(height: 12),
-              _field(_plzCtrl, 'PLZ', required: true),
+              _field(_plzCtrl, 'PLZ', required: false),
               const SizedBox(height: 12),
               _field(_ortCtrl, 'Ort', required: true),
             ] else ...[
@@ -926,7 +926,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 100, child: _field(_plzCtrl, 'PLZ', required: true)),
+                  SizedBox(width: 100, child: _field(_plzCtrl, 'PLZ', required: false)),
                   const SizedBox(width: 12),
                   Expanded(child: _field(_ortCtrl, 'Ort', required: true)),
                 ],
@@ -2024,6 +2024,8 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
   bool _loading = true;
   bool _saving = false;
   String? _currentUserName;
+  StreamSubscription<Map<String, dynamic>?>? _einsatzStreamSubscription;
+  DateTime? _lastStatusUpdateTime;
 
   /// Abgeschlossene Einsätze dürfen nur von Superadmin/Admin bearbeitet werden.
   bool get _canEdit {
@@ -2052,6 +2054,46 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     super.initState();
     _initFromEinsatz();
     _load();
+    _einsatzStreamSubscription = widget.service
+        .streamEinsatz(widget.companyId, widget.docId)
+        .listen(_onEinsatzStreamUpdate);
+  }
+
+  void _onEinsatzStreamUpdate(Map<String, dynamic>? einsatzNeu) {
+    if (!mounted || einsatzNeu == null) return;
+    setState(() {
+      _einsatzData = einsatzNeu;
+      _lastStatusUpdateTime = DateTime.now();
+      final alarmierteIds = (einsatzNeu['alarmierteMitarbeiterIds'] as List?)
+          ?.map((x) => x.toString())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      if (alarmierteIds != null) {
+        _selectedIds
+          ..clear()
+          ..addAll(alarmierteIds);
+      }
+      final statusMap = einsatzNeu['alarmierteMitarbeiterStatus'];
+      if (statusMap is Map) {
+        _alarmierteMitarbeiterStatus.clear();
+        for (final entry in statusMap.entries) {
+          final k = entry.key?.toString();
+          final v = entry.value;
+          if (k != null && k.isNotEmpty) {
+            final status = (v is num) ? v.toInt() : int.tryParse(v.toString());
+            if (status != null && [2, 3, 4, 7].contains(status)) {
+              _alarmierteMitarbeiterStatus[k] = status;
+            }
+          }
+        }
+      }
+      _massnahmen = _parseMassnahmenRueckmeldungen(
+        einsatzNeu['massnahmen'] ?? einsatzNeu['Massnahmen'],
+      );
+      _rueckmeldungen = _parseMassnahmenRueckmeldungen(
+        einsatzNeu['rueckmeldungen'] ?? einsatzNeu['Rueckmeldungen'],
+      );
+    });
   }
 
   void _initFromEinsatz() {
@@ -2093,6 +2135,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
 
   @override
   void dispose() {
+    _einsatzStreamSubscription?.cancel();
     _einsatzNrCtrl.dispose();
     _nameBetroffenerCtrl.dispose();
     _strasseCtrl.dispose();
@@ -2661,11 +2704,13 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
         );
         if (!mounted) return;
         setState(() => _alarmierteMitarbeiterStatus[mitarbeiterId] = newStatus);
-        widget.einsatz['alarmierteMitarbeiterStatus'] ??= {};
-        (widget.einsatz['alarmierteMitarbeiterStatus'] as Map)[mitarbeiterId] = newStatus;
+        final statusMap = widget.einsatz['alarmierteMitarbeiterStatus'];
+        final map = statusMap is Map ? statusMap : <String, dynamic>{};
+        widget.einsatz['alarmierteMitarbeiterStatus'] = map;
+        map[mitarbeiterId] = newStatus;
         final einsatzNeu = await widget.service.get(widget.companyId, widget.docId);
         if (mounted && einsatzNeu != null) setState(() => _einsatzData = einsatzNeu);
-        if (autoAbgeschlossen) {
+        if (autoAbgeschlossen && mounted) {
           widget.onEinsatzAbgeschlossen?.call();
           widget.onBack();
         } else if (mounted) {
@@ -2689,7 +2734,8 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
         );
         if (!mounted) return;
         setState(() => _alarmierteMitarbeiterStatus.remove(mitarbeiterId));
-        (widget.einsatz['alarmierteMitarbeiterStatus'] as Map?)?.remove(mitarbeiterId);
+        final statusMap = widget.einsatz['alarmierteMitarbeiterStatus'];
+        if (statusMap is Map) statusMap.remove(mitarbeiterId);
         final einsatzNeu = await widget.service.get(widget.companyId, widget.docId);
         if (mounted && einsatzNeu != null) setState(() => _einsatzData = einsatzNeu);
         if (mounted) {
@@ -2779,27 +2825,6 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                       final schichtColor = isVerfuegbar && typName.isNotEmpty
                           ? SchichtplanNfsBereitschaftstypUtils.colorForTypData(typColor: typColor, typName: typName)
                           : Colors.grey;
-                      final status = _alarmierteMitarbeiterStatus[id];
-                      final statusDropdown = SizedBox(
-                        width: 52,
-                        child: DropdownButtonFormField<int?>(
-                          value: status,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: null, child: Text('–')),
-                            DropdownMenuItem(value: 3, child: Text('3')),
-                            DropdownMenuItem(value: 4, child: Text('4')),
-                            DropdownMenuItem(value: 7, child: Text('7')),
-                            DropdownMenuItem(value: 2, child: Text('2')),
-                          ],
-                          onChanged: _canEdit ? (v) => _onStatusChanged(id, v) : null,
-                        ),
-                      );
                       final typBadge = typName.isNotEmpty
                           ? Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -2842,18 +2867,10 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                                   removeBtn,
                                 ],
                               ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Text('Status', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-                                  const SizedBox(width: 6),
-                                  statusDropdown,
-                                  if (typName.isNotEmpty) ...[
-                                    const SizedBox(width: 8),
-                                    typBadge,
-                                  ],
-                                ],
-                              ),
+                              if (typName.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                typBadge,
+                              ],
                             ],
                           ),
                         );
@@ -2868,10 +2885,6 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                               child: Text(name, overflow: TextOverflow.ellipsis),
                             ),
                             const Spacer(),
-                            Text('Status', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-                            const SizedBox(width: 6),
-                            statusDropdown,
-                            const SizedBox(width: 8),
                             typBadge,
                             const SizedBox(width: 6),
                             removeBtn,
@@ -3423,7 +3436,9 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
             ),
             const SizedBox(height: 8),
             Text(
-              'Aktueller Einsatzstatus (Stand: ${_formatDate(_einsatzDatum ?? DateTime.now())}, ${_formatTime(_uhrzeitBeginn ?? TimeOfDay.now())})',
+              _lastStatusUpdateTime != null
+                  ? 'Live (aktualisiert: ${_formatDate(_lastStatusUpdateTime!)}, ${_lastStatusUpdateTime!.hour.toString().padLeft(2, '0')}:${_lastStatusUpdateTime!.minute.toString().padLeft(2, '0')})'
+                  : 'Aktueller Einsatzstatus (Stand: ${_formatDate(_einsatzDatum ?? DateTime.now())}, ${_formatTime(_uhrzeitBeginn ?? TimeOfDay.now())})',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
@@ -3444,7 +3459,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                   : '';
               final badge = zeitStr.isNotEmpty ? '$label ($zeitStr)' : label;
               final zeitenMap = z is Map ? z as Map<String, dynamic> : <String, dynamic>{};
-              return _buildStatusRow(name, badge, color, zeitenMap);
+              return _buildStatusRow(id, name, badge, color, zeitenMap);
             }),
           ],
         ),
@@ -3460,11 +3475,13 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     return '';
   }
 
-  Widget _buildStatusRow(String name, String badge, Color color, Map<String, dynamic> zeitenMap) {
+  Widget _buildStatusRow(String mitarbeiterId, String name, String badge, Color color, Map<String, dynamic> zeitenMap) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
-        onTap: () => _showStatusZeitenDialog(name, zeitenMap),
+        onTap: () => _canEdit
+            ? _showStatusBearbeitenDialog(mitarbeiterId, name, zeitenMap)
+            : _showStatusZeitenDialog(name, zeitenMap),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
@@ -3503,29 +3520,91 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     );
   }
 
-  void _showStatusZeitenDialog(String mitarbeiterName, Map<String, dynamic> zeiten) {
-    final rows = <Widget>[];
+  void _showStatusBearbeitenDialog(String mitarbeiterId, String mitarbeiterName, Map<String, dynamic> zeiten) {
+    final currentStatus = _alarmierteMitarbeiterStatus[mitarbeiterId];
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Status setzen: $mitarbeiterName'),
+        content: SizedBox(
+          width: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Status und Zeitstempel werden gespeichert. Die Einsatzkraft sieht die Änderung sofort.',
+                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int?>(
+                  value: currentStatus,
+                  decoration: const InputDecoration(
+                    labelText: 'Status',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('– Kein Status')),
+                    DropdownMenuItem(value: 3, child: Text('3 – Einsatz übernommen')),
+                    DropdownMenuItem(value: 4, child: Text('4 – Am Einsatzort')),
+                    DropdownMenuItem(value: 7, child: Text('7 – Einsatzstelle verlassen')),
+                    DropdownMenuItem(value: 2, child: Text('2 – Einsatz beendet')),
+                  ],
+                  onChanged: (v) async {
+                    Navigator.of(ctx).pop();
+                    if (v != null) await _onStatusChanged(mitarbeiterId, v);
+                  },
+                ),
+                const SizedBox(height: 16),
+                Text('Bereits gespeicherte Zeiten:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
+                const SizedBox(height: 8),
+                ..._statusZeitenRows(zeiten),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Schließen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _statusZeitenRows(Map<String, dynamic> zeiten) {
     final labels = {
       'uhrzeitEinsatzUebernommen': 'Einsatz übernommen',
       'uhrzeitAnEinsatzort': 'Am Einsatzort',
       'uhrzeitAbfahrt': 'Einsatzstelle verlassen',
       'uhrzeitZuHause': 'Einsatz beendet',
     };
+    final rows = <Widget>[];
     for (final e in labels.entries) {
       final val = zeiten[e.key];
       if (val != null && val.toString().trim().isNotEmpty) {
         rows.add(Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(e.value, style: TextStyle(color: Colors.grey.shade700)),
-              Text(val.toString(), style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text(e.value, style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+              Text(val.toString(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
             ],
           ),
         ));
       }
     }
+    if (rows.isEmpty) {
+      rows.add(Text('Keine Statuszeiten gespeichert.', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)));
+    }
+    return rows;
+  }
+
+  void _showStatusZeitenDialog(String mitarbeiterName, Map<String, dynamic> zeiten) {
+    final rows = _statusZeitenRows(zeiten);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -3534,9 +3613,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: rows.isEmpty
-                ? [Text('Keine Statuszeiten gespeichert.', style: TextStyle(color: Colors.grey.shade600))]
-                : rows,
+            children: rows,
           ),
         ),
         actions: [

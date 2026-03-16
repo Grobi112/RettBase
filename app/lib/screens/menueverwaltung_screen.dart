@@ -92,6 +92,7 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
       mods['telefonliste'] ??= {'id': 'telefonliste', 'label': 'Telefonliste', 'url': ''};
       mods['telefonlistenfs'] ??= {'id': 'telefonlistenfs', 'label': 'TelefonlisteNFS', 'url': ''};
       mods['einsatzprotokollnfs'] ??= {'id': 'einsatzprotokollnfs', 'label': 'Einsatzprotokoll Notfallseelsorge', 'url': ''};
+      mods['alarmierungnfs'] ??= {'id': 'alarmierungnfs', 'label': 'Einsatzverwaltung', 'url': ''};
       if (mounted) {
         setState(() {
           _items = items;
@@ -622,9 +623,10 @@ class _MenueverwaltungScreenState extends State<MenueverwaltungScreen> {
     if (_selectedBereich != KundenBereich.schulsanitaetsdienst) {
       available = available.where((e) => e.key != 'ssd').toList();
     }
-    // TelefonlisteNFS und Einsatzprotokoll NFS nur für Bereich Notfallseelsorge
+    // TelefonlisteNFS, Einsatzprotokoll NFS, Alarmierung NFS nur für Bereich Notfallseelsorge
     if (_selectedBereich != KundenBereich.notfallseelsorge) {
-      available = available.where((e) => e.key != 'telefonlistenfs' && e.key != 'einsatzprotokollnfs').toList();
+      available = available.where((e) =>
+          e.key != 'telefonlistenfs' && e.key != 'einsatzprotokollnfs' && e.key != 'alarmierungnfs').toList();
     }
     // Schichtübersicht nur über Schichtanmeldung → Einstellungen, nicht im Menü
     available = available.where((e) => e.key != 'schichtuebersicht').toList();
