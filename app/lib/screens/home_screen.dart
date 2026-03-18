@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/alarm_quittierung_service.dart';
 import '../services/push_notification_service.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+
 import '../theme/app_theme.dart';
 import '../models/app_module.dart';
 import '../models/information_model.dart';
@@ -533,6 +533,14 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
       case 'schichtanmeldung':
       case 'schichtuebersicht':
       case 'schichtplannfs': return Icons.calendar_today;
+      case 'fahrtenbuch':
+      case 'fahrtenbuchuebersicht': return Icons.receipt_long_outlined;
+      case 'checklisten': return Icons.checklist_rounded;
+      case 'informationssystem':
+      case 'informationen': return Icons.info_outline_rounded;
+      case 'ssd':
+      case 'einsatzprotokollnfs':
+      case 'alarmierungnfs': return Icons.description_outlined;
       default: return null;
     }
   }
@@ -542,38 +550,6 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
     final iconData = _getIconDataForModule(id);
     if (iconData != null) {
       return Icon(iconData, size: size, color: color);
-    }
-    if (id == 'fahrtenbuch' || id == 'fahrtenbuchuebersicht') {
-      return SvgPicture.asset(
-        'img/icon_fahrtenbuch.svg',
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      );
-    }
-    if (id == 'checklisten') {
-      return SvgPicture.asset(
-        'img/icon_checklisten.svg',
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      );
-    }
-    if (id == 'informationssystem' || id == 'informationen') {
-      return SvgPicture.asset(
-        'img/icon_informationssystem.svg',
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      );
-    }
-    if (id == 'ssd' || id == 'einsatzprotokollnfs' || id == 'alarmierungnfs') {
-      return SvgPicture.asset(
-        'img/icon_einsatzprotokoll_nfs.svg',
-        width: size,
-        height: size,
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      );
     }
     return null;
   }
