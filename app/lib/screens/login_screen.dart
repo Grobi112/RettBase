@@ -245,10 +245,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
                 decoration: InputDecoration(
-                  hintText: 'ihre@email.de',
+                  labelText: 'ihre@email.de',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF4EA8DE), width: 1.5),
+                  ),
                   filled: true,
-                  fillColor: const Color(0xFFF8FAFC),
+                  fillColor: const Color(0xFFEAF6FF),
                 ),
                 autofocus: true,
               ),
@@ -288,7 +292,7 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', '')),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: const Color(0xFFB71C1C),
           ),
         );
       }
@@ -298,7 +302,7 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
             content: Text('Fehler: $e'),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: const Color(0xFFB71C1C),
           ),
         );
       }
@@ -309,141 +313,245 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.of(context).viewInsets;
     final keyboardVisible = viewInsets.bottom > 0;
+
     return Scaffold(
-      backgroundColor: AppTheme.headerBg,
       resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.only(
-            left: Responsive.horizontalPadding(context),
-            right: Responsive.horizontalPadding(context),
-            top: keyboardVisible ? 12 : 20,
-            bottom: keyboardVisible ? viewInsets.bottom + 16 : 20,
+      body: SizedBox.expand(
+        child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF243D5C), // leicht aufgehellt – Lichtquelle oben links
+              Color(0xFF1D3557), // Brand Navy
+              Color(0xFF152840), // tiefer Abschluss unten rechts
+            ],
+            stops: [0.0, 0.55, 1.0],
           ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Image.asset(
-                  'img/rettbase_splash.png',
-                  height: 90,
-                  fit: BoxFit.contain,
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              left: Responsive.horizontalPadding(context),
+              right: Responsive.horizontalPadding(context),
+              top: keyboardVisible ? 12 : 24,
+              bottom: keyboardVisible ? viewInsets.bottom + 16 : 24,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+
+                    // --- Identitäts-Zone ---
+                    Image.asset(
+                      'img/rettbase_splash.png',
+                      height: keyboardVisible ? 56 : 80,
+                      fit: BoxFit.contain,
+                    ),
+                    SizedBox(height: keyboardVisible ? 20 : 36),
+
+                    // Begrüßung – nur sichtbar wenn Tastatur zu
+                    if (!keyboardVisible) ...[
+                      const Text(
+                        'Willkommen zurück.',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                          height: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                    ],
+
+                    // --- Form-Container ---
+                    // Subtiler blauer Akzent oben signalisiert: "hier beginnt die Aktion"
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border(
+                          top: BorderSide(
+                            color: const Color(0xFF4EA8DE).withValues(alpha: 0.6),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+
+                          // E-Mail / Personalnummer
+                          TextField(
+                            controller: _userController,
+                            focusNode: _userFocus,
+                            keyboardType: TextInputType.text,
+                            autocorrect: false,
+                            textInputAction: TextInputAction.next,
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                            decoration: InputDecoration(
+                              labelText: 'E-Mail oder Personalnummer',
+                              labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
+                              floatingLabelStyle: const TextStyle(color: Color(0xFFBEE3F8), fontSize: 13),
+                              floatingLabelBehavior: FloatingLabelBehavior.auto,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFF4EA8DE), width: 1.5),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFF243D5C),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                            ),
+                            onSubmitted: (_) => _passwordFocus.requestFocus(),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Passwort
+                          TextField(
+                            controller: _passwordController,
+                            focusNode: _passwordFocus,
+                            obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            style: const TextStyle(color: Colors.white, fontSize: 16),
+                            decoration: InputDecoration(
+                              labelText: 'Passwort',
+                              labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
+                              floatingLabelStyle: const TextStyle(color: Color(0xFFBEE3F8), fontSize: 13),
+                              floatingLabelBehavior: FloatingLabelBehavior.auto,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                  size: 22,
+                                ),
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: _error != null ? const Color(0xFFFF5252) : Colors.transparent,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: _error != null ? const Color(0xFFFF5252) : const Color(0xFF4EA8DE),
+                                  width: 1.5,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: const Color(0xFF243D5C),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                            ),
+                            onSubmitted: (_) => _login(),
+                          ),
+
+                          // "Passwort vergessen?" – rechts, direkt unter Passwort-Feld
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _loading ? null : _forgotPassword,
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFFBEE3F8),
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text('Passwort vergessen?', style: TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Fehler-Banner – animiert eingeblendet
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
+                            child: _error != null
+                                ? Container(
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF5252).withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: const Color(0xFFFF5252).withValues(alpha: 0.35),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 1),
+                                          child: Icon(Icons.error_outline_rounded, color: Color(0xFFFF8A80), size: 18),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            _error!,
+                                            style: const TextStyle(color: Color(0xFFFF8A80), fontSize: 13, height: 1.4),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+
+                          // Primäraktion
+                          FilledButton(
+                            onPressed: _loading ? null : _login,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF4EA8DE),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 18),
+                              elevation: 0,
+                              shape: const StadiumBorder(),
+                            ),
+                            child: _loading
+                                ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Text('Anmelden', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Tertiäre Aktion – klar zurückgetreten
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _loading ? null : _switchCompany,
+                        icon: Icon(Icons.business_rounded, size: 18, color: Colors.white.withValues(alpha: 0.35)),
+                        label: Text(
+                          'Unternehmen wechseln',
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(height: keyboardVisible ? 20 : 48),
-                  TextField(
-                    controller: _userController,
-                    focusNode: _userFocus,
-                    keyboardType: TextInputType.text,
-                    autocorrect: false,
-                    textInputAction: TextInputAction.next,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    decoration: InputDecoration(
-                      hintText: 'Email oder Personalnummer eingeben',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-                      floatingLabelBehavior: FloatingLabelBehavior.never,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
-                      ),
-                      filled: true,
-                      fillColor: const Color(0xFF2D3139),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                    ),
-                    onSubmitted: (_) => _passwordFocus.requestFocus(),
-                  ),
-                  SizedBox(height: keyboardVisible ? 12 : 20),
-                  TextField(
-                    controller: _passwordController,
-                    focusNode: _passwordFocus,
-                    obscureText: _obscurePassword,
-                    textInputAction: TextInputAction.done,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    decoration: InputDecoration(
-                      hintText: 'Passwort eingeben',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-                      floatingLabelBehavior: FloatingLabelBehavior.never,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                          color: Colors.white.withOpacity(0.5),
-                          size: 22,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                      errorText: _error,
-                      errorStyle: TextStyle(color: Colors.red.shade300, fontSize: 13),
-                      errorMaxLines: 2,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: _error != null ? Colors.red.shade400 : Colors.transparent,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: _error != null ? Colors.red.shade400 : AppTheme.primary,
-                          width: 1.5,
-                        ),
-                      ),
-                      filled: true,
-                      fillColor: const Color(0xFF2D3139),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                    ),
-                    onSubmitted: (_) => _login(),
-                  ),
-                  SizedBox(height: keyboardVisible ? 20 : 32),
-                  FilledButton(
-                    onPressed: _loading ? null : _login,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _loading
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  ),
-                  SizedBox(height: keyboardVisible ? 12 : 20),
-                  Center(
-                    child: TextButton(
-                      onPressed: _loading ? null : _forgotPassword,
-                      style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
-                      child: const Text('Passwort vergessen?', style: TextStyle(fontSize: 14)                      ),
-                    ),
-                  ),
-                  SizedBox(height: keyboardVisible ? 12 : 24),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: _loading ? null : _switchCompany,
-                      icon: Icon(Icons.business_rounded, size: 18, color: Colors.white.withOpacity(0.9)),
-                      label: Text(
-                        'Unternehmen wechseln',
-                        style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14),
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
         ),
+      ),
       ),
     );
   }
