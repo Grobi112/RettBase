@@ -58,7 +58,8 @@ class AlarmierungNfsService {
     return ref.id;
   }
 
-  /// Abgeschlossenen Einsatz löschen (nur Superadmin). Setzt Laufende-Nr zurück, wenn es die letzte war.
+  /// Abgeschlossenen Einsatz löschen (nur Superadmin). Zähler wird anschließend
+  /// anhand der noch vorhandenen Einsätze neu berechnet.
   Future<void> deleteAbgeschlossenerEinsatz(String companyId, String docId) async {
     final doc = await _col(companyId).doc(docId).get();
     final data = doc.data();
@@ -69,25 +70,32 @@ class AlarmierungNfsService {
     final laufendeNr = (data['laufendeNr'] ?? '').toString().trim();
     await _col(companyId).doc(docId).delete();
     if (laufendeNr.length >= 8 && !laufendeNr.contains('-')) {
-      await _releaseLaufendeNrIfLast(companyId, laufendeNr);
+      final year = int.tryParse(laufendeNr.substring(0, 4));
+      if (year != null) await _recalculateCounterForYear(companyId, year);
     }
   }
 
-  /// Wenn die gelöschte Laufende-Nr die letzte vergebene war, Zähler zurücksetzen.
-  Future<void> _releaseLaufendeNrIfLast(String companyId, String laufendeNr) async {
-    final yearStr = laufendeNr.substring(0, 4);
-    final numStr = laufendeNr.substring(4);
-    final year = int.tryParse(yearStr);
-    final num = int.tryParse(numStr);
-    if (year == null || num == null) return;
-    await _db.runTransaction((tx) async {
-      final ref = _counterDoc(companyId, year);
-      final snap = await tx.get(ref);
-      final last = snap.data()?['lastNumber'] as int? ?? 0;
-      if (last == num && num > 0) {
-        tx.set(ref, {'lastNumber': num - 1});
+  /// Zähler für ein Jahr anhand der noch vorhandenen Einsätze neu berechnen.
+  /// Setzt lastNumber auf die höchste noch vorhandene laufendeNr dieses Jahres.
+  /// Sind keine Einsätze mehr vorhanden, wird lastNumber auf 0 gesetzt.
+  Future<void> _recalculateCounterForYear(String companyId, int year) async {
+    final yearStr = year.toString();
+    final snap = await _col(companyId).get();
+    int maxNum = 0;
+    for (final doc in snap.docs) {
+      final nr = doc.data()['laufendeNr']?.toString().trim() ?? '';
+      if (nr.length >= 8 && nr.startsWith(yearStr) && !nr.contains('-')) {
+        final num = int.tryParse(nr.substring(4));
+        if (num != null && num > maxNum) maxNum = num;
       }
-    });
+    }
+    await _counterDoc(companyId, year).set({'lastNumber': maxNum});
+  }
+
+  /// Zähler manuell setzen (nur Superadmin).
+  /// [lastNumber] = 0 → nächste vergebene Nummer wird YYYY0001 (z.B. 20260001).
+  Future<void> setCounter(String companyId, int year, int lastNumber) async {
+    await _counterDoc(companyId, year).set({'lastNumber': lastNumber});
   }
 
   /// Zähler aktualisieren, damit die vergebene Laufende-Nr nicht erneut vergeben wird.

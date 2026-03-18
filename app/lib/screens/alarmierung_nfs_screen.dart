@@ -1687,6 +1687,49 @@ class _AbgeschlosseneEinsaetzeTabState extends State<_AbgeschlosseneEinsaetzeTab
     super.dispose();
   }
 
+  Future<void> _resetCounter(BuildContext context) async {
+    final year = DateTime.now().year;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Laufende-Nr. zurücksetzen?'),
+        content: Text(
+          'Der Zähler für $year wird zurückgesetzt.\n\n'
+          'Die nächste vergebene Nummer wird ${year}0001.\n\n'
+          'Bereits gespeicherte Nummern in bestehenden Einsätzen bleiben unverändert.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange.shade700),
+            child: const Text('Zurücksetzen'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await widget.service.setCounter(widget.companyId, year, 0);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Zähler zurückgesetzt. Nächste Nr.: ${year}0001'),
+          backgroundColor: Colors.green.shade700,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Map<String, dynamic>>>(
@@ -1722,13 +1765,30 @@ class _AbgeschlosseneEinsaetzeTabState extends State<_AbgeschlosseneEinsaetzeTab
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Filter',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade600,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        'Filter',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const Spacer(),
+                      if ((widget.userRole ?? '').toLowerCase().trim() == 'superadmin')
+                        TextButton.icon(
+                          onPressed: () => _resetCounter(context),
+                          icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                          label: const Text('Lfd.-Nr. zurücksetzen', style: TextStyle(fontSize: 12)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.orange.shade700,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   LayoutBuilder(
