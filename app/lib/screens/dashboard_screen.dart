@@ -399,21 +399,32 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     debugPrint('RettBase Dashboard _load: uid=${user.uid} email=${user.email} widget.companyId=${widget.companyId}');
     try {
       try {
-        if (!EnsureUsersDocCache.shouldSkip(widget.companyId)) {
-          await FirebaseFunctions.instanceFor(region: 'europe-west1')
-              .httpsCallable('ensureUsersDoc')
-              .call({'companyId': widget.companyId});
-          EnsureUsersDocCache.record(widget.companyId);
-        }
-        await user.getIdToken(true);
+        // ensureUsersDoc und getIdToken parallel – spart Ladezeit
+        await Future.wait([
+          if (!EnsureUsersDocCache.shouldSkip(widget.companyId))
+            FirebaseFunctions.instanceFor(region: 'europe-west1')
+                .httpsCallable('ensureUsersDoc')
+                .call({'companyId': widget.companyId})
+                .then((_) => EnsureUsersDocCache.record(widget.companyId))
+          else
+            Future.value(),
+          user.getIdToken(true),
+        ]);
       } catch (_) {}
+      // getAuthData und getCompanyBereich parallel – effectiveCompanyId ist meist = widget.companyId
       AuthData authData;
+      String? bereich;
       try {
-        authData = await _authDataService.getAuthData(
-          user.uid,
-          user.email ?? '',
-          widget.companyId,
-        );
+        final results = await Future.wait([
+          _authDataService.getAuthData(
+            user.uid,
+            user.email ?? '',
+            widget.companyId,
+          ),
+          _kundenService.getCompanyBereich(widget.companyId),
+        ]);
+        authData = results[0] as AuthData;
+        bereich = results[1] as String?;
       } on AuthNotAuthorizedException catch (_) {
         debugPrint('RettBase Dashboard: Nutzer nicht in Mitarbeiterverwaltung -> Abmelden');
         await _authService.logout();
@@ -425,7 +436,10 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       final effectiveCompanyId = authData.companyId.trim().isNotEmpty ? authData.companyId : widget.companyId;
       // Token im Hintergrund speichern – darf Dashboard-Lade nicht blockieren (getToken kann auf Web hängen)
       unawaited(PushNotificationService().saveToken(effectiveCompanyId, user.uid).timeout(const Duration(seconds: 30), onTimeout: () {}));
-      var bereich = await _kundenService.getCompanyBereich(effectiveCompanyId);
+      // Bereich ggf. mit effectiveCompanyId neu laden (falls abweichend von widget.companyId)
+      if (effectiveCompanyId.trim().toLowerCase() != widget.companyId.trim().toLowerCase()) {
+        bereich = await _kundenService.getCompanyBereich(effectiveCompanyId);
+      }
       final isAdminCompany = (effectiveCompanyId.trim().toLowerCase()) == 'admin';
       if (bereich == null || bereich.isEmpty) {
         bereich = isAdminCompany ? KundenBereich.admin : KundenBereich.rettungsdienst;
@@ -1325,7 +1339,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset('img/rettbase.png', height: 32, fit: BoxFit.contain),
+                  Image.asset('img/rettbase-logo.png', height: 40, fit: BoxFit.contain),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white),
                     onPressed: () => Navigator.pop(context),
@@ -1379,8 +1393,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         title: GestureDetector(
           onTap: _goToHome,
           child: Image.asset(
-            'img/rettbase.png',
-            height: MediaQuery.of(context).size.width < 600 ? 36 : 48,
+            'img/rettbase-logo.png',
+            height: MediaQuery.of(context).size.width < 600 ? 44 : 56,
             fit: BoxFit.contain,
           ),
         ),

@@ -249,10 +249,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF4EA8DE), width: 1.5),
+                    borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
                   ),
                   filled: true,
-                  fillColor: const Color(0xFFEAF6FF),
+                  fillColor: AppTheme.iceBlue,
                 ),
                 autofocus: true,
               ),
@@ -292,7 +292,7 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', '')),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB71C1C),
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -302,7 +302,7 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
             content: Text('Fehler: $e'),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: const Color(0xFFB71C1C),
+            backgroundColor: AppTheme.error,
           ),
         );
       }
@@ -323,9 +323,9 @@ class _LoginScreenState extends State<LoginScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF243D5C), // leicht aufgehellt – Lichtquelle oben links
-              Color(0xFF1D3557), // Brand Navy
-              Color(0xFF152840), // tiefer Abschluss unten rechts
+              AppTheme.navyLight,
+              AppTheme.navy,
+              AppTheme.navyDark,
             ],
             stops: [0.0, 0.55, 1.0],
           ),
@@ -349,26 +349,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // --- Identitäts-Zone ---
                     Image.asset(
-                      'img/rettbase_splash.png',
+                      'img/rettbase-logo.png',
                       height: keyboardVisible ? 56 : 80,
                       fit: BoxFit.contain,
                     ),
                     SizedBox(height: keyboardVisible ? 20 : 36),
-
-                    // Begrüßung – nur sichtbar wenn Tastatur zu
-                    if (!keyboardVisible) ...[
-                      const Text(
-                        'Willkommen zurück.',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                    ],
 
                     // --- Form-Container ---
                     // Subtiler blauer Akzent oben signalisiert: "hier beginnt die Aktion"
@@ -378,7 +363,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(20),
                         border: Border(
                           top: BorderSide(
-                            color: const Color(0xFF4EA8DE).withValues(alpha: 0.6),
+                            color: AppTheme.primary.withValues(alpha: 0.6),
                             width: 1.5,
                           ),
                         ),
@@ -399,7 +384,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'E-Mail oder Personalnummer',
                               labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
-                              floatingLabelStyle: const TextStyle(color: Color(0xFFBEE3F8), fontSize: 13),
+                              floatingLabelStyle: const TextStyle(color: AppTheme.skyBlue, fontSize: 13),
                               floatingLabelBehavior: FloatingLabelBehavior.auto,
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                               enabledBorder: OutlineInputBorder(
@@ -408,10 +393,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFF4EA8DE), width: 1.5),
+                                borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
                               ),
                               filled: true,
-                              fillColor: const Color(0xFF243D5C),
+                              fillColor: AppTheme.navyLight,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                             ),
                             onSubmitted: (_) => _passwordFocus.requestFocus(),
@@ -428,7 +413,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'Passwort',
                               labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
-                              floatingLabelStyle: const TextStyle(color: Color(0xFFBEE3F8), fontSize: 13),
+                              floatingLabelStyle: const TextStyle(color: AppTheme.skyBlue, fontSize: 13),
                               floatingLabelBehavior: FloatingLabelBehavior.auto,
                               suffixIcon: IconButton(
                                 icon: Icon(
@@ -442,7 +427,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                  color: _error != null ? const Color(0xFFFF5252) : Colors.transparent,
+                                  color: _error != null ? AppTheme.errorVivid : Colors.transparent,
                                 ),
                               ),
                               focusedBorder: OutlineInputBorder(
@@ -453,7 +438,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               filled: true,
-                              fillColor: const Color(0xFF243D5C),
+                              fillColor: AppTheme.navyLight,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                             ),
                             onSubmitted: (_) => _login(),
@@ -465,7 +450,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: TextButton(
                               onPressed: _loading ? null : _forgotPassword,
                               style: TextButton.styleFrom(
-                                foregroundColor: const Color(0xFFBEE3F8),
+                                foregroundColor: AppTheme.skyBlue,
                                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -484,10 +469,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                     margin: const EdgeInsets.only(bottom: 16),
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFFF5252).withValues(alpha: 0.12),
+                                      color: AppTheme.errorVivid.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                        color: const Color(0xFFFF5252).withValues(alpha: 0.35),
+                                        color: AppTheme.errorVivid.withValues(alpha: 0.35),
                                       ),
                                     ),
                                     child: Row(
@@ -501,7 +486,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         Expanded(
                                           child: Text(
                                             _error!,
-                                            style: const TextStyle(color: Color(0xFFFF8A80), fontSize: 13, height: 1.4),
+                                            style: const TextStyle(color: AppTheme.errorLight, fontSize: 13, height: 1.4),
                                           ),
                                         ),
                                       ],
@@ -514,7 +499,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           FilledButton(
                             onPressed: _loading ? null : _login,
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF4EA8DE),
+                              backgroundColor: AppTheme.primary,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 18),
                               elevation: 0,

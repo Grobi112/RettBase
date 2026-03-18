@@ -110,105 +110,163 @@ class _CompanyIdScreenState extends State<CompanyIdScreen> {
     }
   }
 
-  /// Logo-Höhe: konstant (kein Wechsel bei Tastatur-Fokus)
-  static const double _logoHeight = 90;
-
   @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.of(context).viewInsets;
     final keyboardVisible = viewInsets.bottom > 0;
     return Scaffold(
-      backgroundColor: AppTheme.headerBg,
       resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: EdgeInsets.only(
-            left: Responsive.horizontalPadding(context),
-            right: Responsive.horizontalPadding(context),
-            top: keyboardVisible ? 12 : 20,
-            bottom: keyboardVisible ? viewInsets.bottom + 16 : 20,
+      body: SizedBox.expand(
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppTheme.navyLight,
+                AppTheme.navy,
+                AppTheme.navyDark,
+              ],
+              stops: [0.0, 0.55, 1.0],
+            ),
           ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Image.asset(
-                  'img/rettbase_splash.png',
-                  height: _logoHeight,
-                  fit: BoxFit.contain,
-                ),
-                SizedBox(height: keyboardVisible ? 20 : 48),
-                  if (widget.retryHint != null) ...[
-                    Text(
-                      widget.retryHint!,
-                      style: TextStyle(
-                        color: Colors.amber.shade200,
-                        fontSize: 13,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(
+                left: Responsive.horizontalPadding(context),
+                right: Responsive.horizontalPadding(context),
+                top: keyboardVisible ? 12 : 24,
+                bottom: keyboardVisible ? viewInsets.bottom + 16 : 24,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Image.asset(
+                        'img/rettbase-logo.png',
+                        height: keyboardVisible ? 56 : 80,
+                        fit: BoxFit.contain,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    textInputAction: TextInputAction.done,
-                    keyboardType: TextInputType.text,
-                    autocorrect: false,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
+                      SizedBox(height: keyboardVisible ? 20 : 36),
+                      if (widget.retryHint != null) ...[
+                        Text(
+                          widget.retryHint!,
+                          style: TextStyle(color: Colors.amber.shade200, fontSize: 13),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border(
+                            top: BorderSide(
+                              color: AppTheme.primary.withValues(alpha: 0.6),
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextField(
+                              controller: _controller,
+                              focusNode: _focusNode,
+                              textInputAction: TextInputAction.done,
+                              keyboardType: TextInputType.text,
+                              autocorrect: false,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\-_]')),
+                              ],
+                              style: const TextStyle(color: Colors.white, fontSize: 16),
+                              decoration: InputDecoration(
+                                labelText: 'Kunden-ID',
+                                labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.55)),
+                                floatingLabelStyle: const TextStyle(color: AppTheme.skyBlue, fontSize: 13),
+                                floatingLabelBehavior: FloatingLabelBehavior.auto,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: _error != null ? AppTheme.errorVivid : Colors.transparent,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(
+                                    color: _error != null ? AppTheme.errorVivid : AppTheme.primary,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                filled: true,
+                                fillColor: AppTheme.navyLight,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                              ),
+                              onSubmitted: (_) => _saveAndContinue(),
+                            ),
+                            const SizedBox(height: 16),
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeInOut,
+                              child: _error != null
+                                  ? Container(
+                                      margin: const EdgeInsets.only(bottom: 16),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.errorVivid.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: AppTheme.errorVivid.withValues(alpha: 0.35),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Padding(
+                                            padding: EdgeInsets.only(top: 1),
+                                            child: Icon(Icons.error_outline_rounded, color: AppTheme.errorLight, size: 18),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              _error!,
+                                              style: const TextStyle(color: AppTheme.errorLight, fontSize: 13, height: 1.4),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                            FilledButton(
+                              onPressed: _loading ? null : _saveAndContinue,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppTheme.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                elevation: 0,
+                                shape: const StadiumBorder(),
+                              ),
+                              child: _loading
+                                  ? const SizedBox(
+                                      height: 24,
+                                      width: 24,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    )
+                                  : const Text('Weiter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    decoration: InputDecoration(
-                      hintText: 'Kunden-ID eingeben',
-                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-                      floatingLabelBehavior: FloatingLabelBehavior.never,
-                      errorText: _error,
-                      errorStyle: TextStyle(color: Colors.red.shade300, fontSize: 13),
-                      errorMaxLines: 2,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: _error != null ? Colors.red.shade400 : Colors.transparent,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: _error != null ? Colors.red.shade400 : AppTheme.primary,
-                          width: 1.5,
-                        ),
-                      ),
-                      filled: true,
-                      fillColor: const Color(0xFF2D3139),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                    ),
-                    onSubmitted: (_) => _saveAndContinue(),
                   ),
-                  SizedBox(height: keyboardVisible ? 20 : 32),
-                  FilledButton(
-                    onPressed: _loading ? null : _saveAndContinue,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppTheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _loading
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Weiter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

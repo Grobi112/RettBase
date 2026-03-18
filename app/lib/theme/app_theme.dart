@@ -26,18 +26,30 @@ class Responsive {
       isCompact(context) ? 2 : (isNarrow(context) ? 2 : 3);
 }
 
-/// Design wie Web-App (rettbase CSS): #1e1f26, #0ea5e9, #f4f5f7, Segoe-UI-Stil
+/// RettBase Brand-Farben (Design-Skill): #4EA8DE, #1D3557, #BEE3F8, #EAF6FF
 class AppTheme {
-  static const Color primary = Color(0xFF0EA5E9);
-  static const Color primaryHover = Color(0xFF0B93D0);
-  static const Color headerBg = Color(0xFF1E1F26);
-  static const Color surfaceBg = Color(0xFFF4F5F7);
-  static const Color textPrimary = Color(0xFF1E1F26);
-  static const Color textSecondary = Color(0xFF666666);
+  static const Color primary = Color(0xFF4EA8DE);       // Primary Blue (Brand)
+  static const Color primaryHover = Color(0xFF3D8CC4);
+  static const Color skyBlue = Color(0xFFBEE3F8);       // Sky Blue – Container, Labels
+  static const Color iceBlue = Color(0xFFEAF6FF);      // Ice Blue – Surface
+  static const Color navy = Color(0xFF1D3557);        // Brand Navy
+  static const Color navyLight = Color(0xFF243D5C);   // Login-Gradient, Form-Fill
+  static const Color navyDark = Color(0xFF152840);    // Login-Gradient
+  static const Color headerBg = navy;
+  static const Color surfaceBg = iceBlue;
+  static const Color textPrimary = navy;
+  static const Color textSecondary = Color(0xFF5A6B7A); // Navy-nah für Konsistenz
   static const Color textMuted = Color(0xFF6B7280);
-  static const Color border = Color(0xFFE5E7EB);
+  static const Color border = Color(0xFFD1E5F0);       // Hellblau passend zu Ice Blue
   static const Color errorBg = Color(0xFFFFF5F5);
   static const Color errorBorder = Color(0xFFFFCCCC);
+  static const Color error = Color(0xFFB71C1C);         // SnackBar, Fehler-Hintergründe
+  static const Color errorVivid = Color(0xFFFF5252);  // Input-Border bei Fehler
+  static const Color errorLight = Color(0xFFFF8A80);    // Fehler-Text/Icon auf dunklem Grund
+
+  /// ROT als Ausnahme – Löschen, gefährliche Aktionen. Diese Buttons bleiben rot!
+  /// Nicht durch primary ersetzen. Z.B.: „Menü leeren“, „Löschen“, „Abbrechen“ (destruktiv).
+  static const Color dangerButton = Color(0xFFB71C1C);
   /// Grau für sekundäre Header-Buttons (z.B. „Neuer Menüpunkt“)
   static const Color headerButtonSecondary = Color(0xFF6C757D);
 
@@ -127,6 +139,9 @@ class AppTheme {
         primary: primary,
         brightness: Brightness.light,
         surface: surfaceBg,
+      ).copyWith(
+        error: error,
+        onError: Colors.white,
       ),
       scaffoldBackgroundColor: surfaceBg,
       appBarTheme: const AppBarTheme(
@@ -138,7 +153,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.12),
+        shadowColor: Colors.black.withValues(alpha: 0.12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(

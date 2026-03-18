@@ -27,7 +27,7 @@ jobs:
         run: flutter pub get
 
       - name: Web-App bauen
-        run: flutter build web --release
+        run: flutter build web --release --tree-shake-icons
 
       - name: Zu Strato hochladen (FTP)
         uses: SamKirkland/FTP-Deploy-Action@v4.3.6
