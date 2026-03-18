@@ -54,30 +54,45 @@ class EinsatzprotokollNfsService {
     return (id: ref.id, laufendeInterneNr: laufendeNr);
   }
 
-  /// Protokoll löschen. Wenn laufendeInterneNr die letzte vergebene Nr. ist, wird sie wieder freigegeben.
+  /// Protokoll löschen. Anschließend wird der Zähler anhand der noch vorhandenen
+  /// Protokolle neu berechnet, sodass auch nach Löschungen in beliebiger Reihenfolge
+  /// die nächste freie Nr. korrekt vergeben wird.
   /// Bei Format mit Suffix (z.B. 20260001-1) wird der Zähler nicht angepasst.
+  /// Wenn [laufendeInterneNr] nicht übergeben wird, wird sie aus dem Dokument gelesen (Robustheit).
   Future<void> delete(String companyId, String docId, {String? laufendeInterneNr}) async {
+    var nr = laufendeInterneNr?.trim();
+    if (nr == null || nr.isEmpty) {
+      final doc = await _col(companyId).doc(docId).get();
+      nr = doc.data()?['laufendeInterneNr']?.toString().trim();
+    }
     await _col(companyId).doc(docId).delete();
-    if (laufendeInterneNr != null && laufendeInterneNr.length >= 8 && !laufendeInterneNr.contains('-')) {
-      await _releaseLaufendeNrIfLast(companyId, laufendeInterneNr);
+    if (nr != null && nr.isNotEmpty && nr.length >= 8 && !nr.contains('-')) {
+      final year = int.tryParse(nr.substring(0, 4));
+      if (year != null) await _recalculateCounterForYear(companyId, year);
     }
   }
 
-  /// Wenn die gelöschte Nr. die letzte vergebene war, Zähler zurücksetzen (Nr. wiederverwendbar).
-  Future<void> _releaseLaufendeNrIfLast(String companyId, String laufendeInterneNr) async {
-    final yearStr = laufendeInterneNr.substring(0, 4);
-    final numStr = laufendeInterneNr.substring(4);
-    final year = int.tryParse(yearStr);
-    final num = int.tryParse(numStr);
-    if (year == null || num == null) return;
-    await _db.runTransaction((tx) async {
-      final ref = _counterDoc(companyId, year);
-      final snap = await tx.get(ref);
-      final last = snap.data()?['lastNumber'] as int? ?? 0;
-      if (last == num && num > 0) {
-        tx.set(ref, {'lastNumber': num - 1});
+  /// Zähler für ein Jahr anhand der noch vorhandenen Protokolle neu berechnen.
+  /// Setzt lastNumber auf die höchste noch vorhandene laufendeInterneNr dieses Jahres.
+  /// Sind keine Protokolle mehr vorhanden, wird lastNumber auf 0 gesetzt.
+  Future<void> _recalculateCounterForYear(String companyId, int year) async {
+    final yearStr = year.toString();
+    final snap = await _col(companyId).get();
+    int maxNum = 0;
+    for (final doc in snap.docs) {
+      final nr = doc.data()['laufendeInterneNr']?.toString().trim() ?? '';
+      if (nr.length >= 8 && nr.startsWith(yearStr) && !nr.contains('-')) {
+        final num = int.tryParse(nr.substring(4));
+        if (num != null && num > maxNum) maxNum = num;
       }
-    });
+    }
+    await _counterDoc(companyId, year).set({'lastNumber': maxNum});
+  }
+
+  /// Zähler manuell setzen (nur Superadmin).
+  /// [lastNumber] = 0 → nächste vergebene Nummer wird YYYY0001 (z.B. 20260001).
+  Future<void> setCounter(String companyId, int year, int lastNumber) async {
+    await _counterDoc(companyId, year).set({'lastNumber': lastNumber});
   }
 
   /// Alle Protokolle streamen (neueste zuerst)

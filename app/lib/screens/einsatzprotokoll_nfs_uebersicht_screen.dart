@@ -41,6 +41,8 @@ class _EinsatzprotokollNfsUebersichtScreenState
     return r == 'superadmin' || r == 'admin';
   }
 
+  bool get _isSuperadmin => widget.userRole.toLowerCase().trim() == 'superadmin';
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +85,49 @@ class _EinsatzprotokollNfsUebersichtScreenState
       _filterYear = now.year;
       _filterDate = now;
     });
+  }
+
+  Future<void> _resetCounter(BuildContext context) async {
+    final year = DateTime.now().year;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Laufende-Nr. zurücksetzen?'),
+        content: Text(
+          'Der Zähler für $year wird zurückgesetzt.\n\n'
+          'Die nächste vergebene Nummer wird ${year}0001.\n\n'
+          'Bereits gespeicherte Nummern in bestehenden Protokollen bleiben unverändert.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.orange.shade700),
+            child: const Text('Zurücksetzen'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _service.setCounter(widget.companyId, year, 0);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Zähler zurückgesetzt. Nächste Nr.: ${year}0001'),
+          backgroundColor: Colors.green.shade700,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fehler: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, String docId, String einsatzNr, {String? laufendeInterneNr}) async {
@@ -130,6 +175,15 @@ class _EinsatzprotokollNfsUebersichtScreenState
       appBar: AppTheme.buildModuleAppBar(
         title: 'Protokollübersicht',
         onBack: widget.onBack,
+        actions: _isSuperadmin
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  tooltip: 'Laufende-Nr. zurücksetzen',
+                  onPressed: () => _resetCounter(context),
+                ),
+              ]
+            : null,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
