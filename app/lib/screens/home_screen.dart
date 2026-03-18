@@ -523,36 +523,7 @@ class _ShortcutButtonState extends State<_ShortcutButton> {
     super.dispose();
   }
 
-  IconData? _getIconDataForModule(String? id) {
-    switch (id) {
-      case 'chat': return Icons.chat_bubble_outline;
-      case 'office':
-      case 'email': return Icons.mail_outline;
-      case 'neuermangel': return Icons.build;
-      case 'fahrzeugmanagement': return Icons.directions_car;
-      case 'schichtanmeldung':
-      case 'schichtuebersicht':
-      case 'schichtplannfs': return Icons.calendar_today;
-      case 'fahrtenbuch':
-      case 'fahrtenbuchuebersicht': return Icons.receipt_long_outlined;
-      case 'checklisten': return Icons.checklist_rounded;
-      case 'informationssystem':
-      case 'informationen': return Icons.info_outline_rounded;
-      case 'ssd':
-      case 'einsatzprotokollnfs':
-      case 'alarmierungnfs': return Icons.description_outlined;
-      default: return null;
-    }
-  }
-
-  Widget? _buildIconForModule(String? id, Color color) {
-    const size = 18.0;
-    final iconData = _getIconDataForModule(id);
-    if (iconData != null) {
-      return Icon(iconData, size: size, color: color);
-    }
-    return null;
-  }
+  Widget? _buildIconForModule(String? id, Color color) => null;
 
   @override
   Widget build(BuildContext context) {
