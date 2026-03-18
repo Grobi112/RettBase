@@ -9,13 +9,14 @@ class ToneSettingsService {
   static const String kSystemToneId = 'system';
 
   /// Verfügbare Alarm-Töne. Erste Option = Systemton (kein Asset).
+  /// Alle Töne: voices/ als Quelle, 1:1 Dateiname, mp3-Format.
   static const List<({String id, String assetPath, String label})> kAlarmToneOptions = [
     (id: 'system', assetPath: '', label: 'Systemton (Gerätestandard)'),
     (id: 'EFDN-Gong.mp3', assetPath: 'voices/EFDN-Gong.mp3', label: 'EFDN-Gong'),
-    (id: 'gong-brand.wav', assetPath: 'voices/gong-brand.wav', label: 'Gong Brand'),
-    (id: 'Kleinalarm.wav', assetPath: 'voices/Kleinalarm.wav', label: 'Kleinalarm'),
-    (id: 'Melder1.wav', assetPath: 'voices/Melder1.wav', label: 'Melder 1'),
-    (id: 'Melder2.mp3', assetPath: 'voices/Melder2.mp3', label: 'Melder 2'),
+    (id: 'Ton1.mp3', assetPath: 'voices/Ton1.mp3', label: 'Ton 1'),
+    (id: 'Ton2.mp3', assetPath: 'voices/Ton2.mp3', label: 'Ton 2'),
+    (id: 'Ton3.mp3', assetPath: 'voices/Ton3.mp3', label: 'Ton 3'),
+    (id: 'Ton4.mp3', assetPath: 'voices/Ton4.mp3', label: 'Ton 4'),
   ];
 
   /// Mapping: Ton-ID → Android res/raw Ressourcenname (lowercase, ohne Sonderzeichen).
@@ -23,10 +24,10 @@ class ToneSettingsService {
     if (id == kSystemToneId) return null;
     switch (id) {
       case 'EFDN-Gong.mp3': return 'efdn_gong';
-      case 'gong-brand.wav': return 'gong_brand';
-      case 'Kleinalarm.wav': return 'kleinalarm';
-      case 'Melder1.wav': return 'melder1';
-      case 'Melder2.mp3': return 'melder2';
+      case 'Ton1.mp3': return 'ton1';
+      case 'Ton2.mp3': return 'ton2';
+      case 'Ton3.mp3': return 'ton3';
+      case 'Ton4.mp3': return 'ton4';
       default: return null;
     }
   }

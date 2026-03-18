@@ -628,10 +628,10 @@ function toAndroidRawName(id) {
   if (!id || id === "system") return null;
   const map = {
     "EFDN-Gong.mp3": "efdn_gong",
-    "gong-brand.wav": "gong_brand",
-    "Kleinalarm.wav": "kleinalarm",
-    "Melder1.wav": "melder1",
-    "Melder2.mp3": "melder2",
+    "Ton1.mp3": "ton1",
+    "Ton2.mp3": "ton2",
+    "Ton3.mp3": "ton3",
+    "Ton4.mp3": "ton4",
   };
   return map[id] || null;
 }

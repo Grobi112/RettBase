@@ -45,3 +45,11 @@ android {
 flutter {
     source = "../.."
 }
+
+// Alarm-Töne aus voices/ vor Build nach res/raw kopieren (automatische Übernahme bei Änderung)
+val syncAlarmSounds = tasks.register<Exec>("syncAlarmSounds") {
+    val script = project.file("../../scripts/setup_android_sounds.sh")
+    commandLine("bash", script.absolutePath)
+    onlyIf { project.file("../../voices/EFDN-Gong.mp3").exists() }
+}
+tasks.named("preBuild").configure { dependsOn(syncAlarmSounds) }
