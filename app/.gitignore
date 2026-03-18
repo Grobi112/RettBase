@@ -1,4 +1,5 @@
 # Miscellaneous
+.claude/
 *.class
 *.log
 *.pyc
@@ -41,6 +42,9 @@ app.*.map.json
 
 # Firebase Service Account Key (nur lokal, nie committen!)
 **/service-account-key.json
+
+# Auth-Keys (lokal, nie committen!)
+Auth-Keys/
 
 # Android Studio will place build artifacts here
 /android/app/debug

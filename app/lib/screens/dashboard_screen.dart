@@ -304,6 +304,8 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     if (mitarbeiterId == null || mitarbeiterId.isEmpty) return;
     if (!mounted) return;
     final einsatzId = alarm.$2;
+    unawaited(AlarmQuittierungService().markQuittiert(companyId, einsatzId));
+    unawaited(PushNotificationService.stopAlarmTone());
     unawaited(
       FirebaseFirestore.instance
           .collection('kunden')
@@ -351,6 +353,15 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     unawaited(_chatService.getUnreadCount(cid).then((count) {
       if (mounted) _chatUnreadNotifier.value = count;
     }));
+    // Abgeschlossene Einsätze vom Server neu laden (z.B. nach Löschung durch Superadmin)
+    final uid = _authService.currentUser?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      unawaited(_mitarbeiterService.getMitarbeiterIdForUid(cid, uid).then((mid) async {
+        if (mid == null || mid.isEmpty || !mounted) return;
+        final list = await _alarmierungNfsService.getAbgeschlosseneEinsaetzeForMitarbeiter(cid, mid);
+        if (mounted) _hatAbgeschlosseneEinsaetzeNotifier.value = list.isNotEmpty;
+      }));
+    }
   }
 
   @override

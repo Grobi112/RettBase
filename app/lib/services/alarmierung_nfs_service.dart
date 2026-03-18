@@ -220,6 +220,20 @@ class AlarmierungNfsService {
         .map((s) => s.docs.map((d) => {'id': d.id, ...d.data()}).toList());
   }
 
+  /// Einmal-Abfrage abgeschlossener Einsätze vom Server (um Cache zu umgehen, z.B. nach Löschung durch Superadmin).
+  Future<List<Map<String, dynamic>>> getAbgeschlosseneEinsaetzeForMitarbeiter(
+    String companyId,
+    String mitarbeiterId,
+  ) async {
+    final snap = await _col(companyId)
+        .where('alarmierteMitarbeiterIds', arrayContains: mitarbeiterId)
+        .where('status', isEqualTo: 'abgeschlossen')
+        .orderBy('einsatzDatum', descending: true)
+        .limit(50)
+        .get(const GetOptions(source: Source.server));
+    return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+  }
+
   /// Aktiven Einsatz für einen alarmierten Mitarbeiter streamen (status != abgeschlossen).
   Stream<Map<String, dynamic>?> streamActiveEinsatzForMitarbeiter(
     String companyId,

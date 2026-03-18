@@ -115,6 +115,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showEinsatzPopup(Map<String, dynamic> einsatz) {
     if (!mounted) return;
+    final companyId = widget.companyId ?? '';
+    final eid = einsatz['id'] as String? ?? '';
+    // Einwählen = Quittierung: Wenn User App geöffnet hat (kein Ton läuft), sofort quittieren. Kein Alarmton beim Popup.
+    if (companyId.isNotEmpty && eid.isNotEmpty && !PushNotificationService.isAlarmTonePlaying) {
+      unawaited(AlarmQuittierungService().markQuittiert(companyId, eid));
+    }
     final nr = einsatz['einsatzNr'] as String? ?? '-';
     final datum = einsatz['einsatzDatum'] as String? ?? '';
     final name = einsatz['nameBetroffener'] as String? ?? '';
@@ -155,7 +161,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-    ).then((_) => PushNotificationService.stopAlarmTone());
+    ).then((_) {
+      final wasTonePlaying = PushNotificationService.isAlarmTonePlaying;
+      PushNotificationService.stopAlarmTone();
+      if (companyId.isNotEmpty && eid.isNotEmpty && wasTonePlaying) {
+        unawaited(AlarmQuittierungService().markQuittiert(companyId, eid));
+      }
+    });
   }
 
   static String _einsatzindikationLabel(String key) {

@@ -5,6 +5,7 @@ import 'package:flutter_app_badger/flutter_app_badger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:app/app_config.dart';
 import 'package:app/services/alarm_quittierung_service.dart';
 import 'package:app/services/tone_settings_service.dart';
@@ -60,6 +61,11 @@ class PushNotificationService {
     }
     return null;
   }
+
+  /// Ob ein Alarm-Popup beim App-Öffnen ansteht (Nutzer hat über Benachrichtigung geöffnet).
+  /// Wird nicht konsumiert – nur zur Prüfung, ob wir den Alarmton unterdrücken sollen.
+  static bool get hasPendingInitialAlarm =>
+      _initialAlarmCompanyId != null && _initialAlarmEinsatzId != null;
 
   /// Alarm-Kontext aus Push (wenn App durch Alarm-Benachrichtigung geöffnet wurde).
   static (String companyId, String einsatzId)? get initialAlarmFromNotification {
@@ -132,7 +138,10 @@ class PushNotificationService {
         }
       }
     } else if (type == 'alarm' && !kIsWeb) {
-      unawaited(_maybePlayAlarmTone(data));
+      // Kein Alarmton, wenn Nutzer App über Benachrichtigung geöffnet hat – Popup kommt
+      if (!hasPendingInitialAlarm) {
+        unawaited(_maybePlayAlarmTone(data));
+      }
     }
   }
 
@@ -146,6 +155,10 @@ class PushNotificationService {
   }
 
   static AudioPlayer? _alarmPlayer;
+  static double? _volumeBeforeAlarm;
+
+  /// Ob der Alarm-Ton gerade abgespielt wird (Foreground-Push).
+  static bool get isAlarmTonePlaying => _alarmPlayer != null;
 
   /// Stoppt den laufenden Alarm-Ton (z.B. nach Quittierung oder Schließen des Popups).
   static Future<void> stopAlarmTone() async {
@@ -157,21 +170,36 @@ class PushNotificationService {
       } catch (_) {}
       await p.dispose();
     }
+    // Lautstärke wiederherstellen
+    if (!kIsWeb && _volumeBeforeAlarm != null) {
+      try {
+        await FlutterVolumeController.setVolume(_volumeBeforeAlarm!);
+      } catch (_) {}
+      _volumeBeforeAlarm = null;
+    }
   }
 
   /// Spielt den in den Toneinstellungen gewählten Alarm-Ton (Foreground).
-  /// Läuft in Endlosschleife bei maximaler Lautstärke bis stopAlarmTone() aufgerufen wird.
+  /// Einmal abspielen, kein Loop. Setzt die Gerätelautstärke auf Maximum (nur bei Alarmierung).
   /// Bei "Systemton" wird nichts abgespielt – die OS-Benachrichtigung nutzt den Gerätestandard.
   Future<void> _playAlarmTone() async {
     final assetPath = await ToneSettingsService().getAlarmToneAssetPath();
     if (assetPath.isEmpty) return; // Systemton – kein Custom-Asset
     await stopAlarmTone();
+    // Gerätelautstärke auf Maximum setzen (nur bei Alarmierung)
+    if (!kIsWeb) {
+      try {
+        _volumeBeforeAlarm = await FlutterVolumeController.getVolume();
+        await FlutterVolumeController.setVolume(1.0);
+      } catch (e) {
+        debugPrint('RettBase Push: Lautstärke setzen fehlgeschlagen: $e');
+      }
+    }
     final player = AudioPlayer();
     _alarmPlayer = player;
     try {
       await player.setAsset(assetPath);
       await player.setVolume(1.0);
-      await player.setLoopMode(LoopMode.one);
       await player.play();
     } catch (e) {
       debugPrint('RettBase Push: Alarm-Ton abspielen fehlgeschlagen: $e');

@@ -201,6 +201,7 @@
 			buildConfigurationList = 97C147051CF9000F007C117D /* Build configuration list for PBXNativeTarget "Runner" */;
 			buildPhases = (
 				3984DA6016135AF7A07111E2 /* [CP] Check Pods Manifest.lock */,
+				SYNCIOSSOUNDS001 /* Sync iOS Alarm Sounds */,
 				9740EEB61CF901F6004384FC /* Run Script */,
 				97C146EA1CF9000F007C117D /* Sources */,
 				97C146EB1CF9000F007C117D /* Frameworks */,
@@ -358,6 +359,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin";
+		};
+		SYNCIOSSOUNDS001 /* Sync iOS Alarm Sounds */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${SRCROOT}/../voices/EFDN-Gong.mp3",
+			);
+			name = "Sync iOS Alarm Sounds";
+			outputPaths = (
+				"${SRCROOT}/../voices/EFDN-Gong.wav",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/../scripts/setup_ios_sounds.sh\"\n";
+			showEnvVarsInLog = 0;
 		};
 		65F59663BF038F66765CFBE4 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;

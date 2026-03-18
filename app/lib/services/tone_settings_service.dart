@@ -1,41 +1,33 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../generated/alarm_tones.dart' as alarm_tones;
+
 /// Service für Toneinstellungen (Alarm-Push).
 /// Chat-Push bleibt immer Systemton.
 /// "system" = Geräte-Standardton; sonst benutzerdefinierter Ton.
+/// Liste aus lib/generated/alarm_tones.dart (auto-generiert aus voices/*.mp3).
 class ToneSettingsService {
   /// Systemton – Gerätestandard für Benachrichtigungen.
   static const String kSystemToneId = 'system';
 
-  /// Verfügbare Alarm-Töne. Erste Option = Systemton (kein Asset).
-  /// Alle Töne: voices/ als Quelle, 1:1 Dateiname, mp3-Format.
-  static const List<({String id, String assetPath, String label})> kAlarmToneOptions = [
-    (id: 'system', assetPath: '', label: 'Systemton (Gerätestandard)'),
-    (id: 'EFDN-Gong.mp3', assetPath: 'voices/EFDN-Gong.mp3', label: 'EFDN-Gong'),
-    (id: 'Ton1.mp3', assetPath: 'voices/Ton1.mp3', label: 'Ton 1'),
-    (id: 'Ton2.mp3', assetPath: 'voices/Ton2.mp3', label: 'Ton 2'),
-    (id: 'Ton3.mp3', assetPath: 'voices/Ton3.mp3', label: 'Ton 3'),
-    (id: 'Ton4.mp3', assetPath: 'voices/Ton4.mp3', label: 'Ton 4'),
-  ];
+  /// Verfügbare Alarm-Töne (generiert aus voices/*.mp3).
+  static List<({String id, String assetPath, String label})> get kAlarmToneOptions =>
+      alarm_tones.kAlarmToneOptions;
 
   /// Mapping: Ton-ID → Android res/raw Ressourcenname (lowercase, ohne Sonderzeichen).
   static String? toAndroidRawName(String id) {
     if (id == kSystemToneId) return null;
-    switch (id) {
-      case 'EFDN-Gong.mp3': return 'efdn_gong';
-      case 'Ton1.mp3': return 'ton1';
-      case 'Ton2.mp3': return 'ton2';
-      case 'Ton3.mp3': return 'ton3';
-      case 'Ton4.mp3': return 'ton4';
-      default: return null;
-    }
+    if (!id.endsWith('.mp3')) return null;
+    final base = id.replaceFirst(RegExp(r'\.mp3$'), '');
+    return base.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
   }
 
-  /// Mapping: Ton-ID → iOS Sound-Dateiname im Bundle.
+  /// Mapping: Ton-ID → iOS Sound-Dateiname im Bundle (.wav, da iOS kein MP3 unterstützt).
   static String? toIosSoundName(String id) {
     if (id == kSystemToneId) return null;
-    return id; // z.B. Melder1.wav
+    if (id.endsWith('.mp3')) return id.replaceFirst(RegExp(r'\.mp3$'), '.wav');
+    return id;
   }
 
   static const _keyAlarmTone = 'rettbase_alarm_tone';

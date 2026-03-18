@@ -52,6 +52,7 @@ Future<void> initBackgroundNotifications() async {
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
       ),
     );
   }

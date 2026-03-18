@@ -21,7 +21,12 @@ class NotificationService: UNNotificationServiceExtension {
            let badge = aps["badge"] as? NSNumber {
             bestAttemptContent.badge = badge
         }
-        bestAttemptContent.sound = .default
+        // Bei Alarm-Push: Custom-Sound aus Payload beibehalten (voller Lautstärke).
+        // Bei anderen Push-Typen: Standardton.
+        let isAlarm = (request.content.userInfo["type"] as? String) == "alarm"
+        if !isAlarm {
+            bestAttemptContent.sound = .default
+        }
 
         contentHandler(bestAttemptContent)
     }

@@ -1399,7 +1399,7 @@ class _EmSuchenDialogState extends State<_EmSuchenDialog> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Einsatzmittel zuordnen',
+                    'Einsatzkräfte zuordnen',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
                   ),
                   const SizedBox(height: 12),
@@ -1418,26 +1418,60 @@ class _EmSuchenDialogState extends State<_EmSuchenDialog> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Text('${_selected.length} ausgewählt', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: widget.onAbbrechen,
-                        child: const Text('Abbrechen'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: () {
-                          widget.initialSelected.clear();
-                          widget.initialSelected.addAll(_selected);
-                          widget.onZuteilen();
-                        },
-                        icon: const Icon(Icons.add, size: 20),
-                        label: const Text('Zuteilen'),
-                        style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final narrow = constraints.maxWidth < 360;
+                      if (narrow) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text('${_selected.length} ausgewählt', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: widget.onAbbrechen,
+                                  child: const Text('Abbrechen'),
+                                ),
+                                const SizedBox(width: 8),
+                                FilledButton.icon(
+                                  onPressed: () {
+                                    widget.initialSelected.clear();
+                                    widget.initialSelected.addAll(_selected);
+                                    widget.onZuteilen();
+                                  },
+                                  icon: const Icon(Icons.add, size: 20),
+                                  label: const Text('Zuteilen'),
+                                  style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      }
+                      return Row(
+                        children: [
+                          Text('${_selected.length} ausgewählt', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: widget.onAbbrechen,
+                            child: const Text('Abbrechen'),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.icon(
+                            onPressed: () {
+                              widget.initialSelected.clear();
+                              widget.initialSelected.addAll(_selected);
+                              widget.onZuteilen();
+                            },
+                            icon: const Icon(Icons.add, size: 20),
+                            label: const Text('Zuteilen'),
+                            style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
@@ -1486,16 +1520,18 @@ class _EmSuchenDialogState extends State<_EmSuchenDialog> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Expanded(child: Text(name)),
+                          Expanded(child: Text(name, overflow: TextOverflow.ellipsis)),
                           if (typName.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: color.withOpacity(0.25),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: color.withOpacity(0.6)),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: color.withOpacity(0.25),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: color.withOpacity(0.6)),
+                                ),
+                                child: Text(typName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color), overflow: TextOverflow.ellipsis),
                               ),
-                              child: Text(typName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
                             ),
                         ],
                       ),
@@ -1979,14 +2015,11 @@ Future<void> _openBearbeiten(
         einsatz: einsatz,
         service: service,
         userRole: userRole,
-        onBack: () {
-          Navigator.of(context).pop();
-          onRefresh();
-        },
         onEinsatzAbgeschlossen: onEinsatzAbgeschlossen,
       ),
     ),
   );
+  onRefresh();
 }
 
 /// Bearbeitungs-Screen: vollständige Einsatzmaske + weitere Kräfte + Status
@@ -1996,7 +2029,6 @@ class _AlarmierungBearbeitenScreen extends StatefulWidget {
   final Map<String, dynamic> einsatz;
   final AlarmierungNfsService service;
   final String? userRole;
-  final VoidCallback onBack;
   final VoidCallback? onEinsatzAbgeschlossen;
 
   const _AlarmierungBearbeitenScreen({
@@ -2005,7 +2037,6 @@ class _AlarmierungBearbeitenScreen extends StatefulWidget {
     required this.einsatz,
     required this.service,
     this.userRole,
-    required this.onBack,
     this.onEinsatzAbgeschlossen,
   });
 
@@ -2339,7 +2370,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Einsatz aktualisiert.')),
         );
-        widget.onBack();
+        if (mounted) Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
@@ -2362,14 +2393,13 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
       );
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
-      final onBack = widget.onBack;
       final onAbgeschlossen = widget.onEinsatzAbgeschlossen;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         messenger.showSnackBar(
           const SnackBar(content: Text('Einsatz abgeschlossen.')),
         );
         onAbgeschlossen?.call();
-        onBack();
+        if (mounted) Navigator.of(context).pop();
       });
     } catch (e, st) {
       debugPrint('Einsatz abschließen Fehler: $e');
@@ -2444,7 +2474,9 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
             const Spacer(),
           ],
         ),
-        onBack: widget.onBack,
+        onBack: () {
+          if (mounted) Navigator.of(context).pop();
+        },
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -2712,7 +2744,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
         if (mounted && einsatzNeu != null) setState(() => _einsatzData = einsatzNeu);
         if (autoAbgeschlossen && mounted) {
           widget.onEinsatzAbgeschlossen?.call();
-          widget.onBack();
+          Navigator.of(context).pop();
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Status gespeichert und beim Mitarbeiter aktualisiert.')),
@@ -2833,7 +2865,7 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(color: schichtColor.withOpacity(0.6)),
                               ),
-                              child: Text(typName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: schichtColor)),
+                              child: Text(typName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: schichtColor), overflow: TextOverflow.ellipsis),
                             )
                           : const SizedBox.shrink();
                       final removeBtn = IconButton(
@@ -2869,7 +2901,13 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                               ),
                               if (typName.isNotEmpty) ...[
                                 const SizedBox(height: 6),
-                                typBadge,
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(maxWidth: listConstraints.maxWidth - 60),
+                                    child: typBadge,
+                                  ),
+                                ),
                               ],
                             ],
                           ),
@@ -2884,8 +2922,8 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                             Flexible(
                               child: Text(name, overflow: TextOverflow.ellipsis),
                             ),
-                            const Spacer(),
-                            typBadge,
+                            const SizedBox(width: 6),
+                            Flexible(child: typBadge),
                             const SizedBox(width: 6),
                             removeBtn,
                           ],
@@ -2931,11 +2969,13 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                         ),
                       ),
                       const SizedBox(width: 12),
-                      FilledButton.icon(
-                        onPressed: _showEmSuchenSheetBearbeiten,
-                        icon: const Icon(Icons.add, size: 20),
-                        label: const Text('Zuteilen'),
-                        style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                      Flexible(
+                        child: FilledButton.icon(
+                          onPressed: _showEmSuchenSheetBearbeiten,
+                          icon: const Icon(Icons.add, size: 20),
+                          label: const Text('Zuteilen'),
+                          style: FilledButton.styleFrom(backgroundColor: AppTheme.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                        ),
                       ),
                     ],
                   );

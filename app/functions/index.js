@@ -623,22 +623,21 @@ async function sendChatPush(token, title, body, companyId, chatId, extraData = {
   });
 }
 
-/** Mapping: alarmToneId -> Android res/raw Name (lowercase, ohne Sonderzeichen). */
+/** Mapping: alarmToneId -> Android res/raw Name (lowercase, ohne Sonderzeichen).
+ *  Dynamisch: .mp3 entfernen, lowercase, Nicht-Alphanumerisches durch _ ersetzen. */
 function toAndroidRawName(id) {
   if (!id || id === "system") return null;
-  const map = {
-    "EFDN-Gong.mp3": "efdn_gong",
-    "Ton1.mp3": "ton1",
-    "Ton2.mp3": "ton2",
-    "Ton3.mp3": "ton3",
-    "Ton4.mp3": "ton4",
-  };
-  return map[id] || null;
+  if (!id.endsWith(".mp3")) return null;
+  const base = id.replace(/\.mp3$/, "");
+  return base.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 }
 
-/** Mapping: alarmToneId -> iOS Sound-Dateiname im Bundle. */
+/** Mapping: alarmToneId -> iOS Sound-Dateiname im Bundle.
+ *  iOS unterstützt KEINE MP3 für Push-Sounds – nur AIFF, WAV, CAF.
+ *  Daher: .mp3 → .wav (parallele WAV-Dateien in voices/). */
 function toIosSoundName(id) {
   if (!id || id === "system") return null;
+  if (id.endsWith(".mp3")) return id.replace(/\.mp3$/, ".wav");
   return id;
 }
 

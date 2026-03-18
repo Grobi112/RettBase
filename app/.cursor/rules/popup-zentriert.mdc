@@ -1,7 +1,7 @@
 ---
-description: Fenster zentriert anzeigen – kein Bottom-Sheet
+description: Fenster zentriert, feste Größe 400×320, kein Bottom-Sheet
 globs: lib/**/*.dart
-alwaysApply: false
+alwaysApply: true
 ---
 
 # PopUp-Fenster: Zentriert, kein Bottom-Sheet
@@ -12,16 +12,21 @@ Fenster (Dialoge, Modals, Auswahl-Dialoge) werden **immer in der Bildschirmmitte
 
 - **showDialog** oder **showGeneralDialog** mit zentrierter Darstellung nutzen
 - **showModalBottomSheet** vermeiden – stattdessen AlertDialog/ Dialog in der Mitte
+- **Feste Größe:** Dialoge haben Standardmaße **400 × 320 px** (Breite × Höhe)
 
 ## Umsetzung in Flutter
 
 ```dart
-// ✅ RICHTIG: showDialog – zentriert
+// ✅ RICHTIG: showDialog – zentriert, feste Größe
 showDialog(
   context: context,
   builder: (ctx) => AlertDialog(
     title: const Text('Hinzufügen'),
-    content: /* Inhalt */,
+    content: SizedBox(
+      width: 400,
+      height: 320,
+      child: /* Inhalt */,
+    ),
   ),
 )
 

@@ -1,7 +1,7 @@
 #!/bin/bash
-# Kopiert Alarm-Töne von voices/ nach android/app/src/main/res/raw/
+# Kopiert alle Alarm-Töne von voices/ nach android/app/src/main/res/raw/
 # Wird automatisch vor jedem Android-Build ausgeführt.
-# Quelle: voices/ (EFDN-Gong.mp3, Ton1.mp3, Ton2.mp3, Ton3.mp3, Ton4.mp3)
+# Android res/raw: lowercase, Sonderzeichen → Unterstrich.
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,21 +11,22 @@ RAW="$APP_DIR/android/app/src/main/res/raw"
 
 mkdir -p "$RAW"
 
-# Mapping: voices-Dateiname -> Android res/raw (lowercase, ohne Sonderzeichen)
-copy_sound() {
-  local src="$1"
-  local dst="$2"
-  if [[ -f "$VOICES/$src" ]]; then
-    cp "$VOICES/$src" "$RAW/$dst"
-  else
-    echo "Warnung: $VOICES/$src nicht gefunden, übersprungen."
-  fi
+# Dateiname → Android raw-Name (lowercase, - und Leerzeichen → _)
+to_raw_name() {
+  echo "$1" | sed 's/\.mp3$//' | tr '[:upper:]' '[:lower:]' | tr -s ' -' '_' | tr -cd 'a-z0-9_'
 }
 
-copy_sound "EFDN-Gong.mp3" "efdn_gong.mp3"
-copy_sound "Ton1.mp3" "ton1.mp3"
-copy_sound "Ton2.mp3" "ton2.mp3"
-copy_sound "Ton3.mp3" "ton3.mp3"
-copy_sound "Ton4.mp3" "ton4.mp3"
+echo "Android-Alarmtöne: alle MP3 aus voices/ nach res/raw kopieren..."
+count=0
+for mp3 in "$VOICES"/*.mp3; do
+  [[ -f "$mp3" ]] || continue
+  raw=$(to_raw_name "$(basename "$mp3")")
+  [[ -n "$raw" ]] || continue
+  cp "$mp3" "$RAW/${raw}.mp3"
+  echo "  $(basename "$mp3") → ${raw}.mp3"
+  ((count++)) || true
+done
+echo "Fertig ($count Dateien)."
 
-echo "Android-Alarmtöne nach res/raw kopiert."
+# Dart-Liste für App-Auswahl generieren
+"$SCRIPT_DIR/generate_alarm_tones.sh"
