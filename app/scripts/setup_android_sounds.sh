@@ -11,6 +11,9 @@ RAW="$APP_DIR/android/app/src/main/res/raw"
 
 mkdir -p "$RAW"
 
+echo "MP3-Quelle: $VOICES"
+echo "Android res/raw: $RAW"
+
 # Dateiname → Android raw-Name (lowercase, - und Leerzeichen → _)
 to_raw_name() {
   echo "$1" | sed 's/\.mp3$//' | tr '[:upper:]' '[:lower:]' | tr -s ' -' '_' | tr -cd 'a-z0-9_'
@@ -18,7 +21,13 @@ to_raw_name() {
 
 echo "Android-Alarmtöne: alle MP3 aus voices/ nach res/raw kopieren..."
 count=0
-for mp3 in "$VOICES"/*.mp3; do
+shopt -s nullglob
+mp3_sorted=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && mp3_sorted+=("$line")
+done < <(printf '%s\n' "$VOICES"/*.mp3 | LC_ALL=C sort)
+
+for mp3 in "${mp3_sorted[@]}"; do
   [[ -f "$mp3" ]] || continue
   raw=$(to_raw_name "$(basename "$mp3")")
   [[ -n "$raw" ]] || continue
@@ -26,6 +35,7 @@ for mp3 in "$VOICES"/*.mp3; do
   echo "  $(basename "$mp3") → ${raw}.mp3"
   ((count++)) || true
 done
+shopt -u nullglob
 echo "Fertig ($count Dateien)."
 
 # Dart-Liste für App-Auswahl generieren

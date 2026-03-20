@@ -121,6 +121,7 @@ class PushNotificationService {
       alert: true,
       badge: true,
       sound: true,
+      criticalAlert: defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS,
     );
     debugPrint('RettBase Push: permission ${settings.authorizationStatus} (authorized=${settings.authorizationStatus == AuthorizationStatus.authorized})');
   }

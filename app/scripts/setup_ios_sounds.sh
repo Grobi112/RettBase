@@ -13,6 +13,9 @@ if [[ ! -d "$VOICES" ]]; then
   exit 1
 fi
 
+# Immer absolut ausgeben – es gibt oft zwei Ordner: RettBase/voices vs. RettBase/app/voices
+echo "Zielordner (hier landen die WAVs): $VOICES"
+
 if ! command -v ffmpeg &>/dev/null; then
   echo "FEHLER: ffmpeg fehlt. iOS-Alarmtöne müssen aus MP3 konvertiert werden."
   echo "Installation: brew install ffmpeg"
@@ -21,7 +24,13 @@ fi
 
 echo "iOS-Alarmtöne: alle MP3 in voices/ → WAV konvertieren..."
 count=0
-for mp3 in "$VOICES"/*.mp3; do
+shopt -s nullglob
+mp3_sorted=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && mp3_sorted+=("$line")
+done < <(printf '%s\n' "$VOICES"/*.mp3 | LC_ALL=C sort)
+
+for mp3 in "${mp3_sorted[@]}"; do
   [[ -f "$mp3" ]] || continue
   base=$(basename "$mp3" .mp3)
   wav="$VOICES/${base}.wav"
@@ -30,6 +39,7 @@ for mp3 in "$VOICES"/*.mp3; do
     ((count++)) || true
   fi
 done
+shopt -u nullglob
 echo "Fertig ($count Dateien konvertiert)."
 
 # Dart-Liste für App-Auswahl generieren

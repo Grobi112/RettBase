@@ -303,12 +303,14 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
     TextEditingController ctrl,
     String label, {
     List<TextInputFormatter>? inputFormatters,
+    TextInputType? keyboardType,
     bool required = false,
   }) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(
           controller: ctrl,
+          keyboardType: keyboardType,
           onChanged: required ? (_) => setState(() {}) : null,
           inputFormatters: inputFormatters,
           decoration: _inputDecoration.copyWith(
@@ -737,7 +739,13 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
               ),
             ),
             const SizedBox(height: 16),
-            _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true),
+            _field(
+              _einsatzNrCtrl,
+              'Einsatz-Nr.',
+              required: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: false, signed: false),
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: InkWell(
@@ -868,7 +876,13 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
                     children: [
                       _field(_laufendeNrCtrl, 'Laufende-Nr.', required: false),
                       const SizedBox(height: 12),
-                      _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true),
+                      _field(
+                        _einsatzNrCtrl,
+                        'Einsatz-Nr.',
+                        required: true,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: false, signed: false),
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      ),
                     ],
                   )
                 else
@@ -881,7 +895,13 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true),
+                        child: _field(
+                          _einsatzNrCtrl,
+                          'Einsatz-Nr.',
+                          required: true,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: false, signed: false),
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        ),
                       ),
                     ],
                   ),
@@ -2480,12 +2500,21 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
     }
   }
 
-  Widget _field(TextEditingController ctrl, String label, {bool required = false, bool readOnly = false}) =>
+  Widget _field(
+    TextEditingController ctrl,
+    String label, {
+    bool required = false,
+    bool readOnly = false,
+    TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+  }) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(
           controller: ctrl,
           readOnly: readOnly,
+          keyboardType: readOnly ? null : keyboardType,
+          inputFormatters: readOnly ? null : inputFormatters,
           onChanged: !readOnly && required ? (_) => setState(() {}) : null,
           decoration: _inputDecoration.copyWith(
             labelText: label,
@@ -2678,7 +2707,14 @@ class _AlarmierungBearbeitenScreenState extends State<_AlarmierungBearbeitenScre
                   ),
                 ),
                 const SizedBox(height: 16),
-                _field(_einsatzNrCtrl, 'Einsatz-Nr.', required: true, readOnly: !_canEdit),
+                _field(
+                  _einsatzNrCtrl,
+                  'Einsatz-Nr.',
+                  required: true,
+                  readOnly: !_canEdit,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: false, signed: false),
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: InkWell(

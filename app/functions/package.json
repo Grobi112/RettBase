@@ -2,7 +2,7 @@
   "name": "functions",
   "description": "RettBase Cloud Functions",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "scripts": {

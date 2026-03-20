@@ -653,6 +653,8 @@ async function sendAlarmPush(token, title, body, companyId, einsatzId, uid) {
   }
   const androidRaw = toAndroidRawName(alarmToneId);
   const iosSound = toIosSoundName(alarmToneId);
+  /** iOS: voices/ ist als Ordner-Referenz ins App-Bundle eingebunden – APNs braucht den relativen Pfad. */
+  const iosApnsSoundName = iosSound ? `voices/${iosSound}` : "default";
   const androidConfig = {
     priority: "high",
     notification: {
@@ -670,7 +672,7 @@ async function sendAlarmPush(token, title, body, companyId, einsatzId, uid) {
     payload: {
       aps: {
         alert: { title, body },
-        ...(iosSound ? { sound: { critical: 1, name: iosSound, volume: 1.0 } } : {}),
+        sound: { critical: 1, name: iosApnsSoundName, volume: 1.0 },
       },
     },
     fcmOptions: {},

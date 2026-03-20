@@ -362,15 +362,14 @@
 		};
 		SYNCIOSSOUNDS001 /* Sync iOS Alarm Sounds */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputPaths = (
-				"${SRCROOT}/../voices/EFDN-Gong.mp3",
 			);
 			name = "Sync iOS Alarm Sounds";
 			outputPaths = (
-				"${SRCROOT}/../voices/EFDN-Gong.wav",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;

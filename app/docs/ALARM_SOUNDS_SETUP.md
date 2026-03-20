@@ -1,34 +1,26 @@
 # Alarm-Töne einrichten
 
-Die App unterstützt benutzerdefinierte Alarm-Töne für Push-Benachrichtigungen. **Alle Töne** werden im Ordner `app/voices/` hinterlegt und bei jedem App-Neubau/Update automatisch übernommen.
+Die App unterstützt benutzerdefinierte Alarm-Töne für Push-Benachrichtigungen. **Quelle der Wahrheit sind die MP3-Dateien** in **`app/voices/`** (also `RettBase/app/voices/`, **nicht** ein separater Ordner `RettBase/voices/` neben `app/`).
+
+Wenn du im Finder nur MP3s siehst und **keine** frischen WAVs: prüfe, ob du wirklich **`app/voices`** geöffnet hast. Die Skripte schreiben WAVs **dorthin**, wohin die Zeile „Zielordner“ im Terminal zeigt. Zusätzliche Dateien (z. B. nur `.wav` ohne passendes `.mp3`) erscheinen **nicht** in der Ton-Auswahl und werden für Android `res/raw` nicht kopiert.
 
 ## Erforderliche Dateien
 
-| Datei | Android res/raw | iOS Bundle |
-|-------|-----------------|------------|
-| EFDN-Gong.mp3 | efdn_gong | EFDN-Gong.**wav** |
-| Ton1.mp3 | ton1 | Ton1.**wav** |
-| Ton2.mp3 | ton2 | Ton2.**wav** |
-| Ton3.mp3 | ton3 | Ton3.**wav** |
-| Ton4.mp3 | ton4 | Ton4.**wav** |
-
-**Android:** Nutzt MP3 aus `voices/` (wird nach `res/raw/` kopiert).
-
-**iOS:** Nutzt **WAV** (nicht MP3!). iOS unterstützt für Push-Sounds nur AIFF, WAV, CAF. Die Cloud Function sendet automatisch `.wav` statt `.mp3`. **Pflicht:** `ffmpeg` muss installiert sein (`brew install ffmpeg`). Das Skript `setup_ios_sounds.sh` läuft automatisch vor jedem iOS-Build und konvertiert MP3 → WAV.
+- Pro Ton: **`Name.mp3`** in `voices/` (beliebiger Name, z. B. `Ton2.mp3`).
+- **Android:** `setup_android_sounds.sh` kopiert jede MP3 nach `android/.../res/raw/` (Name normalisiert, z. B. `ton2.mp3`).
+- **iOS:** Vor dem Build wandelt `setup_ios_sounds.sh` jede MP3 in **`Name.wav`** im gleichen Ordner (Push/APNs). **ffmpeg** nötig: `brew install ffmpeg`.
 
 ## Android
 
-- **Automatisch:** Das Skript `scripts/setup_android_sounds.sh` wird vor jedem Build ausgeführt (Gradle-Task `syncAlarmSounds`).
-- **Manuell** (falls nötig):
-  ```bash
-  cd app && ./scripts/setup_android_sounds.sh
-  ```
+- **Automatisch:** `scripts/setup_android_sounds.sh` läuft vor jedem Build (Gradle `syncAlarmSounds`).
+- **Manuell:** `cd app && ./scripts/setup_android_sounds.sh`
 
-## iOS
+## iOS (Xcode)
 
-- **Automatisch:** Der Ordner `voices/` ist als Referenz im Xcode-Projekt eingebunden (`../voices`). Alle Dateien darin werden beim Build ins App-Bundle kopiert.
-- **ffmpeg erforderlich:** Vor dem iOS-Build werden MP3 automatisch in WAV konvertiert. Dafür muss ffmpeg installiert sein: `brew install ffmpeg`. Ohne ffmpeg schlägt der iOS-Build fehl.
+- Der Ordner `voices/` liegt als Folder Reference im Projekt; alle Dateien werden ins Bundle kopiert.
+- **Wichtig:** Die Build-Phase **„Sync iOS Alarm Sounds“** läuft bei **jedem** Build (`alwaysOutOfDate`), damit nach Änderungen an **beliebigen** `voices/*.mp3` stets neu konvertiert wird und `lib/generated/alarm_tones.dart` aktualisiert wird. Früher waren nur `EFDN-Gong` als Input/Output eingetragen – dann hat Xcode die Phase übersprungen, wenn nur andere MP3s geändert wurden.
+- Ohne **ffmpeg** schlägt der iOS-Build an dieser Phase fehl.
 
 ## Systemton
 
-Wenn der Nutzer "Systemton (Gerätestandard)" wählt, wird der vom Gerät eingestellte Standard-Benachrichtigungston verwendet – keine zusätzlichen Dateien nötig.
+„Systemton (Gerätestandard)“ nutzt den Geräte-Standard – keine Zusatzdateien.

@@ -63,9 +63,27 @@ Wenn die Cloud Function „erfolgreich gesendet“ meldet, aber **keine Push-Ben
 
 **Wenn sie nicht ankommt:** APNs-Key oder Geräteeinstellungen prüfen.
 
-## 5. Hinweis: interruption-level
+## 5. Kritische Warnmeldungen (Critical Alerts) für Einsatz-Alarm
 
-`interruption-level: time-sensitive` wurde aus dem APNs-Payload entfernt. Diese Option erfordert die Capability „Time Sensitive Notifications“ in Xcode. Ohne sie kann iOS die Benachrichtigung anders behandeln. Standard-Push mit `sound: "default"` und `badge` funktioniert ohne diese Capability.
+**Einsatz-Alarme** werden als **Critical Alerts** gesendet: Sie durchbrechen Stummschaltung und Fokus-Modus, damit Sanitäter auch bei lautlosem Gerät alarmiert werden.
+
+### Voraussetzung: Apple-Genehmigung
+
+Critical Alerts erfordern eine **Genehmigung durch Apple**:
+
+1. **Formular ausfüllen:** https://developer.apple.com/contact/request/notifications-critical-alerts-entitlement/
+2. **Begründung:** Rettungsdienst/Schulsanitätsdienst – Einsatz-Alarmierungen müssen auch bei Stummschaltung ankommen.
+3. **Warten auf Freigabe** (meist 1–2 Werktage)
+4. **Apple Developer Portal:** Identifiers → RettBase App ID → Edit → **Critical Alerts** aktivieren
+5. **Provisioning Profile** neu erstellen/herunterladen
+
+Ohne Genehmigung schlägt der iOS-Build mit Fehlermeldung zum Entitlement fehl. Die Entitlements-Dateien enthalten bereits den Eintrag; er wird erst nach Apple-Freigabe gültig.
+
+### Technische Umsetzung
+
+- **Cloud Function:** `sendAlarmPush` sendet mit `apns-interruption-level: critical` und `sound: { critical: 1, ... }`
+- **Flutter:** `requestPermission` mit `criticalAlert: true` (nur iOS)
+- **Entitlements:** `com.apple.developer.usernotifications.critical-alerts` in Runner.entitlements und Runner-Debug.entitlements
 
 ## 6. Schnelltest (Chat-Push)
 
