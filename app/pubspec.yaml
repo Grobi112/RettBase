@@ -11,7 +11,7 @@ executables:
   migrate_reset_nfs_laufende_nr: bin/migrate_reset_nfs_laufende_nr
   seed_module_ssd: bin/seed_module_ssd
 
-version: 1.0.62+63
+version: 1.0.64+65
 
 environment:
   sdk: ^3.8.1

@@ -166,48 +166,82 @@ Future<void> maybePromptAndroidApkUpdate(BuildContext context) async {
 Future<void> _downloadAndInstallApk(BuildContext context, String apkUrl) async {
   if (!context.mounted) return;
 
+  // Fortschritt: null = unbekannt (Spinner), 0.0–1.0 = Prozent
+  final progressNotifier = ValueNotifier<double?>( null);
+
   showDialog<void>(
     context: context,
     useRootNavigator: true,
     barrierDismissible: false,
     builder: (ctx) => PopScope(
       canPop: false,
-      child: AlertDialog(
-        content: SizedBox(
-          width: 400,
-          height: 120,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Update wird geladen …'),
-            ],
+      child: ValueListenableBuilder<double?>(
+        valueListenable: progressNotifier,
+        builder: (_, progress, __) => AlertDialog(
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: progress, // null → unbestimmt, 0–1 → Prozent
+                  minHeight: 6,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  progress != null
+                      ? 'Update wird geladen … ${(progress * 100).round()} %'
+                      : 'Update wird geladen …',
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     ),
   );
 
+  final client = http.Client();
   try {
-    final response = await http
-        .get(
-          Uri.parse(apkUrl),
-          headers: const {'Cache-Control': 'no-cache'},
-        )
-        .timeout(const Duration(minutes: 15));
+    final request = http.Request('GET', Uri.parse(apkUrl))
+      ..headers['Cache-Control'] = 'no-cache';
 
-    if (response.statusCode != 200) {
-      throw Exception('HTTP ${response.statusCode}');
+    final streamedResponse = await client
+        .send(request)
+        .timeout(const Duration(seconds: 30)); // Verbindungs-Timeout
+
+    if (streamedResponse.statusCode != 200) {
+      throw Exception('HTTP ${streamedResponse.statusCode}');
     }
+
+    final total = streamedResponse.contentLength ?? 0;
+    var received = 0;
 
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/rettbase_update.apk');
-    await file.writeAsBytes(response.bodyBytes, flush: true);
+    final sink = file.openWrite();
+
+    // Streaming: chunk-weise schreiben → kein In-Memory-Puffer der ganzen APK
+    await streamedResponse.stream
+        .timeout(const Duration(minutes: 15))
+        .forEach((chunk) {
+      sink.add(chunk);
+      received += chunk.length;
+      if (total > 0) {
+        progressNotifier.value = (received / total).clamp(0.0, 1.0);
+      }
+    });
+
+    await sink.flush();
+    await sink.close();
 
     if (context.mounted) {
       Navigator.of(context, rootNavigator: true).pop();
     }
+    progressNotifier.dispose();
 
     final result = await OpenFilex.open(file.path);
     if (result.type != ResultType.done && context.mounted) {
@@ -220,11 +254,14 @@ Future<void> _downloadAndInstallApk(BuildContext context, String apkUrl) async {
       );
     }
   } catch (e) {
+    progressNotifier.dispose();
     if (context.mounted) {
       Navigator.of(context, rootNavigator: true).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Download fehlgeschlagen: $e')),
       );
     }
+  } finally {
+    client.close();
   }
 }

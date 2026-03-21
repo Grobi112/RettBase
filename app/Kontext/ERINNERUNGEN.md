@@ -318,18 +318,37 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 
 ---
 
-## 19. APK-Update – Deaktiviert (Stand: 2025)
+## 19. APK-Update – Sideload (aktiv, März 2026)
 
-**Aktueller Stand:** APK-In-App-Update ist **entfernt**. Kein Update-Dialog, kein Download-Link im Dashboard, keine App-Update-Karte in Einstellungen.
+**Aktueller Stand:** APK-Sideload-Update ist **aktiv**. Der Update-Check läuft beim App-Start (Android) automatisch im Hintergrund. Kein Update-Link im Dashboard, keine App-Update-Karte in Einstellungen (weiterhin entfernt).
 
-### Was existiert, aber nicht genutzt wird
-- `lib/services/app_update_service*.dart`, `app_update_types.dart` – Code bleibt, wird nirgends aufgerufen. APK-Updates entfernt (Play Store).
-- `app_config.dart`: `androidUpdateCheckUrl` – für Web-Versionscheck (version.json) genutzt
-- `web/increment_version.js`, `web/version.json` – für Web-Versionierung, APK-Vergleich aus
+### Wie es funktioniert
+- **App-Start** (`main.dart` → `_initAppImpl`): Ruft `maybePromptAndroidApkUpdate(context)` auf
+- **Version-Check:** GET `https://app.rettbase.de/app/download/version.json` (Cache-Buster)
+- **Vergleich:** `remoteCode > localCode` (BuildNumber aus `pubspec.yaml`) → Dialog
+- **Download:** Streaming (`http.Client().send()`) in `getTemporaryDirectory()` – kein In-Memory-Puffer
+- **Fortschrittsbalken:** `LinearProgressIndicator` mit Prozentanzeige während Download
+- **Installation:** `OpenFilex.open()` → öffnet nativen Android-Package-Installer
 
-### Was zurückgenommen wurde
-- **app_installer_plus** (In-App-Download/Install) – entfernt, hatte XML-Änderungen (FileProvider, Permissions) die Probleme verursachten
-- **Android Launch-Screen** mit Logo – zurück auf weißen Standard (launch_background, colors.xml, launch_splash entfernt)
+### Android-Konfiguration (März 2026 gefixt)
+- **FileProvider** in `AndroidManifest.xml` – Pflicht ab Android 7 (API 24), damit `open_filex` die APK-Datei mit dem Package-Installer teilen kann. Authority: `${applicationId}.fileProvider`
+- **`res/xml/file_provider_paths.xml`** – gibt `cache-path` und `files-path` für FileProvider frei
+- **`REQUEST_INSTALL_PACKAGES`** Permission + `<queries>` APK-Intent – bereits vorhanden
+
+### Wichtige Dateien
+| Datei | Zweck |
+|-------|-------|
+| `lib/services/app_update_service_android.dart` | Vollständige Android-Implementierung |
+| `lib/services/app_update_service.dart` | Plattform-Fassade (Android vs. Web/iOS-Stub) |
+| `lib/app_config.dart` | URLs (`androidUpdateCheckUrl`, `androidApkDownloadUrlDefault`) |
+| `web/app/download/version.json` | Aktuelle Version auf Server |
+| `android/app/src/main/res/xml/file_provider_paths.xml` | FileProvider-Pfade |
+| `scripts/build_apk.sh` | APK bauen + Version erhöhen |
+| `scripts/deploy_apk_and_hosting.sh` | APK + Web deployen (alles in einem) |
+
+### Was zurückgenommen wurde / nicht mehr vorhanden
+- **app_installer_plus** – entfernt (hatte eigene FileProvider-Konflikte); ersetzt durch `open_filex`
+- **Android Launch-Screen** mit Logo – zurück auf weißen Standard
 - **screenOrientation fullSensor** – zurückgenommen
 - **Update-Link im Dashboard** – entfernt
 - **Einstellungen App-Update-Karte** – entfernt

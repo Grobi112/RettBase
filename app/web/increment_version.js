@@ -7,17 +7,18 @@ const fs = require('fs');
 const path = require('path');
 
 const dir = path.join(__dirname);
-const defaultApkUrl = 'https://app.rettbase.de/app/download/rettbase.apk';
-const downloadDir = path.join(dir, 'app', 'download');
+const defaultApkUrl = 'https://app.rettbase.de/download/rettbase.apk';
+const downloadDir = path.join(dir, 'download');
 fs.mkdirSync(downloadDir, { recursive: true });
 const versionPath = path.join(downloadDir, 'version.json');
-const legacyVersionPath = path.join(dir, 'version.json');
+// Fallback: alter Pfad web/app/download/version.json
+const legacyVersionPath = path.join(dir, 'app', 'download', 'version.json');
 if (!fs.existsSync(versionPath) && fs.existsSync(legacyVersionPath)) {
   fs.copyFileSync(legacyVersionPath, versionPath);
 }
 if (!fs.existsSync(versionPath)) {
   console.error(
-    'Fehler: web/app/download/version.json fehlt. Einmal: node scripts/increment_pubspec_version.js oder ./scripts/build_apk.sh'
+    'Fehler: web/download/version.json fehlt. Einmal: node scripts/increment_pubspec_version.js oder ./scripts/build_apk.sh'
   );
   process.exit(1);
 }
@@ -63,8 +64,6 @@ if (buildFromPubspec == null || !Number.isFinite(buildFromPubspec)) {
 data.versionCode = buildFromPubspec;
 
 if (typeof data.apkUrl !== 'string' || !data.apkUrl.trim()) {
-  data.apkUrl = defaultApkUrl;
-} else if (data.apkUrl.trim() === 'https://app.rettbase.de/download/rettbase.apk') {
   data.apkUrl = defaultApkUrl;
 }
 

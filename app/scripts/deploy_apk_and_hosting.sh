@@ -1,9 +1,9 @@
 #!/bin/bash
 # Ein Befehl: Release-APK bauen, version.json setzen, Web bauen, Hosting deployen.
 #
-# 1) APK bauen + web/app/download/version.json + rettbase.apk (build_apk.sh)
+# 1) APK bauen + web/download/version.json + rettbase.apk (build_apk.sh)
 # 2) flutter build web → kopiert alles nach build/web/ (was Firebase ausliefert)
-# 3) firebase deploy --only hosting → app/download/version.json + APK + Web-App online
+# 3) firebase deploy --only hosting → download/version.json + APK + Web-App online
 #
 # Danach: Nutzer App neu starten → Update-Dialog (versionCode aus JSON > installierte APK).
 #
@@ -35,6 +35,6 @@ firebase deploy --only hosting
 
 echo ""
 echo "Fertig."
-echo "  - https://app.rettbase.de/app/download/version.json"
-echo "  - https://app.rettbase.de/app/download/rettbase.apk"
+echo "  - https://app.rettbase.de/download/version.json"
+echo "  - https://app.rettbase.de/download/rettbase.apk"
 echo "  Nutzer: App komplett schließen und neu öffnen → Update-Hinweis."

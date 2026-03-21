@@ -38,12 +38,12 @@ fs.writeFileSync(pubspecPath, content, 'utf8');
 
 console.log(`Version: ${newVersion} | Build: ${newBuild} (${newVersionStr})`);
 
-// web/app/download/version.json – gleicher Ordner wie rettbase.apk (ein FTP-Upload-Ordner)
-const defaultApkUrl = 'https://app.rettbase.de/app/download/rettbase.apk';
-const downloadDir = path.join(appDir, 'web', 'app', 'download');
+// web/download/version.json – gleicher Ordner wie rettbase.apk (URL: /download/ auf Firebase + Strato)
+const defaultApkUrl = 'https://app.rettbase.de/download/rettbase.apk';
+const downloadDir = path.join(appDir, 'web', 'download');
 fs.mkdirSync(downloadDir, { recursive: true });
 const versionJsonPath = path.join(downloadDir, 'version.json');
-const legacyVersionJsonPath = path.join(appDir, 'web', 'version.json');
+const legacyVersionJsonPath = path.join(appDir, 'web', 'app', 'download', 'version.json');
 const versionJsonPayload = {
   version: newVersion,
   versionCode: newBuild,
@@ -59,11 +59,7 @@ if (fs.existsSync(prevFile)) {
       versionJsonPayload.releaseNotes = prev.releaseNotes;
     }
     if (typeof prev.apkUrl === 'string' && prev.apkUrl.trim() !== '') {
-      let u = prev.apkUrl.trim();
-      if (u === 'https://app.rettbase.de/download/rettbase.apk') {
-        u = defaultApkUrl;
-      }
-      versionJsonPayload.apkUrl = u;
+      versionJsonPayload.apkUrl = prev.apkUrl.trim();
     }
   } catch (_) {
     /* Defaults */
@@ -80,11 +76,11 @@ if (
 ) {
   try {
     fs.unlinkSync(legacyVersionJsonPath);
-    console.log('Alte web/version.json entfernt (jetzt nur web/app/download/version.json).');
+    console.log('Alte web/app/download/version.json entfernt (jetzt nur web/download/version.json).');
   } catch (_) {}
 }
 console.log(
-  `web/app/download/version.json → version ${newVersion}, versionCode ${newBuild}`
+  `web/download/version.json → version ${newVersion}, versionCode ${newBuild}`
 );
 
 // Web: Meta in index.html (gleiche Anzeige-Version wie version.json; ohne web/increment_version.js)

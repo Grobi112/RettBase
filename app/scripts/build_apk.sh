@@ -32,11 +32,11 @@ fi
 if [[ "$RELEASE_APK" != "$RETTBASE_APK" ]]; then
   cp -f "$RELEASE_APK" "$RETTBASE_APK"
 fi
-mkdir -p web/app/download
-cp -f "$RETTBASE_APK" "web/app/download/rettbase.apk"
+mkdir -p web/download
+cp -f "$RETTBASE_APK" "web/download/rettbase.apk"
 echo "Fertig."
 echo "  APK: $RETTBASE_APK"
-echo "  Kopie für Web-Hosting: web/app/download/rettbase.apk"
+echo "  Kopie für Web-Hosting: web/download/rettbase.apk"
 echo ""
 echo "  Alles in einem Rutsch (Web bauen + Hosting):"
 echo "    ./scripts/deploy_apk_and_hosting.sh"

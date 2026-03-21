@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Pfade die FileProvider (für open_filex) nach außen freigeben darf.
+    getTemporaryDirectory() → cache-path (z. B. /data/user/0/com.mikefullbeck.rettbase/cache/)
+    Ohne diesen Eintrag schlägt OpenFilex.open() auf Android 7+ mit
+    "Failed to find configured root that contains ..." fehl.
+-->
+<paths>
+    <cache-path name="cache" path="." />
+    <external-cache-path name="external_cache" path="." />
+    <files-path name="files" path="." />
+    <external-path name="external_files" path="." />
+</paths>

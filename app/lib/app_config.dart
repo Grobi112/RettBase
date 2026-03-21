@@ -21,11 +21,11 @@ class AppConfig {
   /// - `version.json` – von Android + Web für Update-Check geladen
   /// - `rettbase.apk` – Installationspaket
   static const String? androidUpdateCheckUrl =
-      'https://app.rettbase.de/app/download/version.json';
+      'https://app.rettbase.de/download/version.json';
 
   /// Fallback, wenn `version.json` kein `apkUrl` enthält.
   static const String androidApkDownloadUrlDefault =
-      'https://app.rettbase.de/app/download/rettbase.apk';
+      'https://app.rettbase.de/download/rettbase.apk';
 
   /// Basis-URL für die RettBase Web-App (Produktion)
   /// [kundenId] Kunden-ID, z.B. 'admin' → https://admin.rettbase.de
