@@ -67,6 +67,19 @@ class PushNotificationService {
   static bool get hasPendingInitialAlarm =>
       _initialAlarmCompanyId != null && _initialAlarmEinsatzId != null;
 
+  /// Alarm-Kontext aus lokaler Notification setzen (Android: Tap auf flutter_local_notifications-Banner).
+  /// [payload] Format: "companyId|einsatzId" (von [background_push_handler.initMainNotifications]).
+  static void setAlarmContextFromLocalNotification(String payload) {
+    final sep = payload.indexOf('|');
+    if (sep <= 0 || sep >= payload.length - 1) return;
+    final c = payload.substring(0, sep);
+    final e = payload.substring(sep + 1);
+    if (c.isNotEmpty && e.isNotEmpty) {
+      _initialAlarmCompanyId = c;
+      _initialAlarmEinsatzId = e;
+    }
+  }
+
   /// Alarm-Kontext aus Push (wenn App durch Alarm-Benachrichtigung geöffnet wurde).
   static (String companyId, String einsatzId)? get initialAlarmFromNotification {
     if (_initialAlarmCompanyId != null && _initialAlarmEinsatzId != null) {

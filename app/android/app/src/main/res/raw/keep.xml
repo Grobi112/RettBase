@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Alarm-Töne müssen mit Originalnamen (efdn_gong, ton1, …) per android.resource:// erreichbar sein.
+     tools:keep verhindert, dass AAPT2 die raw-Ressourcen umbenennt/obfuskiert (AGP 8+). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/*" />

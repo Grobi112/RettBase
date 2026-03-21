@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp"
+    android:background="#ffcc00">
+
+    <TextView
+        android:id="@+id/alarm_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="EINSATZALARM"
+        android:textSize="48sp"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        android:gravity="center"
+        android:layout_marginBottom="32dp" />
+
+    <TextView
+        android:id="@+id/alarm_message"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Einsatz eingegangen"
+        android:textSize="24sp"
+        android:textColor="#000000"
+        android:gravity="center"
+        android:layout_marginBottom="48dp" />
+
+    <Button
+        android:id="@+id/alarm_accept_btn"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:text="BESTÄTIGEN"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:background="#ff0000"
+        android:textColor="#ffffff"
+        android:gravity="center" />
+
+</LinearLayout>

@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <application
         android:label="RettBase"
         android:name="${applicationName}"
@@ -28,6 +29,18 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <!-- Alarm-Activity: Full-Screen für kritische Alarme (Lock Screen) -->
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/AlarmActivityTheme">
+            <intent-filter>
+                <action android:name="com.mikefullbeck.rettbase.ALARM"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

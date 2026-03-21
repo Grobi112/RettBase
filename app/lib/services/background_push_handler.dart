@@ -1,15 +1,18 @@
 import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:flutter_app_badger/flutter_app_badger.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'tone_settings_service.dart';
 
 /// Zeigt eine lokale Benachrichtigung mit Badge und Ton, wenn ein Chat-Push im Hintergrund ankommt.
 /// Das System-Badge aus dem APNs-Payload erscheint oft erst nach App-Start – diese lokale
 /// Benachrichtigung stellt sicher, dass Badge + Ton sofort sichtbar/hörbar sind.
 const _channelId = 'chat_messages';
 const _channelName = 'Chat-Nachrichten';
-const _alarmChannelId = 'alarm_messages';
+// v2: alarm_messages_v2 mit System-Alarmton + USAGE_ALARM (alarm_messages war ohne Sound angelegt).
+const _alarmChannelId = 'alarm_messages_v2';
 const _alarmChannelName = 'Alarmierungen';
 
 final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
@@ -44,11 +47,13 @@ Future<void> initBackgroundNotifications() async {
         enableVibration: true,
       ),
     );
+    // Kanal-Erstellung hier ist Fallback – Haupterstellung in NotificationChannelSetup.kt (RettBaseApplication).
+    // flutter_local_notifications kann keinen Sound-URI setzen; NotificationChannelSetup.kt setzt System-Alarm-URI.
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
         _alarmChannelId,
         _alarmChannelName,
-        description: 'Alarmierungen für Einsätze (Einsatzverwaltung)',
+        description: 'Alarmierungen für Einsätze',
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
@@ -126,10 +131,21 @@ Future<void> showAlarmNotificationFromBackground(RemoteMessage message) async {
   final body = bodyRaw.isNotEmpty
       ? bodyRaw
       : (message.notification?.body ?? 'Neuer Einsatz');
-  var channelId = (data['alarmChannelId'] as String? ?? '').trim();
-  if (channelId.isEmpty) channelId = _alarmChannelId;
-  if (!RegExp(r'^[a-zA-Z0-9_.-]+$').hasMatch(channelId)) {
-    channelId = _alarmChannelId;
+  // Kanal lokal aus SharedPreferences bestimmen – zuverlässiger als Firestore-Roundtrip der
+  // Firebase Function (alarmToneId kann in Firestore veraltet/"system" sein).
+  // SharedPreferences ist im Background-Isolate nach Firebase.initializeApp() verfügbar.
+  String channelId;
+  try {
+    final toneId = await ToneSettingsService().getAlarmToneId();
+    final raw = ToneSettingsService.toAndroidRawName(toneId);
+    channelId = raw != null ? 'rett_alarm_w5_$raw' : _alarmChannelId;
+  } catch (_) {
+    // Fallback: Kanal aus FCM-Daten (von Firebase Function)
+    channelId = (data['alarmChannelId'] as String? ?? '').trim();
+    if (channelId.isEmpty || channelId == 'alarm_messages' ||
+        !RegExp(r'^[a-zA-Z0-9_.-]+$').hasMatch(channelId)) {
+      channelId = _alarmChannelId;
+    }
   }
 
   final companyId = data['companyId'] as String? ?? '';
@@ -155,8 +171,31 @@ Future<void> showAlarmNotificationFromBackground(RemoteMessage message) async {
     iOS: darwinDetails,
   );
 
+  final payload = '$companyId|$einsatzId';
   try {
-    await _plugin.show(id, title, body, details);
+    await _plugin.show(id, title, body, details, payload: payload);
+
+    // Full-Screen Alarm-Activity für kritische Einsätze (zeigt sich auf Lock Screen)
+    if (Platform.isAndroid) {
+      try {
+        const alarmChannel = MethodChannel('com.mikefullbeck.rettbase/alarm');
+        await alarmChannel.invokeMethod('showAlarmFullScreen', {
+          'title': title,
+          'message': body,
+          'notificationId': id,
+        });
+        if (kDebugMode) {
+          // ignore: avoid_print
+          print('RettBase Push: AlarmActivity gestartet (Full-Screen)');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          // ignore: avoid_print
+          print('RettBase Push: AlarmActivity-Fehler: $e');
+        }
+      }
+    }
+
     if (kDebugMode) {
       // ignore: avoid_print
       print('RettBase Push: Alarm-Notification Android channel=$channelId');
@@ -186,7 +225,35 @@ Future<void> showAlarmNotificationFromBackground(RemoteMessage message) async {
         title,
         body,
         const NotificationDetails(android: fallback, iOS: darwinDetails),
+        payload: payload,
       );
     } catch (_) {}
   }
+}
+
+/// Initialisiert flutter_local_notifications im Main-Isolate (Tap-Handler + Cold-Start).
+/// Muss in main() aufgerufen werden – zusätzlich zu [initBackgroundNotifications] im Background-Isolate.
+/// [onTap] erhält den Payload "companyId|einsatzId" wenn der Nutzer die Alarm-Notification tippt.
+Future<void> initMainNotifications(void Function(String payload) onTap) async {
+  if (kIsWeb) return;
+  const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const darwin = DarwinInitializationSettings(
+    requestAlertPermission: false,
+    requestBadgePermission: false,
+  );
+  await _plugin.initialize(
+    const InitializationSettings(android: android, iOS: darwin),
+    onDidReceiveNotificationResponse: (details) {
+      final payload = details.payload ?? '';
+      if (payload.isNotEmpty) onTap(payload);
+    },
+  );
+  // Cold-Start: App wurde durch Tippen auf die Notification gestartet
+  try {
+    final launch = await _plugin.getNotificationAppLaunchDetails();
+    if (launch?.didNotificationLaunchApp == true) {
+      final payload = launch?.notificationResponse?.payload ?? '';
+      if (payload.isNotEmpty) onTap(payload);
+    }
+  } catch (_) {}
 }

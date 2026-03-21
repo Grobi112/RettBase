@@ -679,8 +679,8 @@ async function sendAlarmPush(token, title, body, companyId, einsatzId, uid) {
   /** iOS: WAVs liegen zusätzlich im Bundle-Root (Build-Phase copy_ios_push_wavs…); APNs nutzt den Dateinamen. */
   const iosApnsSoundName = iosSound || "default";
   /** Android 8+: Ton kommt vom Notification-Kanal (PCM-WAV in res/raw). Kein FCM-sound nötig/zuverlässig.
-   *  Präfix rett_alarm_w_ = WAV-Kanäle (MP3-Kanäle spielten oft nur Systemton). */
-  const alarmChannelId = androidRaw ? `rett_alarm_w_${androidRaw}` : "alarm_messages";
+   *  Präfix rett_alarm_w5_ = WAV-Kanäle v5 (w4: AAPT2/AGP obfuskierte Ressourcennamen → Pfad-URI lief ins Leere → Systemton). */
+  const alarmChannelId = androidRaw ? `rett_alarm_w5_${androidRaw}` : "alarm_messages_v2";
   console.info(
     "sendAlarmPush",
     JSON.stringify({ uid, alarmToneId, androidRaw: androidRaw || null, alarmChannelId })

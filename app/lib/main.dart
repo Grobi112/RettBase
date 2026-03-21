@@ -31,6 +31,7 @@ import 'utils/splash_loader_stub.dart'
 /// Stumme Chats: Badge-Update überspringen (Cloud Function sendet idealerweise keinen Push).
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   final data = message.data;
   if (data == null) return;
@@ -111,6 +112,14 @@ void main() async {
       if (kDebugMode) debugPrint('RettBase Push Init: $e');
     }));
     if (!kIsWeb) {
+      // Main-Isolate: Tap auf lokale Alarm-Notification → zum Einsatz navigieren
+      unawaited(bg_push.initMainNotifications((payload) {
+        PushNotificationService.setAlarmContextFromLocalNotification(payload);
+      }).catchError((e) {
+        if (kDebugMode) debugPrint('RettBase LocalNotif Init: $e');
+      }));
+    }
+    if (!kIsWeb) {
       unawaited(ChatOfflineQueue.init().catchError((e) {
         if (kDebugMode) debugPrint('RettBase ChatOfflineQueue Init: $e');
       }));
@@ -118,7 +127,6 @@ void main() async {
   } catch (e) {
     debugPrint('Firebase Init Fehler: $e');
   }
-  // Update-Check: immer einrichten (auch wenn Firebase fehlschlägt)
   WidgetsBinding.instance.addPostFrameCallback((_) {
     firebase_sw.registerFirebaseMessagingSwDeferred();
   });
@@ -143,7 +151,19 @@ class _AppWithTokenRefreshOnResumeState extends State<_AppWithTokenRefreshOnResu
   void initState() {
     super.initState();
     _lifecycleListener = AppLifecycleListener(
-      onResume: () => unawaited(PushNotificationService.retrySaveTokenIfNeeded()),
+      onResume: () {
+        unawaited(PushNotificationService.retrySaveTokenIfNeeded());
+        // Update-Check bei jedem App-Resume (nicht nur Cold-Start), damit der Dialog
+        // auch erscheint wenn die App aus dem Hintergrund geöffnet wird.
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+          final ctx = _navigatorKey.currentState?.overlay?.context;
+          if (ctx != null && ctx.mounted) {
+            unawaited(maybePromptAndroidApkUpdate(ctx).catchError((Object e) {
+              if (kDebugMode) debugPrint('RettBase APK-Update (Resume): $e');
+            }));
+          }
+        }
+      },
     );
   }
 
@@ -370,31 +390,22 @@ class _RettBaseHomeState extends State<RettBaseHome> {
             FadeTransition(opacity: a, child: c),
       ),
     );
+    // Update-Check NACH Navigation zum Dashboard/Login – der Navigator hat jetzt eine stabile Route.
+    // addPostFrameCallback wartet bis die neue Route gerendert ist → overlay.context ist garantiert gültig.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _navigatorKey.currentState?.overlay?.context;
+        print('[RettBase.apkUpdate] _navigateTo: ctx=${ctx != null}, mounted=${ctx?.mounted}');
+        if (ctx != null && ctx.mounted) {
+          unawaited(maybePromptAndroidApkUpdate(ctx).catchError((Object e) {
+            print('[RettBase.apkUpdate] FEHLER: $e');
+          }));
+        }
+      });
+    }
   }
 
   Future<void> _initAppImpl(BuildContext context) async {
-    // APK-Update: erst nach erstem Frame + Root-Navigator – sonst fehlt oft der Overlay/Context
-    // und der Dialog erscheint nicht (Splash/Home-Context zu früh).
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      final done = Completer<void>();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited((() async {
-          try {
-            final navCtx = _navigatorKey.currentContext;
-            final ctx = (navCtx != null && navCtx.mounted) ? navCtx : context;
-            if (ctx.mounted) {
-              await maybePromptAndroidApkUpdate(ctx);
-            }
-          } catch (e, st) {
-            if (kDebugMode) debugPrint('RettBase APK-Update Rahmen: $e\n$st');
-          } finally {
-            if (!done.isCompleted) done.complete();
-          }
-        })());
-      });
-      await done.future;
-    }
-
     final prefs = await SharedPreferences.getInstance();
 
     final companyConfigured = prefs.getBool('rettbase_company_configured') ?? false;
