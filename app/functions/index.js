@@ -624,12 +624,19 @@ async function sendChatPush(token, title, body, companyId, chatId, extraData = {
 }
 
 /** Mapping: alarmToneId -> Android res/raw Name (lowercase, ohne Sonderzeichen).
- *  Dynamisch: .mp3 entfernen, lowercase, Nicht-Alphanumerisches durch _ ersetzen. */
+ *  Entspricht setup_android_sounds.sh / ToneSettingsService.toAndroidRawName.
+ *  .mp3 optional (Groß/Klein), damit ältere Firestore-Werte wie "Ton1" nicht auf Systemton fallen. */
 function toAndroidRawName(id) {
-  if (!id || id === "system") return null;
-  if (!id.endsWith(".mp3")) return null;
-  const base = id.replace(/\.mp3$/, "");
-  return base.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  if (id == null || id === "") return null;
+  const s = String(id).trim();
+  if (!s || s.toLowerCase() === "system") return null;
+  let t = s;
+  const lower = t.toLowerCase();
+  if (lower.endsWith(".mp3")) {
+    t = t.slice(0, -4);
+  }
+  const out = t.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return out || null;
 }
 
 /** Mapping: alarmToneId -> iOS Sound-Dateiname im Bundle.
@@ -641,28 +648,58 @@ function toIosSoundName(id) {
   return id;
 }
 
+/** Alarm-Ton für FCM: wie getFcmToken – erst kunden/.../users, sonst fcmTokens/{uid}
+ *  (Token kann nur in fcmTokens liegen; ohne Fallback wäre alarmToneId immer "system".) */
+async function getAlarmToneIdForPush(companyId, uid) {
+  const fallback = "system";
+  if (!uid || !companyId) return fallback;
+  try {
+    const db = admin.firestore();
+    const userSnap = await db.collection("kunden").doc(companyId).collection("users").doc(uid).get();
+    if (userSnap.exists) {
+      const v = userSnap.data()?.alarmToneId;
+      if (v != null && String(v).trim() !== "") return String(v).trim();
+    }
+    const globalSnap = await db.collection("fcmTokens").doc(uid).get();
+    if (globalSnap.exists) {
+      const v = globalSnap.data()?.alarmToneId;
+      if (v != null && String(v).trim() !== "") return String(v).trim();
+    }
+  } catch (e) {
+    console.warn("getAlarmToneIdForPush:", e && e.message ? e.message : e);
+  }
+  return fallback;
+}
+
 async function sendAlarmPush(token, title, body, companyId, einsatzId, uid) {
   if (!PUSH_ENABLED || !token) return;
-  const data = { type: "alarm", companyId, einsatzId };
-  let alarmToneId = "system";
-  if (uid && companyId) {
-    try {
-      const userSnap = await admin.firestore().collection("kunden").doc(companyId).collection("users").doc(uid).get();
-      if (userSnap.exists) alarmToneId = (userSnap.data().alarmToneId || "system").trim();
-    } catch (_) {}
-  }
+  const alarmToneId = await getAlarmToneIdForPush(companyId, uid);
   const androidRaw = toAndroidRawName(alarmToneId);
   const iosSound = toIosSoundName(alarmToneId);
-  /** iOS: voices/ ist als Ordner-Referenz ins App-Bundle eingebunden – APNs braucht den relativen Pfad. */
-  const iosApnsSoundName = iosSound ? `voices/${iosSound}` : "default";
+  /** iOS: WAVs liegen zusätzlich im Bundle-Root (Build-Phase copy_ios_push_wavs…); APNs nutzt den Dateinamen. */
+  const iosApnsSoundName = iosSound || "default";
+  /** Android 8+: Ton kommt vom Notification-Kanal (PCM-WAV in res/raw). Kein FCM-sound nötig/zuverlässig.
+   *  Präfix rett_alarm_w_ = WAV-Kanäle (MP3-Kanäle spielten oft nur Systemton). */
+  const alarmChannelId = androidRaw ? `rett_alarm_w_${androidRaw}` : "alarm_messages";
+  console.info(
+    "sendAlarmPush",
+    JSON.stringify({ uid, alarmToneId, androidRaw: androidRaw || null, alarmChannelId })
+  );
+  /** Android: kein Root-[notification]-Payload – sonst zeigt das System die FCM-Notification und
+   *  Flutter onBackgroundMessage läuft nicht; fehlender Kanal → kaum sichtbarer Alarm.
+   *  Stattdessen Data-Message + lokale Notification im Background-Handler (siehe main.dart).
+   *  iOS/Web: unverändert über apns bzw. webpush. */
+  const data = {
+    type: "alarm",
+    companyId: String(companyId),
+    einsatzId: String(einsatzId),
+    title: String(title || ""),
+    body: String(body || ""),
+    alarmChannelId: String(alarmChannelId),
+  };
   const androidConfig = {
     priority: "high",
-    notification: {
-      channelId: "alarm_messages",
-      defaultVibrateTimings: true,
-    },
   };
-  if (androidRaw) androidConfig.notification.sound = androidRaw;
   const apnsConfig = {
     headers: {
       "apns-push-type": "alert",
@@ -679,7 +716,6 @@ async function sendAlarmPush(token, title, body, companyId, einsatzId, uid) {
   };
   await admin.messaging().send({
     token,
-    notification: { title, body },
     data,
     android: androidConfig,
     apns: apnsConfig,

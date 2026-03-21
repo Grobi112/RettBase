@@ -109,3 +109,84 @@ Future<void> showChatNotificationFromBackground(RemoteMessage message) async {
     }
   }
 }
+
+/// Android: FCM-Alarm als **Data-Message** (ohne Root-notification), damit dieser Handler läuft
+/// und eine sichtbare lokale Notification mit dem richtigen Kanal/Ton erscheint.
+/// iOS bleibt bei APNs (Critical Alert) – hier kein zweites Banner.
+Future<void> showAlarmNotificationFromBackground(RemoteMessage message) async {
+  if (kIsWeb || !Platform.isAndroid) return;
+  final data = message.data;
+  if (data.isEmpty || (data['type'] as String? ?? '') != 'alarm') return;
+
+  final titleRaw = (data['title'] as String? ?? '').trim();
+  final bodyRaw = (data['body'] as String? ?? '').trim();
+  final title = titleRaw.isNotEmpty
+      ? titleRaw
+      : (message.notification?.title ?? 'Alarmierung');
+  final body = bodyRaw.isNotEmpty
+      ? bodyRaw
+      : (message.notification?.body ?? 'Neuer Einsatz');
+  var channelId = (data['alarmChannelId'] as String? ?? '').trim();
+  if (channelId.isEmpty) channelId = _alarmChannelId;
+  if (!RegExp(r'^[a-zA-Z0-9_.-]+$').hasMatch(channelId)) {
+    channelId = _alarmChannelId;
+  }
+
+  final companyId = data['companyId'] as String? ?? '';
+  final einsatzId = data['einsatzId'] as String? ?? '';
+  final id = ('alarm$companyId$einsatzId').hashCode.abs() % 2147483647;
+
+  final androidDetails = AndroidNotificationDetails(
+    channelId,
+    _alarmChannelName,
+    channelDescription: 'Einsatzalarm',
+    importance: Importance.max,
+    priority: Priority.max,
+    playSound: true,
+    enableVibration: true,
+    category: AndroidNotificationCategory.alarm,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
+    number: 1,
+    visibility: NotificationVisibility.public,
+  );
+  const darwinDetails = DarwinNotificationDetails();
+  final details = NotificationDetails(
+    android: androidDetails,
+    iOS: darwinDetails,
+  );
+
+  try {
+    await _plugin.show(id, title, body, details);
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print('RettBase Push: Alarm-Notification Android channel=$channelId');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print('RettBase Push: Alarm lokale Notification fehlgeschlagen: $e');
+    }
+    // Fallback: Standard-Alarmkanal (existiert immer in NotificationChannelSetup)
+    try {
+      const fallback = AndroidNotificationDetails(
+        _alarmChannelId,
+        _alarmChannelName,
+        channelDescription: 'Einsatzalarm (Fallback)',
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        enableVibration: true,
+        category: AndroidNotificationCategory.alarm,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        number: 1,
+        visibility: NotificationVisibility.public,
+      );
+      await _plugin.show(
+        id,
+        title,
+        body,
+        const NotificationDetails(android: fallback, iOS: darwinDetails),
+      );
+    } catch (_) {}
+  }
+}

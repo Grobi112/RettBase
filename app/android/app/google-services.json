@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:740721219821:android:1742d1b6e7b68b87ccd4e4",
+        "mobilesdk_app_id": "1:740721219821:android:10121e2b834031b1ccd4e4",
         "android_client_info": {
-          "package_name": "com.example.app"
+          "package_name": "com.mikefullbeck.rettbase"
         }
       },
       "oauth_client": [],

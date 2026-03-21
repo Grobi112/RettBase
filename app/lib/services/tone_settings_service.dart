@@ -18,9 +18,14 @@ class ToneSettingsService {
   /// Mapping: Ton-ID → Android res/raw Ressourcenname (lowercase, ohne Sonderzeichen).
   static String? toAndroidRawName(String id) {
     if (id == kSystemToneId) return null;
-    if (!id.endsWith('.mp3')) return null;
-    final base = id.replaceFirst(RegExp(r'\.mp3$'), '');
-    return base.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    var t = id.trim();
+    if (t.isEmpty) return null;
+    final lower = t.toLowerCase();
+    if (lower.endsWith('.mp3')) {
+      t = t.substring(0, t.length - 4);
+    }
+    final out = t.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+    return out.isEmpty ? null : out;
   }
 
   /// Mapping: Ton-ID → iOS Sound-Dateiname im Bundle (.wav, da iOS kein MP3 unterstützt).
@@ -54,12 +59,16 @@ class ToneSettingsService {
   Future<void> syncAlarmToneToFirestore(String companyId, String uid) async {
     try {
       final id = await getAlarmToneId();
-      await FirebaseFirestore.instance
+      final payload = {'alarmToneId': id};
+      final fs = FirebaseFirestore.instance;
+      await fs
           .collection('kunden')
           .doc(companyId)
           .collection('users')
           .doc(uid)
-          .set({'alarmToneId': id}, SetOptions(merge: true));
+          .set(payload, SetOptions(merge: true));
+      // Spiegel für Cloud Function: getFcmToken fällt sonst auf fcmTokens zurück ohne alarmToneId.
+      await fs.collection('fcmTokens').doc(uid).set(payload, SetOptions(merge: true));
     } catch (_) {}
   }
 

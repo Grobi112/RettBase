@@ -1,0 +1,28 @@
+---
+description: Aktueller Fokus nur Android – keine parallelen Änderungen an iOS/macOS/Web
+alwaysApply: true
+---
+
+# Vorübergehend: Nur Android
+
+**Gilt im Moment** (bis du diese Regel deaktivierst oder entfernst): Es wird **ausschließlich an der Android-App** gearbeitet.
+
+## Was ändern
+
+- **`android/`** (Kotlin, Manifest, Gradle, `res/`, Firebase/Google Services für Android)
+- **`lib/`** nur, wenn es **klar nur Android** betrifft (z. B. `Platform.isAndroid` / `defaultTargetPlatform == TargetPlatform.android`, Android-Push-Kanäle) oder du ausdrücklich nur Android willst und die Änderung andere Plattformen nicht bricht
+- **`functions/`** nur, wenn es **Android-FCM/Payload** betrifft und du das so verlangst
+
+## Was nicht anfassen (ohne ausdrücklichen Auftrag)
+
+- **`ios/`**, **`macos/`**, **`web/`**
+- **`lib/firebase_options.dart`** → Web- oder iOS/macOS-Teile
+- **iOS/macOS/Web-spezifische** Skripte oder Xcode-Projekte
+
+## Gemeinsame `lib/`-Logik
+
+Wenn eine Anpassung **nur für Android** sein soll: **plattformgekoppelt** umsetzen, damit iOS/macOS/Web unverändert bleiben.
+
+## Hinweis
+
+Wenn der Fokus wieder **alle Plattformen** oder **Web** sein soll: diese Datei löschen oder `alwaysApply: false` setzen.

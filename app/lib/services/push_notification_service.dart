@@ -304,9 +304,11 @@ class PushNotificationService {
   Future<void> _saveTokenToFirestore(String companyId, String uid, String token) async {
     try {
       debugPrint('RettBase Push: schreibe Token nach Firestore (companyId=$companyId, uid=$uid)');
+      final alarmToneId = await ToneSettingsService().getAlarmToneId();
       final data = {
         'fcmToken': token,
         'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+        'alarmToneId': alarmToneId,
       };
       await _db.collection('kunden').doc(companyId).collection('users').doc(uid).set(data, SetOptions(merge: true));
       await _db.collection('fcmTokens').doc(uid).set(data, SetOptions(merge: true));

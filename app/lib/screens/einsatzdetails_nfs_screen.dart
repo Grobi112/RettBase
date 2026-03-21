@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/alarmierung_nfs_service.dart';
@@ -24,6 +25,10 @@ class EinsatzdetailsNfsScreen extends StatefulWidget {
   final String mitarbeiterId;
   final Map<String, dynamic> einsatz;
   final VoidCallback onBack;
+  /// **Nur Android:** Nach automatischem Abschluss Dashboard aktualisieren ohne Seite zu schließen.
+  final VoidCallback? onEinsatzAbgeschlossen;
+  /// **Nur Android:** Gelber „Protokoll“-Shortcut auf der Detailseite (wie Dashboard).
+  final VoidCallback? onEinsatzprotokollTap;
 
   const EinsatzdetailsNfsScreen({
     super.key,
@@ -31,6 +36,8 @@ class EinsatzdetailsNfsScreen extends StatefulWidget {
     required this.mitarbeiterId,
     required this.einsatz,
     required this.onBack,
+    this.onEinsatzAbgeschlossen,
+    this.onEinsatzprotokollTap,
   });
 
   @override
@@ -40,6 +47,10 @@ class EinsatzdetailsNfsScreen extends StatefulWidget {
 class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
   final _service = AlarmierungNfsService();
   bool _saving = false;
+
+  /// Einsatz-Abschluss-UX mit Details sichtbar + Protokoll-Button: nur native Android-App.
+  static bool get _nativeAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   Map<String, dynamic>? _einsatzData;
   StreamSubscription<Map<String, dynamic>?>? _einsatzStreamSubscription;
   Timer? _refreshTimer;
@@ -98,6 +109,9 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
     return parsed ?? 0;
   }
 
+  bool get _einsatzIstAbgeschlossen =>
+      (_einsatz['status'] ?? 'offen').toString().trim().toLowerCase() == 'abgeschlossen';
+
   String _indikationLabel(String? key) {
     if (key == null || key.isEmpty) return '';
     final found = _einsatzindikationOptions.where((e) => e.$1 == key).firstOrNull;
@@ -116,7 +130,30 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
       );
       if (mounted) {
         if (autoAbgeschlossen) {
-          Navigator.of(context).pop('abgeschlossen');
+          if (_nativeAndroid) {
+            widget.onEinsatzAbgeschlossen?.call();
+            setState(() {
+              _einsatzData ??= Map<String, dynamic>.from(widget.einsatz);
+              _einsatzData!['status'] = 'abgeschlossen';
+              _einsatzData!['alarmierteMitarbeiterStatus'] ??= {};
+              (_einsatzData!['alarmierteMitarbeiterStatus'] as Map)[widget.mitarbeiterId] = status;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Einsatz abgeschlossen. Details bleiben sichtbar – bitte Einsatzprotokoll ausfüllen (gelber Button unten).',
+                ),
+                action: widget.onEinsatzprotokollTap != null
+                    ? SnackBarAction(
+                        label: 'Protokoll',
+                        onPressed: widget.onEinsatzprotokollTap!,
+                      )
+                    : null,
+              ),
+            );
+          } else {
+            Navigator.of(context).pop('abgeschlossen');
+          }
         } else {
           setState(() {
             _einsatzData ??= Map<String, dynamic>.from(widget.einsatz);
@@ -208,8 +245,36 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
             _Statusgeber(
               currentStatus: _currentStatus,
               saving: _saving,
+              disabled: _einsatzIstAbgeschlossen,
               onStatus: _setStatus,
             ),
+            if (_nativeAndroid &&
+                _einsatzIstAbgeschlossen &&
+                widget.onEinsatzprotokollTap != null) ...[
+              const SizedBox(height: 24),
+              Text(
+                'Nächster Schritt',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: widget.onEinsatzprotokollTap,
+                  icon: const Icon(Icons.description, size: 22),
+                  label: const Text('Einsatzprotokoll ausfüllen'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.amber.shade700,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -240,11 +305,13 @@ class _EinsatzdetailsNfsScreenState extends State<EinsatzdetailsNfsScreen> {
 class _Statusgeber extends StatelessWidget {
   final int currentStatus;
   final bool saving;
+  final bool disabled;
   final void Function(int) onStatus;
 
   const _Statusgeber({
     required this.currentStatus,
     required this.saving,
+    required this.disabled,
     required this.onStatus,
   });
 
@@ -268,12 +335,21 @@ class _Statusgeber extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (disabled) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Der Einsatz ist abgeschlossen. Statusänderungen sind nicht mehr möglich.',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                ),
+              ),
+            ],
             for (final entry in _statusLabels.entries) ...[
               _StatusButton(
                 status: entry.key,
                 label: entry.value,
                 isActive: currentStatus == entry.key,
-                disabled: saving,
+                disabled: saving || disabled,
                 onTap: () => onStatus(entry.key),
               ),
               if (entry.key != 2) const SizedBox(height: 8),

@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, kDebugMode, defaultTargetPlatform, TargetPlatform;
 import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,9 +13,10 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'services/push_notification_service.dart';
+import 'services/background_push_handler.dart' as bg_push;
+import 'services/app_update_service.dart';
 import 'services/chat_offline_queue.dart';
 import 'theme/app_theme.dart';
-import 'app_config.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -31,7 +33,21 @@ import 'utils/splash_loader_stub.dart'
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   final data = message.data;
-  if (data == null || (data['type'] as String? ?? '') != 'chat') return;
+  if (data == null) return;
+
+  // Android-Alarm: Data-only FCM → hier lokale Notification (Kanal/Ton aus App), sichtbar + hörbar.
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    final t = (data['type'] as String? ?? '');
+    if (t == 'alarm') {
+      try {
+        await bg_push.initBackgroundNotifications();
+        await bg_push.showAlarmNotificationFromBackground(message);
+      } catch (_) {}
+      return;
+    }
+  }
+
+  if ((data['type'] as String? ?? '') != 'chat') return;
   final companyId = (data['companyId'] as String? ?? '').trim();
   final chatId = (data['chatId'] as String? ?? '').trim();
   if (companyId.isEmpty || chatId.isEmpty) return;
@@ -264,7 +280,7 @@ class _RettBaseHomeState extends State<RettBaseHome> {
 
   Future<void> _initApp() async {
     try {
-      await _initAppImpl();
+      await _initAppImpl(context);
     } catch (e, s) {
       if (kDebugMode) debugPrint('RettBase _initApp Fehler: $e\n$s');
       if (!mounted) return;
@@ -356,7 +372,29 @@ class _RettBaseHomeState extends State<RettBaseHome> {
     );
   }
 
-  Future<void> _initAppImpl() async {
+  Future<void> _initAppImpl(BuildContext context) async {
+    // APK-Update: erst nach erstem Frame + Root-Navigator – sonst fehlt oft der Overlay/Context
+    // und der Dialog erscheint nicht (Splash/Home-Context zu früh).
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final done = Completer<void>();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited((() async {
+          try {
+            final navCtx = _navigatorKey.currentContext;
+            final ctx = (navCtx != null && navCtx.mounted) ? navCtx : context;
+            if (ctx.mounted) {
+              await maybePromptAndroidApkUpdate(ctx);
+            }
+          } catch (e, st) {
+            if (kDebugMode) debugPrint('RettBase APK-Update Rahmen: $e\n$st');
+          } finally {
+            if (!done.isCompleted) done.complete();
+          }
+        })());
+      });
+      await done.future;
+    }
+
     final prefs = await SharedPreferences.getInstance();
 
     final companyConfigured = prefs.getBool('rettbase_company_configured') ?? false;

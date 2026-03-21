@@ -201,7 +201,7 @@ Dashboard und AuthDataService enthalten `debugPrint`-Ausgaben:
 
 - **version.json:** Mit `fetch(..., { cache: 'no-store' })` laden – umgeht Service-Worker- und HTTP-Cache (sonst liefert der alte SW die gecachte alte Version)
 - **reload():** Service Worker deregistrieren → 150 ms Verzögerung → `location.replace()` mit `?_nocache=Timestamp` (Cache-Bypass)
-- **version.json-URL:** `https://app.rettbase.de/version.json` (AppConfig.androidUpdateCheckUrl)
+- **version.json-URL:** `https://app.rettbase.de/app/download/version.json` (AppConfig.androidUpdateCheckUrl)
 - **Cooldown:** 2 Min nach Reload keine erneute Prüfung (verhindert Endlosschleife)
 - **Relevante Dateien:** `lib/utils/web_version_check_web.dart`, `lib/utils/reload_web_web.dart`, `lib/screens/login_screen.dart`, `lib/screens/dashboard_screen.dart`
 

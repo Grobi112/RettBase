@@ -1,0 +1,12 @@
+# Kopieren nach key.properties und Werte eintragen.
+# key.properties und *.jks niemals ins Git committen (stehen in .gitignore).
+#
+# Keystore erzeugen (einmalig), z. B.:
+#   keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Pfade: storeFile relativ zum Ordner android/ (dieses Verzeichnis).
+
+storePassword=DEIN_KEYSTORE_PASSWORT
+keyPassword=DEIN_KEY_PASSWORT
+keyAlias=upload
+storeFile=upload-keystore.jks

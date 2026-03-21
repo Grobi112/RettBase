@@ -337,7 +337,7 @@ settings/modules/items/{moduleId} – roles, label, order, ...
 ### Web-App (Stand Feb 2026)
 - **Kein Update-Banner mehr** – bei neuer Version (version.json) wird die Seite **automatisch** neu geladen
 - **version.json-Check:** nur **einmal** beim App-Start im Ladefenster (vor Dashboard/Login); keine periodische Prüfung mehr in der Session
-- **Versionierung:** `web/version.json` + `web/increment_version.js` – wird bei `./fw`, `./flutter build web`, `./scripts/build_web.sh`, `./scripts/deploy_web.sh` automatisch erhöht. Manuell: `node web/increment_version.js`
+- **Versionierung:** `web/app/download/version.json` + `web/increment_version.js` – wird bei `./fw`, `./flutter build web`, `./scripts/build_web.sh`, `./scripts/deploy_web.sh` automatisch erhöht. Manuell: `node web/increment_version.js`
 - **Cache-Leerung beim Aufruf:** firebase.json headers + index.html Meta-Tags für index.html, JS, manifest, version.json
 
 ---

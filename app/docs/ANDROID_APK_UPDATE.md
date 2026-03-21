@@ -1,8 +1,11 @@
 # Versionierung und Update (Web, iOS, Android)
 
-**Einzige Quelle:** `web/version.json` – Web und ggf. weitere Plattformen nutzen diese Datei.
+> **APK ohne Play Store (Sideload):** Ein Deploy-Befehl für APK + `version.json` + Hosting:  
+> **`./scripts/deploy_apk_and_hosting.sh`** – siehe **`docs/ANDROID_APK_SIDEPLOAD_UPDATE.md`**.
 
-**Android:** Updates laufen über den Play Store – keine direkte APK-Download-URL mehr.
+**Einzige Quelle:** `web/app/download/version.json` – Web (Versionscheck) und Android (Update-Check) nutzen dieselbe URL über `AppConfig.androidUpdateCheckUrl`.
+
+**Android (Play Store):** unten beschriebener Ablauf mit separater `pubspec`-Version.
 
 ## Ablauf: Immer zuerst Web deployen
 

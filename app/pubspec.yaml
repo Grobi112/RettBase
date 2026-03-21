@@ -11,7 +11,7 @@ executables:
   migrate_reset_nfs_laufende_nr: bin/migrate_reset_nfs_laufende_nr
   seed_module_ssd: bin/seed_module_ssd
 
-version: 1.0.46+47
+version: 1.0.62+63
 
 environment:
   sdk: ^3.8.1
@@ -57,11 +57,21 @@ dependencies:
   flutter_screenshot_blocker: ^1.0.2
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+  open_filex: ^4.7.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  image_path: img/rettbase-app-icon.png
+  android: true
+  ios: true
+  # Vollflächiges Icon; Hintergrundfarbe fürs Android-Adaptive-Icon (API 26+)
+  adaptive_icon_background: "#142c52"
+  adaptive_icon_foreground: img/rettbase-app-icon.png
 
 dependency_overrides:
   path_provider_foundation: 2.5.1  # Fix: TestFlight "Simulator platforms aren't permitted"

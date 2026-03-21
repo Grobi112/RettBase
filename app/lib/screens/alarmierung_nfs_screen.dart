@@ -299,6 +299,12 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
         ),
       );
 
+  /// Zusatz unten: Tastatur (System-Ziffernblock) liegt am unteren Rand; Inhalt muss nach oben scrollbar bleiben.
+  EdgeInsets get _fieldScrollPadding {
+    final kb = MediaQuery.viewInsetsOf(context).bottom;
+    return EdgeInsets.fromLTRB(20, 20, 20, kb + 24);
+  }
+
   Widget _field(
     TextEditingController ctrl,
     String label, {
@@ -311,6 +317,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
         child: TextField(
           controller: ctrl,
           keyboardType: keyboardType,
+          scrollPadding: _fieldScrollPadding,
           onChanged: required ? (_) => setState(() {}) : null,
           inputFormatters: inputFormatters,
           decoration: _inputDecoration.copyWith(
@@ -325,6 +332,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
         child: TextField(
           controller: _bemerkungenCtrl,
           maxLines: 5,
+          scrollPadding: _fieldScrollPadding,
           decoration: _inputDecoration.copyWith(
             labelText: 'Bemerkungen',
             alignLabelWithHint: true,
@@ -388,6 +396,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
           child: TextField(
             controller: controller,
             focusNode: focusNode,
+            scrollPadding: _fieldScrollPadding,
             onChanged: (v) {
               _strasseCtrl.text = v;
               setState(() {});
@@ -693,28 +702,25 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
   }
 
   Widget _buildForm() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildEinsatzdatenCardWithAlarmierte(),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _saving ? null : _speichern,
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red.shade700,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: _saving ? const Text('Wird gespeichert...') : const Text('Einsatz eröffnen und alarmieren'),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildEinsatzdatenCardWithAlarmierte(),
+        const SizedBox(height: 24),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _saving ? null : _speichern,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
             ),
+            child: _saving ? const Text('Wird gespeichert...') : const Text('Einsatz eröffnen und alarmieren'),
           ),
-          const SizedBox(height: 24),
-        ],
-      ),
+        ),
+        const SizedBox(height: 24),
+      ],
     );
   }
 
@@ -1309,6 +1315,7 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: AppTheme.surfaceBg,
       appBar: AppTheme.buildModuleAppBar(
         title: widget.title ?? 'Einsatzverwaltung',
@@ -1331,9 +1338,15 @@ class _AlarmierungNfsScreenState extends State<AlarmierungNfsScreen>
             padding: const EdgeInsets.all(16),
             child: _buildMitgliederStatusGrid(),
           ),
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: _buildForm(),
+          Builder(
+            builder: (context) {
+              final kb = MediaQuery.viewInsetsOf(context).bottom;
+              return SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + kb),
+                child: _buildForm(),
+              );
+            },
           ),
           _OffeneEinsaetzeTab(
             companyId: widget.companyId,

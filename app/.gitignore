@@ -46,6 +46,11 @@ app.*.map.json
 # Auth-Keys (lokal, nie committen!)
 Auth-Keys/
 
+# Android Sideload-APK (nach build_apk.sh lokal; mit Web-Build zu Hosting deployen)
+web/app/download/rettbase.apk
+# Verwechslungs-Pfad (nicht committen)
+web/download/
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

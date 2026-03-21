@@ -17,8 +17,15 @@ class AppConfig {
     return domain == rootDomain || domain.endsWith('.$rootDomain');
   }
 
-  /// URL zur version.json (für Web-Versionscheck und ggf. zukünftige native Updates).
-  static const String? androidUpdateCheckUrl = 'https://app.rettbase.de/version.json';
+  /// APK-Sideload: **ein Ordner** `app/download/` auf dem Webserver (Firebase oder FTP):
+  /// - `version.json` – von Android + Web für Update-Check geladen
+  /// - `rettbase.apk` – Installationspaket
+  static const String? androidUpdateCheckUrl =
+      'https://app.rettbase.de/app/download/version.json';
+
+  /// Fallback, wenn `version.json` kein `apkUrl` enthält.
+  static const String androidApkDownloadUrlDefault =
+      'https://app.rettbase.de/app/download/rettbase.apk';
 
   /// Basis-URL für die RettBase Web-App (Produktion)
   /// [kundenId] Kunden-ID, z.B. 'admin' → https://admin.rettbase.de

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -326,11 +326,22 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 mitarbeiterId: mitarbeiterId,
                 einsatz: einsatz,
                 onBack: () => _bodyNavigatorKey.currentState?.pop(),
+                onEinsatzAbgeschlossen: _onEinsatzAbgeschlossenFromDetails,
+                onEinsatzprotokollTap: _openProtokollErstellen,
               ),
             ),
           ).then((result) {
             if (result == 'abgeschlossen' && mounted) {
-              _hatAbgeschlosseneEinsaetzeNotifier.value = true;
+              _onEinsatzAbgeschlossenFromDetails();
+              if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Einsatz beendet und abgeschlossen. Er erscheint unter „Abgeschlossene Einsätze“.',
+                    ),
+                  ),
+                );
+              }
             }
           });
         });
@@ -687,6 +698,14 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     );
   }
 
+  /// Nach Abschluss auf der Einsatzdetailseite: aktiven Einsatz entfernen, Protokoll-Button freischalten.
+  /// Auf **Android** zusätzlich ohne Pop (siehe [EinsatzdetailsNfsScreen]); iOS/macOS/Web schließen die Seite und liefern `abgeschlossen`.
+  void _onEinsatzAbgeschlossenFromDetails() {
+    if (!mounted) return;
+    _activeEinsatzNotifier.value = null;
+    _hatAbgeschlosseneEinsaetzeNotifier.value = true;
+  }
+
   void _openEinsatzDetails() {
     final einsatz = _activeEinsatzNotifier.value;
     final mid = _mitarbeiterId;
@@ -703,19 +722,22 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           mitarbeiterId: mid,
           einsatz: Map<String, dynamic>.from(einsatz),
           onBack: () => _bodyNavigatorKey.currentState?.pop(),
+          onEinsatzAbgeschlossen: _onEinsatzAbgeschlossenFromDetails,
+          onEinsatzprotokollTap: _openProtokollErstellen,
         ),
       ),
     ).then((result) {
       if (result == 'abgeschlossen' && mounted) {
-        _activeEinsatzNotifier.value = null;
-        _hatAbgeschlosseneEinsaetzeNotifier.value = true;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Einsatz beendet und abgeschlossen. Er erscheint unter „Abgeschlossene Einsätze“.',
+        _onEinsatzAbgeschlossenFromDetails();
+        if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Einsatz beendet und abgeschlossen. Er erscheint unter „Abgeschlossene Einsätze“.',
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
     });
   }

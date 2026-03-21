@@ -1,6 +1,8 @@
 /// Stub: Kein App-Update-Check (Web, iOS).
 import 'app_update_types.dart';
 
+Future<void> maybePromptAndroidApkUpdate(dynamic context) async {}
+
 bool get canCheckAppUpdate => false;
 Future<AppUpdateResult> checkForAppUpdate() async =>
     AppUpdateResult.upToDate;

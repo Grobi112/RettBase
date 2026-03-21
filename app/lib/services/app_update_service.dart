@@ -6,6 +6,9 @@ export 'app_update_types.dart';
 import 'app_update_service_stub.dart'
     if (dart.library.io) 'app_update_service_android.dart' as app_update;
 
+Future<void> maybePromptAndroidApkUpdate(BuildContext context) =>
+    app_update.maybePromptAndroidApkUpdate(context);
+
 bool get canCheckAppUpdate => app_update.canCheckAppUpdate;
 Future<AppUpdateResult> checkForAppUpdate() => app_update.checkForAppUpdate();
 Future<void> openApkDownloadUrl() => app_update.openApkDownloadUrl();

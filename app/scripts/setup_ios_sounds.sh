@@ -22,7 +22,7 @@ if ! command -v ffmpeg &>/dev/null; then
   exit 1
 fi
 
-echo "iOS-Alarmtöne: alle MP3 in voices/ → WAV konvertieren..."
+echo "iOS-Alarmtöne: MP3 in voices/ → WAV (immer neu aus MP3, damit der Build nie alte WAVs mitnimmt)…"
 count=0
 shopt -s nullglob
 mp3_sorted=()
@@ -34,13 +34,16 @@ for mp3 in "${mp3_sorted[@]}"; do
   [[ -f "$mp3" ]] || continue
   base=$(basename "$mp3" .mp3)
   wav="$VOICES/${base}.wav"
-  if ffmpeg -y -i "$mp3" -acodec pcm_s16le -ar 44100 "$wav" 2>/dev/null; then
+  if ffmpeg -y -nostdin -i "$mp3" -acodec pcm_s16le -ar 44100 "$wav"; then
     echo "  $(basename "$mp3") → ${base}.wav"
     ((count++)) || true
+  else
+    echo "FEHLER: ffmpeg für $mp3" >&2
+    exit 1
   fi
 done
 shopt -u nullglob
-echo "Fertig ($count Dateien konvertiert)."
+echo "Fertig ($count MP3 → WAV)."
 
 # Dart-Liste für App-Auswahl generieren
 "$SCRIPT_DIR/generate_alarm_tones.sh"

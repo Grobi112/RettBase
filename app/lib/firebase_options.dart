@@ -33,8 +33,8 @@ class DefaultFirebaseOptions {
 
   // ========== NATIVE APP – rett-fe0fa ==========
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCBpI6-cT5PDbRzjNPsx_k03np4JK8AJtA',
-    appId: '1:740721219821:android:a8e7f8070f875866ccd4e4',
+    apiKey: 'AIzaSyAkkqPFYdW61Nd6699MxsIP63x4HSj81u4',
+    appId: '1:740721219821:android:10121e2b834031b1ccd4e4',
     messagingSenderId: '740721219821',
     projectId: 'rett-fe0fa',
     storageBucket: 'rett-fe0fa.firebasestorage.app',
